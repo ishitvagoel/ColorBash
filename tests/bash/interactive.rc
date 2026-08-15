@@ -1,0 +1,3 @@
+PS2=''
+source "${MBX_TEST_ROOT:?}/bash/init.bash"
+
