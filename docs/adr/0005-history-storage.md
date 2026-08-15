@@ -1,6 +1,6 @@
 # ADR 0005: History sidecar — privacy, capture, data, and protocol contract
 
-Status: Proposed; ready for acceptance (G1 decision pending)
+Status: Accepted (2026-08-15, G1 decision)
 
 This ADR expands the earlier one-page sketch of the same record. The expanded
 contract is the deliverable of roadmap item `HIST-001` and the acceptance test

@@ -6,9 +6,9 @@
 > intended program and are not a status tracker.
 
 - Last reviewed: 2026-08-15 UTC
-- Current milestone: history groundwork evidence and contracts complete (`HIST-001`, `HIST-002`, `HIST-003`, `HIST-004`, `RSH-004`); acceptance and `G0` validation remain
-- Active workstream: none; awaiting `G1` acceptance of the expanded ADR 0005 and `FND-001`/`G0` baseline review
-- Next decision gate: `G1` history privacy/data contract acceptance
+- Current milestone: history implementation slice in progress (`HIST-005` onward); `G1` accepted; `G0` validation remains
+- Active workstream: Phase 3A history sidecar implementation
+- Next decision gate: `G2` history readiness (after `HIST-007`/`HIST-008` evidence)
 - Editor-facing work is blocked by: `G2` history readiness and/or `G3` editor
   integration, as identified per phase
 
@@ -187,17 +187,16 @@ Pass only when:
 
 ### G1 — History privacy and data contract
 
-Status: `validation`; acceptance decision pending on the expanded ADR 0005
+Status: `complete` (2026-08-15)
 
-Blocks enabling history capture. Pass only after ADR 0005 is accepted with:
-
-- a threat model and plaintext-local storage disclosure;
-- authoritative Bash capture semantics and ambiguity/drop behavior;
-- schema, versioning, migrations, retention, concurrency, and idempotency;
-- whole-record exclusions, best-effort secret policy, and no-command-text logging;
-- storage path, `0700` directory and user-only database/WAL/SHM permissions;
-- disable, path inspection, clear, and deletion behavior; and
-- an explicit MBX1-addition versus MBX2 protocol decision.
+ADR 0005 is accepted with a threat model and plaintext-local storage disclosure;
+authoritative Bash capture semantics and ambiguity/drop behavior; schema,
+versioning, migrations, retention, concurrency, and idempotency; whole-record
+exclusions, best-effort secret policy, and no-command-text logging; storage
+path, `0700` directory and user-only database/WAL/SHM permissions; disable,
+path inspection, clear, and deletion behavior; and the explicit MBX2 protocol
+decision. History capture may now be built; it must remain disabled until `G2`
+evidence passes.
 
 ### G2 — History sidecar and search readiness
 
@@ -276,7 +275,7 @@ latency budgets.
 | 0 | Research / architecture | `validation` | platform matrix and remaining `G0` evidence |
 | 1 | Bootstrap | `validation` | clean baseline/CI evidence and broader lifecycle tracing |
 | 2 | Prompt | `validation` | width model and representative prompt percentiles |
-| 3 | History | `discovery` | accept `G1`; groundwork contracts and evidence are complete |
+| 3 | History | `in-progress` | Phase 3A vertical slice implementing; `G2` evidence pending |
 | 4 | Ghost suggestions | `blocked` | `G2` and `G3` |
 | 5 | Completion | `discovery` | adapter experiment produces `G4`; popup waits for `G3` and `G4` |
 | 6 | Syntax highlighting | `blocked` | `G3`; intentionally after search/ghost/completion evidence |
@@ -372,13 +371,13 @@ accept or revise these details before implementation:
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `HIST-001` | Expand and accept ADR 0005 threat/data/protocol contract | `validation` | expanded ADR 0005 covers the full `G1` checklist; acceptance decision pending |
+| `HIST-001` | Expand and accept ADR 0005 threat/data/protocol contract | `complete` | ADR 0005 accepted; `G1` passed |
 | `HIST-002` | PTY characterize Bash admission and multiline behavior | `complete` | `crates/pty/tests/history_admission.rs` and `docs/research/bash-history-admission.md` |
-| `HIST-003` | Approve the Phase 3A vertical-slice contract | `validation` | `docs/history-phase3a-contract.md` drafted; approval pending |
+| `HIST-003` | Approve the Phase 3A vertical-slice contract | `complete` | `docs/history-phase3a-contract.md` approved |
 | `HIST-004` | Define datasets, contention cases, and benchmark budgets | `complete` | `docs/benchmarks/history-budgets.md` |
-| `HIST-005` | Add narrow recorder/search/policy and reader/writer ports | `blocked` | `FND-001`, `HIST-003` |
-| `HIST-013` | Decide SQLite linkage/dependency and supported-platform packaging | `blocked` | `HIST-003`, `HIST-004`; update ADR 0002/0005 with size/platform evidence |
-| `HIST-012` | Define queue drain, shell-exit, crash, retry, and acceptable-loss semantics | `blocked` | `HIST-003`; required before writer/ingestion |
+| `HIST-005` | Add narrow recorder/search/policy and reader/writer ports | `ready` | `FND-001`, `HIST-003` |
+| `HIST-013` | Decide SQLite linkage/dependency and supported-platform packaging | `ready` | `HIST-003`, `HIST-004`; update ADR 0002/0005 with size/platform evidence |
+| `HIST-012` | Define queue drain, shell-exit, crash, retry, and acceptable-loss semantics | `ready` | `HIST-003`; required before writer/ingestion |
 | `HIST-006` | Implement SQLite schema, migrations, permissions, retention, and writer | `blocked` | `FND-001`, `HIST-005`, `HIST-012`, `HIST-013` |
 | `HIST-011` | Implement exclusions, no-log policy, disable/path/clear/delete controls | `blocked` | `HIST-005`, `HIST-006`; required by `G2` |
 | `HIST-007` | Add opt-in Bash observation and bounded protocol ingestion | `blocked` | `FND-001`, `HIST-006`, `HIST-011`, `HIST-012`, protocol ADR decision |
@@ -508,21 +507,17 @@ Exit condition: `G5` after every `HRD-*` item is complete.
 
 ## Immediate next work
 
-History groundwork evidence (`HIST-002`/`RSH-004`), contracts (`HIST-001`,
-`HIST-003`, `HIST-004`), and PTY-based prompt validation (`PRM-005`) are
-complete. Do not start editor UI, history capture, provider expansion, or later
-phases. Authorized follow-ups, in order:
+`G1` is accepted and the `HIST-003` Phase 3A contract is approved. The Phase 3A
+vertical slice is now in progress in dependency order:
 
-1. `G1`: accept the expanded ADR 0005 (the `HIST-001` decision), then approve
-   the `HIST-003` vertical-slice contract.
-2. `FND-001` / `G0`: review and land the baseline; link clean-tree CI evidence.
-3. `HIST-005` onward: ports, storage, and recorder only after `G1` acceptance
-   and `HIST-003` approval.
-4. `PRM-002` remains discovery until a width model is designed from the
-   `RSH-004` baseline.
+1. `HIST-012` durability semantics, then `HIST-013` SQLite linkage evidence.
+2. `HIST-005` ports, `HIST-006` schema/writer, `HIST-011` controls,
+   `HIST-008` deterministic queries, then `HIST-007` observation/ingestion.
+3. Capture stays disabled until `G2` evidence passes; no editor UI before `G2`.
+4. `FND-001` / `G0`: CI evidence via the pushed baseline is pending the run.
 
-`EDT-001` stays blocked on `FND-001`. `G0` stays `validation` until the reviewed
-baseline and CI evidence exist.
+`EDT-001` stays blocked on `FND-001`. `PRM-002` remains discovery until the
+width model is designed from the `RSH-004` baseline.
 
 ## Provisional performance and safety budgets
 

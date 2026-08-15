@@ -1,8 +1,7 @@
 # Phase 3A vertical-slice contract (history sidecar, UI-free)
 
-Status: draft for approval. `HIST-002` (PTY admission evidence) is complete;
-when `HIST-001` (ADR 0005) is accepted, this document becomes the `HIST-003`
-deliverable awaiting the approval decision.
+Status: approved (2026-08-15). `HIST-002` (PTY admission evidence) is complete;
+this document is the accepted `HIST-003` Phase 3A vertical-slice contract.
 
 ## Purpose
 
