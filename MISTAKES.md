@@ -585,3 +585,23 @@ to prevent recurrence, not to assign blame.
   rollback; do not prune inside a failed batch.
 - Evidence: `writer_loop` in `crates/cli/src/storage.rs`.
 
+## M-032 — Concurrent store open lost migration and read paths on writer locks
+
+- Discovered: 2026-08-16
+- Status: Fixed
+- Failed assumption: a single `busy_timeout` on each statement was enough for
+  eight simultaneous first opens and for search/count paths that reused write
+  connections with `PRAGMA journal_mode=WAL`.
+- Impact: concurrent-writer contention tests failed with `database is locked`
+  during migrate or reader `open`; one row could be dropped when
+  `BEGIN IMMEDIATE` failed once under cross-session WAL contention.
+- Correction: migrate inside `BEGIN IMMEDIATE` with version re-check and a
+  bounded retry loop; skip redundant WAL mode changes; open read-only
+  connections for search/count; retry writer `BEGIN IMMEDIATE`/`COMMIT` on
+  `SQLITE_BUSY`/`SQLITE_LOCKED` within `BUSY_TIMEOUT_MS`.
+- Prevention: any path that may run concurrently on one sidecar file must use
+  read-only handles for queries, transactional idempotent migration, and writer
+  lock retries before dropping queued entries.
+- Evidence: `open_read_connection`, `try_migrate`, and `execute_batch_with_lock_retry`
+  in `crates/cli/src/storage.rs`; concurrent-writer tests C-1–C-3 and C-6.
+

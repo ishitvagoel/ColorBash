@@ -10,9 +10,12 @@ use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use rusqlite::OpenFlags;
+
 const DIR_MODE: u32 = 0o700;
 const FILE_MODE: u32 = 0o600;
 const BUSY_TIMEOUT_MS: u64 = 100;
+const MIGRATE_BUSY_DEADLINE_MS: u64 = 2_000;
 const WRITER_BATCH_SIZE: usize = 32;
 
 const SCHEMA_V1: &str = "
@@ -102,7 +105,9 @@ fn writer_loop(
     while let Ok(message) = receiver.recv() {
         match message {
             QueueMessage::Write(entry) => {
-                if pending == 0 && connection.execute_batch("BEGIN IMMEDIATE;").is_err() {
+                if pending == 0
+                    && execute_batch_with_lock_retry(&connection, "BEGIN IMMEDIATE;").is_err()
+                {
                     trace_history_failure(&HistoryError::new(
                         HistoryErrorKind::Write,
                         "writer could not begin a batch",
@@ -113,7 +118,7 @@ fn writer_loop(
                     Ok(()) => {
                         pending += 1;
                         if pending >= WRITER_BATCH_SIZE {
-                            if connection.execute_batch("COMMIT;").is_err() {
+                            if execute_batch_with_lock_retry(&connection, "COMMIT;").is_err() {
                                 trace_history_failure(&HistoryError::new(
                                     HistoryErrorKind::Write,
                                     "writer could not commit a batch",
@@ -134,7 +139,7 @@ fn writer_loop(
                 }
             }
             QueueMessage::Shutdown => {
-                if pending > 0 && connection.execute_batch("COMMIT;").is_err() {
+                if pending > 0 && execute_batch_with_lock_retry(&connection, "COMMIT;").is_err() {
                     trace_history_failure(&HistoryError::new(
                         HistoryErrorKind::Write,
                         "writer could not commit a partial batch",
@@ -176,7 +181,7 @@ impl HistoryRecorder for QueuedHistoryStore {
 
 impl HistorySearch for QueuedHistoryStore {
     fn recent(&self, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError> {
-        let connection = open_connection(&self.store_path)?;
+        let connection = open_read_connection(&self.store_path)?;
         query(
             &connection,
             "SELECT session_id, event_sequence, history_number, command_text, start_cwd, \
@@ -187,7 +192,7 @@ impl HistorySearch for QueuedHistoryStore {
     }
 
     fn exact_prefix(&self, prefix: &str, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError> {
-        let connection = open_connection(&self.store_path)?;
+        let connection = open_read_connection(&self.store_path)?;
         let escaped = escape_like(prefix);
         let pattern = format!("{escaped}%");
         if escaped == prefix {
@@ -212,7 +217,7 @@ impl HistorySearch for QueuedHistoryStore {
     }
 
     fn by_cwd(&self, cwd: &str, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError> {
-        let connection = open_connection(&self.store_path)?;
+        let connection = open_read_connection(&self.store_path)?;
         query(
             &connection,
             "SELECT session_id, event_sequence, history_number, command_text, start_cwd, \
@@ -226,7 +231,7 @@ impl HistorySearch for QueuedHistoryStore {
 
 impl HistoryControl for QueuedHistoryStore {
     fn count(&self) -> Result<u64, HistoryError> {
-        let connection = open_connection(&self.store_path)?;
+        let connection = open_read_connection(&self.store_path)?;
         connection
             .query_row("SELECT COUNT(*) FROM history", [], |row| {
                 row.get::<_, u64>(0)
@@ -295,26 +300,116 @@ fn open_connection(store_path: &Path) -> Result<rusqlite::Connection, HistoryErr
     connection
         .busy_timeout(Duration::from_millis(BUSY_TIMEOUT_MS))
         .map_err(history_error(HistoryErrorKind::Open))?;
-    connection
-        .execute_batch("PRAGMA journal_mode=WAL;")
-        .map_err(history_error(HistoryErrorKind::Open))?;
+    ensure_wal_mode(&connection)?;
     migrate(&connection)?;
     Ok(connection)
 }
 
-fn migrate(connection: &rusqlite::Connection) -> Result<(), HistoryError> {
+fn open_read_connection(store_path: &Path) -> Result<rusqlite::Connection, HistoryError> {
+    if !store_path.exists() {
+        return Err(HistoryError::new(
+            HistoryErrorKind::Open,
+            "store does not exist",
+        ));
+    }
+    let connection =
+        rusqlite::Connection::open_with_flags(store_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .map_err(history_error(HistoryErrorKind::Open))?;
+    connection
+        .busy_timeout(Duration::from_millis(BUSY_TIMEOUT_MS))
+        .map_err(history_error(HistoryErrorKind::Open))?;
     let version: i64 = connection
         .query_row("PRAGMA user_version", [], |row| row.get(0))
-        .map_err(history_error(HistoryErrorKind::Migrate))?;
-    if version < 1 {
-        connection
-            .execute_batch(SCHEMA_V1)
-            .map_err(history_error(HistoryErrorKind::Migrate))?;
-        connection
-            .execute(&format!("PRAGMA user_version = {SCHEMA_VERSION}"), [])
-            .map_err(history_error(HistoryErrorKind::Migrate))?;
+        .map_err(history_error(HistoryErrorKind::Read))?;
+    if version < SCHEMA_VERSION {
+        return Err(HistoryError::new(
+            HistoryErrorKind::Read,
+            "store schema is not ready",
+        ));
     }
+    Ok(connection)
+}
+
+fn ensure_wal_mode(connection: &rusqlite::Connection) -> Result<(), HistoryError> {
+    let mode: String = connection
+        .query_row("PRAGMA journal_mode", [], |row| row.get(0))
+        .map_err(history_error(HistoryErrorKind::Open))?;
+    if mode.eq_ignore_ascii_case("wal") {
+        return Ok(());
+    }
+    connection
+        .execute_batch("PRAGMA journal_mode=WAL;")
+        .map_err(history_error(HistoryErrorKind::Open))?;
     Ok(())
+}
+
+fn migrate(connection: &rusqlite::Connection) -> Result<(), HistoryError> {
+    let deadline = std::time::Instant::now() + Duration::from_millis(MIGRATE_BUSY_DEADLINE_MS);
+    loop {
+        match try_migrate(connection) {
+            Ok(()) => return Ok(()),
+            Err(error) if is_sqlite_lock_contention(&error) => {
+                if std::time::Instant::now() >= deadline {
+                    return Err(history_error(HistoryErrorKind::Migrate)(error));
+                }
+                if schema_version(connection).unwrap_or(0) >= SCHEMA_VERSION {
+                    return Ok(());
+                }
+                thread::yield_now();
+            }
+            Err(error) => return Err(history_error(HistoryErrorKind::Migrate)(error)),
+        }
+    }
+}
+
+fn schema_version(connection: &rusqlite::Connection) -> Result<i64, rusqlite::Error> {
+    connection.query_row("PRAGMA user_version", [], |row| row.get(0))
+}
+
+fn try_migrate(connection: &rusqlite::Connection) -> Result<(), rusqlite::Error> {
+    if schema_version(connection)? >= SCHEMA_VERSION {
+        return Ok(());
+    }
+    connection.execute_batch("BEGIN IMMEDIATE;")?;
+    let migrated = (|| -> Result<(), rusqlite::Error> {
+        if schema_version(connection)? >= SCHEMA_VERSION {
+            return Ok(());
+        }
+        connection.execute_batch(SCHEMA_V1)?;
+        connection.execute(&format!("PRAGMA user_version = {SCHEMA_VERSION}"), [])?;
+        Ok(())
+    })();
+    if migrated.is_err() {
+        let _ = connection.execute_batch("ROLLBACK;");
+        return migrated;
+    }
+    connection.execute_batch("COMMIT;")?;
+    Ok(())
+}
+
+fn is_sqlite_lock_contention(error: &rusqlite::Error) -> bool {
+    matches!(
+        error.sqlite_error_code(),
+        Some(rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked)
+    )
+}
+
+fn execute_batch_with_lock_retry(
+    connection: &rusqlite::Connection,
+    sql: &str,
+) -> Result<(), rusqlite::Error> {
+    let deadline = std::time::Instant::now() + Duration::from_millis(BUSY_TIMEOUT_MS);
+    loop {
+        match connection.execute_batch(sql) {
+            Ok(()) => return Ok(()),
+            Err(error)
+                if is_sqlite_lock_contention(&error) && std::time::Instant::now() < deadline =>
+            {
+                thread::yield_now();
+            }
+            Err(error) => return Err(error),
+        }
+    }
 }
 
 fn insert(connection: &rusqlite::Connection, entry: &HistoryEntry) -> Result<(), HistoryError> {
@@ -464,9 +559,11 @@ fn history_failure_diagnostic(error: &HistoryError) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::history::{HistoryControl, HistoryRecorder, HistorySearch};
+    use crate::history::{HistoryControl, HistoryErrorKind, HistoryRecorder, HistorySearch};
     use std::os::unix::fs::PermissionsExt;
-    use std::sync::Mutex;
+    use std::path::Path;
+    use std::sync::{Arc, Mutex};
+    use std::thread;
 
     fn history_env_lock() -> std::sync::MutexGuard<'static, ()> {
         static LOCK: Mutex<()> = Mutex::new(());
@@ -500,6 +597,232 @@ mod tests {
             host: "host".to_owned(),
             user: "user".to_owned(),
         }
+    }
+
+    fn enqueue(store: &QueuedHistoryStore, entry: HistoryEntry) {
+        loop {
+            match store.record(entry.clone()) {
+                Ok(()) => return,
+                Err(error) if error.kind() == HistoryErrorKind::QueueFull => {
+                    thread::yield_now();
+                }
+                Err(error) => panic!("record failed: {error}"),
+            }
+        }
+    }
+
+    fn count_rows(path: &Path) -> u64 {
+        let store = QueuedHistoryStore::open(path, 32).unwrap();
+        store.count().unwrap()
+    }
+
+    fn assert_unique_keys(path: &Path) {
+        let connection = rusqlite::Connection::open(path).unwrap();
+        let duplicates: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM (
+                    SELECT session_id, event_sequence FROM history
+                    GROUP BY session_id, event_sequence HAVING COUNT(*) > 1
+                )",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(duplicates, 0, "duplicate (session_id, event_sequence) keys");
+    }
+
+    #[test]
+    fn concurrent_sessions_write_distinct_rows_without_duplicates() {
+        let (dir, path) = temp_store("c1");
+        let path = Arc::new(path);
+        let handles: Vec<_> = (0..8)
+            .map(|session| {
+                let path = Arc::clone(&path);
+                thread::spawn(move || {
+                    let store = QueuedHistoryStore::open(&path, 64).unwrap();
+                    let session_id = format!("s{session}");
+                    for sequence in 0..32 {
+                        enqueue(
+                            &store,
+                            entry(
+                                &session_id,
+                                sequence,
+                                &format!("cmd {sequence}"),
+                                "/w",
+                                "2026-08-15T10:00:00Z",
+                            ),
+                        );
+                    }
+                    drop(store);
+                })
+            })
+            .collect();
+        for handle in handles {
+            handle.join().unwrap();
+        }
+        assert_unique_keys(&path);
+        assert_eq!(count_rows(&path), 256);
+        let connection = rusqlite::Connection::open(path.as_path()).unwrap();
+        for session in 0..8 {
+            let count: i64 = connection
+                .query_row(
+                    "SELECT COUNT(*) FROM history WHERE session_id = ?1",
+                    [format!("s{session}")],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(count, 32);
+        }
+        drop(dir);
+    }
+
+    #[test]
+    fn concurrent_distinct_sessions_both_land() {
+        let (dir, path) = temp_store("c2");
+        let path = Arc::new(path);
+        let alpha = {
+            let path = Arc::clone(&path);
+            thread::spawn(move || {
+                let store = QueuedHistoryStore::open(&path, 32).unwrap();
+                for sequence in 0..16 {
+                    enqueue(
+                        &store,
+                        entry("alpha", sequence, "cmd", "/w", "2026-08-15T10:00:00Z"),
+                    );
+                }
+                drop(store);
+            })
+        };
+        let beta = {
+            let path = Arc::clone(&path);
+            thread::spawn(move || {
+                let store = QueuedHistoryStore::open(&path, 32).unwrap();
+                for sequence in 0..16 {
+                    enqueue(
+                        &store,
+                        entry("beta", sequence, "cmd", "/w", "2026-08-15T10:00:01Z"),
+                    );
+                }
+                drop(store);
+            })
+        };
+        alpha.join().unwrap();
+        beta.join().unwrap();
+        assert_unique_keys(&path);
+        assert_eq!(count_rows(&path), 32);
+        let connection = rusqlite::Connection::open(path.as_path()).unwrap();
+        let alpha_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM history WHERE session_id = 'alpha'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let beta_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM history WHERE session_id = 'beta'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(alpha_count, 16);
+        assert_eq!(beta_count, 16);
+        drop(dir);
+    }
+
+    #[test]
+    fn reader_queries_while_writer_inserts_and_prunes() {
+        let (dir, path) = temp_store("c3");
+        let path = Arc::new(path);
+        let reader_path = Arc::clone(&path);
+        let reader = thread::spawn(move || {
+            let store = QueuedHistoryStore::open(&reader_path, 32).unwrap();
+            for _ in 0..200 {
+                let _ = store.count();
+                let _ = store.recent(10);
+                let _ = store.exact_prefix("cmd", 5);
+                let _ = store.by_cwd("/w", 5);
+                thread::yield_now();
+            }
+        });
+        {
+            let store = QueuedHistoryStore::open_with_limits(&path, 64, 40, 36_500).unwrap();
+            for sequence in 0..64 {
+                enqueue(
+                    &store,
+                    entry(
+                        "s1",
+                        sequence,
+                        &format!("cmd {sequence}"),
+                        "/w",
+                        &format!("2026-08-15T10:{sequence:02}:00Z"),
+                    ),
+                );
+            }
+            drop(store);
+        }
+        reader.join().unwrap();
+        assert_unique_keys(&path);
+        let count = count_rows(&path);
+        assert!(
+            count <= 40,
+            "retention cap must prune to 40 rows; got {count}"
+        );
+        let connection = rusqlite::Connection::open(path.as_path()).unwrap();
+        let tables: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='history'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(tables, 1);
+        drop(dir);
+    }
+
+    #[test]
+    fn concurrent_replay_of_same_key_is_idempotent() {
+        let (dir, path) = temp_store("c4");
+        let first = entry("s1", 1, "echo one", "/work", "2026-08-15T10:00:00Z");
+        {
+            let store = QueuedHistoryStore::open(&path, 8).unwrap();
+            store.record(first.clone()).unwrap();
+        }
+        {
+            let store = QueuedHistoryStore::open(&path, 8).unwrap();
+            store.record(first).unwrap();
+        }
+        assert_eq!(count_rows(&path), 1);
+        assert_unique_keys(&path);
+        drop(dir);
+    }
+
+    #[test]
+    fn full_queue_returns_quickly_and_drains_without_hang() {
+        let (dir, path) = temp_store("c6");
+        let mut saw_queue_full = false;
+        {
+            let store = QueuedHistoryStore::open(&path, 2).unwrap();
+            for sequence in 0..8 {
+                match store.record(entry("s1", sequence, "cmd", "/w", "2026-08-15T10:00:00Z")) {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == HistoryErrorKind::QueueFull => {
+                        saw_queue_full = true;
+                    }
+                    Err(error) => panic!("unexpected record error: {error}"),
+                }
+            }
+            drop(store);
+        }
+        assert!(
+            saw_queue_full,
+            "queue capacity 2 must reject at least one record"
+        );
+        let count = count_rows(&path);
+        assert!(count <= 8, "at most eight records may commit; got {count}");
+        assert!(count >= 1, "at least one record must drain");
+        assert_unique_keys(&path);
+        drop(dir);
     }
 
     #[test]

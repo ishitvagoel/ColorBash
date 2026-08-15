@@ -390,7 +390,7 @@ accept or revise these details before implementation:
 | `HIST-012` | Define queue drain, shell-exit, crash, retry, and acceptable-loss semantics | `complete` | durability contract in `docs/history-phase3a-contract.md`; writer commits eagerly and Shutdown drains |
 | `HIST-006` | Implement SQLite schema, migrations, permissions, retention, and writer | `complete` | `crates/cli/src/storage.rs` schema v1, WAL, `0700`/`0600`, retention prune, batched writer |
 | `HIST-011` | Implement exclusions, no-log policy, disable/path/clear/delete controls | `complete` | `crates/cli/src/policy.rs` plus `mbx history path|count|clear|delete` and env controls |
-| `HIST-007` | Add opt-in Bash observation and bounded protocol ingestion | `validation` | `bash/history.bash`, MBX2 RECORD ingestion, PTY recording/invariance tests, seeded 100k corpus, hostile inertness, and query p95 in `docs/benchmarks/2026-08-16-history-queries.md`; contention, prompt-boundary write, many-match prefix, and extra permission checks remain |
+| `HIST-007` | Add opt-in Bash observation and bounded protocol ingestion | `validation` | `bash/history.bash`, MBX2 RECORD ingestion, PTY recording/invariance tests, seeded 100k corpus, hostile inertness, query p95, and concurrent-writer contention in `crates/cli/src/storage.rs`; prompt-boundary write, many-match prefix, WAL crash/corrupt, and extra permission checks remain |
 | `HIST-008` | Add recent, exact-prefix, cwd queries and deterministic ranking | `complete` | `mbx history search recent|prefix|cwd` with bounded limits and NOCASE prefix index |
 | `HIST-009` | Add bounded fuzzy ranking | `blocked` | `HIST-008`, deterministic-query evidence, and 100k+ benchmark |
 | `HIST-010` | Add repository context | `blocked` | history-scoped `GIT-003` root/branch provider subset |
@@ -522,10 +522,10 @@ controls, deterministic queries, MBX2 ingestion, and opt-in Bash observation
 (`HIST-005`–`HIST-008`, `HIST-011`–`HIST-013`). Capture stays disabled by
 default. Remaining before `G2`:
 
-1. `HIST-007` remaining `G2` evidence: contention cases, prompt-boundary write
-   acknowledgement, permission checks beyond mode bits, and many-match prefix
-   latency. 100k query p95, hostile inertness, and invariance/admission-parity
-   PTY evidence are recorded.
+1. `HIST-007` remaining `G2` evidence: prompt-boundary write acknowledgement,
+   permission checks beyond mode bits, WAL crash/corrupt, and many-match prefix
+   latency. Concurrent-writer contention (cases 1–3 and 6), 100k query p95,
+   hostile inertness, and invariance/admission-parity PTY evidence are recorded.
 2. `FND-001` / `G0`: CI evidence via the pushed baseline is pending the run.
 3. `PRM-002` remains discovery until the width model is designed from the
    `RSH-004` baseline; `EDT-001` stays blocked on `FND-001`.
@@ -593,3 +593,5 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-15 | Started the `HIST-007` `.bash_history` invariance and recorder admission-parity PTY slice; plan in `docs/history-g2-invariance-plan.md`. `G2` budgets/contention remain. |
 | 2026-08-15 | Completed the invariance/admission-parity PTY slice: paired `HISTFILE` comparisons for enable/disable/clear/delete/exit-flush, recorder parity with the `HIST-002` matrix, and recorder fixes for first-prompt skip, `history 1` parsing, and list-number drop keys (`M-026`–`M-028`). `G2` budgets/contention remain. |
 | 2026-08-16 | Corrected ADR 0005/`history_number` to the `history 1` list number, not `HISTCMD`. Completed the `HIST-004` corpus, hostile-inertness, and 100k query-percentile slice (`docs/history-g2-corpus-plan.md`, `docs/benchmarks/2026-08-16-history-queries.md`). Writer batching and under-cap prune skips (`M-029`, `M-030`). `G2` contention, prompt-boundary write, many-match prefix, and extra permission checks remain. |
+| 2026-08-16 | Identified the next `HIST-007` slice as concurrent-writer contention cases 1–3 and 6; plan in `docs/history-g2-contention-plan.md`. Prompt-boundary write-ack, WAL crash/corrupt, many-match prefix, and extra permission checks remain. |
+| 2026-08-16 | Completed concurrent-writer contention storage tests (C-1–C-4, C-6) and hardened concurrent migrate, read-only query opens, and writer lock retries (`M-032`) in `crates/cli/src/storage.rs`. Prompt-boundary write-ack, WAL crash/corrupt, many-match prefix, and extra permission checks remain. |
