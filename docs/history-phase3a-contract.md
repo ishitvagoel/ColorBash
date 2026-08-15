@@ -34,9 +34,11 @@ Out of scope (later phases or explicit gates):
 
 ## Recording contract
 
-- One record per Bash-admitted entry at the prompt boundary.
+- One record per Bash-admitted entry at the prompt boundary after command
+  completion; the first prompt is skipped so a seeded `HISTFILE` is not ingested.
 - Command text is the folded form Bash stores; NUL/invalid-UTF-8/empty/
   oversized entries are rejected without truncation (ADR 0005 section 3).
+- The diagnostic `history_number` is the `history 1` list number, not `HISTCMD`.
 - Ambiguous attribution drops the record and increments a command-text-free
   diagnostic counter.
 - `(session_id, event_sequence)` uniqueness is enforced by the store.

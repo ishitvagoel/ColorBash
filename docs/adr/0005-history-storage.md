@@ -33,8 +33,11 @@ and exit-flush behavior. This ADR binds the sidecar to that observed authority.
 - `$BASH_COMMAND`, `HISTCMD`, readline input, and `PROMPT_COMMAND` arguments are
   never used as the record source or as stable identifiers.
 - `(session_id, event_sequence)` is the unique idempotency key, where
-  `event_sequence` is a monotonic counter owned by the recorder (not `HISTCMD`).
-  `HISTCMD` is retained only as a diagnostic number.
+  `event_sequence` is a monotonic counter owned by the recorder (not `HISTCMD`
+  and not the Bash list number). The diagnostic `history_number` is the list
+  number printed by `history 1` for the newest admitted entry. `HISTCMD` is not
+  stored: it is not a stable identifier and can be unset or still change while
+  history is off.
 
 ### 2. Threat model and disclosure
 
@@ -73,7 +76,7 @@ and exit-flush behavior. This ADR binds the sidecar to that observed authority.
 | --- | --- | --- |
 | `session_id` | UUIDv4 string | generated once per shell session |
 | `event_sequence` | integer | monotonic recorder counter |
-| `history_number` | integer | diagnostic Bash `HISTCMD` value, not an identifier |
+| `history_number` | integer | diagnostic list number from `history 1`, not an identifier and not `HISTCMD` |
 | `command_text` | text | folded Bash-normalized command text |
 | `start_cwd` | text | starting working directory |
 | `completed_at` | text | completion timestamp (UTC ISO-8601) |
@@ -130,8 +133,11 @@ whose status cannot be attributed drops per the ambiguity rule.
   WAL plus its bounded `busy_timeout` serializes mutations across sessions; no
   shared history daemon is assumed for the MVP.
 - The prompt path enqueues (bounded queue, acknowledgement p95 < 2 ms, p99 <
-  5 ms) and never waits on database locks. Full queues and storage errors drop
-  enhancement data according to the accepted durability contract in `HIST-012`.
+  5 ms) and never waits on database locks. The writer commits inserts in
+  batches of 32 (`BEGIN IMMEDIATE` / `COMMIT`) before prune. Full queues and
+  storage errors drop enhancement data according to the accepted durability
+  contract in `HIST-012`. Retention limits are captured when the store is
+  opened, not re-read on every prune.
 - Retries use the `(session_id, event_sequence)` key so duplicates are
   impossible; concurrent shells never share an idempotency key.
 - Retention, corruption, and lock-contention behavior are exercised by tests
@@ -197,9 +203,11 @@ whose status cannot be attributed drops per the ambiguity rule.
 
 - `G1` (this ADR): threat model, capture semantics, schema, permissions,
   controls, and the MBX2 decision accepted with review.
-- `G2` evidence: PTY admission suite (`HIST-002`, done), same-command
-  `.bash_history` invariance comparison, 100k+ row search/write benchmarks
-  (`HIST-004` budgets), contention and permission tests, hostile SQL/control
-  inertness, and command-text-free diagnostics.
+- `G2` evidence: PTY admission suite (`HIST-002`, done); same-command
+  `.bash_history` invariance comparison (`crates/pty/tests/history_invariance.rs`,
+  done); hostile SQL/control inertness (done); 100k-row search p95 for recent,
+  selective prefix, and cwd (`docs/benchmarks/2026-08-16-history-queries.md`);
+  many-match prefix latency; prompt-boundary write acknowledgement; contention
+  and permission tests; and command-text-free diagnostics.
 - Every claim in this ADR maps to a test in `HIST-005`–`HIST-008`,
   `HIST-011`–`HIST-013` before `G2` passes.

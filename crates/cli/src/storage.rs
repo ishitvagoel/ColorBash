@@ -39,6 +39,11 @@ enum QueueMessage {
     Shutdown,
 }
 
+struct WriterSettings {
+    max_rows: u64,
+    retention_days: u64,
+}
+
 pub struct QueuedHistoryStore {
     sender: SyncSender<QueueMessage>,
     store_path: PathBuf,
@@ -47,11 +52,35 @@ pub struct QueuedHistoryStore {
 
 impl QueuedHistoryStore {
     pub fn open(path: &Path, queue_capacity: usize) -> Result<Self, HistoryError> {
+        Self::open_with_limits(
+            path,
+            queue_capacity,
+            env_u64(
+                "MBX_HISTORY_RETENTION_ROWS",
+                crate::history::DEFAULT_RETENTION_ROWS,
+            ),
+            env_u64(
+                "MBX_HISTORY_RETENTION_DAYS",
+                crate::history::DEFAULT_RETENTION_DAYS,
+            ),
+        )
+    }
+
+    pub(crate) fn open_with_limits(
+        path: &Path,
+        queue_capacity: usize,
+        max_rows: u64,
+        retention_days: u64,
+    ) -> Result<Self, HistoryError> {
         let store_path = path.to_path_buf();
         create_store_dir(&store_path)?;
         let connection = open_connection(&store_path)?;
         let (sender, receiver) = mpsc::sync_channel(queue_capacity);
-        let writer = thread::spawn(move || writer_loop(receiver, connection));
+        let settings = WriterSettings {
+            max_rows,
+            retention_days,
+        };
+        let writer = thread::spawn(move || writer_loop(receiver, connection, settings));
         Ok(Self {
             sender,
             store_path,
@@ -64,25 +93,55 @@ impl QueuedHistoryStore {
     }
 }
 
-fn writer_loop(receiver: Receiver<QueueMessage>, connection: rusqlite::Connection) {
+fn writer_loop(
+    receiver: Receiver<QueueMessage>,
+    connection: rusqlite::Connection,
+    settings: WriterSettings,
+) {
     let mut pending = 0usize;
     while let Ok(message) = receiver.recv() {
         match message {
-            QueueMessage::Write(entry) => match insert(&connection, &entry) {
-                Ok(()) => {
-                    pending += 1;
-                    if pending >= WRITER_BATCH_SIZE {
+            QueueMessage::Write(entry) => {
+                if pending == 0 && connection.execute_batch("BEGIN IMMEDIATE;").is_err() {
+                    trace_history_failure(&HistoryError::new(
+                        HistoryErrorKind::Write,
+                        "writer could not begin a batch",
+                    ));
+                    continue;
+                }
+                match insert(&connection, &entry) {
+                    Ok(()) => {
+                        pending += 1;
+                        if pending >= WRITER_BATCH_SIZE {
+                            if connection.execute_batch("COMMIT;").is_err() {
+                                trace_history_failure(&HistoryError::new(
+                                    HistoryErrorKind::Write,
+                                    "writer could not commit a batch",
+                                ));
+                                let _ = connection.execute_batch("ROLLBACK;");
+                                pending = 0;
+                            } else {
+                                pending = 0;
+                                let _ = prune(&connection, &settings);
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        trace_history_failure(&error);
+                        let _ = connection.execute_batch("ROLLBACK;");
                         pending = 0;
-                        let _ = prune(&connection);
                     }
                 }
-                Err(error) => {
-                    trace_history_failure(&error);
-                    pending = 0;
-                }
-            },
+            }
             QueueMessage::Shutdown => {
-                let _ = prune(&connection);
+                if pending > 0 && connection.execute_batch("COMMIT;").is_err() {
+                    trace_history_failure(&HistoryError::new(
+                        HistoryErrorKind::Write,
+                        "writer could not commit a partial batch",
+                    ));
+                    let _ = connection.execute_batch("ROLLBACK;");
+                }
+                let _ = prune(&connection, &settings);
                 break;
             }
         }
@@ -130,14 +189,26 @@ impl HistorySearch for QueuedHistoryStore {
     fn exact_prefix(&self, prefix: &str, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError> {
         let connection = open_connection(&self.store_path)?;
         let escaped = escape_like(prefix);
-        query(
-            &connection,
-            "SELECT session_id, event_sequence, history_number, command_text, start_cwd, \
-             completed_at, status, duration_ms, host, user \
-             FROM history WHERE command_text LIKE ?1 ESCAPE '\\' \
-             ORDER BY completed_at DESC, event_sequence DESC LIMIT ?2",
-            &[format!("{escaped}%"), limit.to_string()],
-        )
+        let pattern = format!("{escaped}%");
+        if escaped == prefix {
+            query(
+                &connection,
+                "SELECT session_id, event_sequence, history_number, command_text, start_cwd, \
+                 completed_at, status, duration_ms, host, user \
+                 FROM history WHERE command_text LIKE ?1 \
+                 ORDER BY completed_at DESC, event_sequence DESC LIMIT ?2",
+                &[pattern, limit.to_string()],
+            )
+        } else {
+            query(
+                &connection,
+                "SELECT session_id, event_sequence, history_number, command_text, start_cwd, \
+                 completed_at, status, duration_ms, host, user \
+                 FROM history WHERE command_text LIKE ?1 ESCAPE '\\' \
+                 ORDER BY completed_at DESC, event_sequence DESC LIMIT ?2",
+                &[pattern, limit.to_string()],
+            )
+        }
     }
 
     fn by_cwd(&self, cwd: &str, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError> {
@@ -270,29 +341,34 @@ fn insert(connection: &rusqlite::Connection, entry: &HistoryEntry) -> Result<(),
     Ok(())
 }
 
-fn prune(connection: &rusqlite::Connection) -> Result<(), HistoryError> {
-    let retention_days = std::env::var("MBX_HISTORY_RETENTION_DAYS")
-        .ok()
-        .and_then(|value| value.parse::<u64>().ok())
-        .unwrap_or(crate::history::DEFAULT_RETENTION_DAYS);
-    let cutoff = now_utc_iso_days_ago(retention_days);
+fn prune(connection: &rusqlite::Connection, settings: &WriterSettings) -> Result<(), HistoryError> {
+    let cutoff = now_utc_iso_days_ago(settings.retention_days);
     connection
         .execute("DELETE FROM history WHERE completed_at < ?1", [cutoff])
         .map_err(history_error(HistoryErrorKind::Write))?;
-    let max_rows = std::env::var("MBX_HISTORY_RETENTION_ROWS")
-        .ok()
-        .and_then(|value| value.parse::<u64>().ok())
-        .unwrap_or(crate::history::DEFAULT_RETENTION_ROWS);
+    let count: u64 = connection
+        .query_row("SELECT COUNT(*) FROM history", [], |row| row.get(0))
+        .map_err(history_error(HistoryErrorKind::Write))?;
+    if count <= settings.max_rows {
+        return Ok(());
+    }
     connection
         .execute(
             "DELETE FROM history WHERE rowid IN ( \
              SELECT rowid FROM history \
              ORDER BY completed_at DESC, event_sequence DESC \
              LIMIT -1 OFFSET ?1)",
-            [max_rows],
+            [settings.max_rows],
         )
         .map_err(history_error(HistoryErrorKind::Write))?;
     Ok(())
+}
+
+fn env_u64(name: &str, default: u64) -> u64 {
+    std::env::var(name)
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(default)
 }
 
 fn escape_like(value: &str) -> String {
@@ -390,6 +466,12 @@ mod tests {
     use super::*;
     use crate::history::{HistoryControl, HistoryRecorder, HistorySearch};
     use std::os::unix::fs::PermissionsExt;
+    use std::sync::Mutex;
+
+    fn history_env_lock() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: Mutex<()> = Mutex::new(());
+        LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
 
     fn temp_store(name: &str) -> (tempfile_dir::TempDir, PathBuf) {
         let dir = std::env::temp_dir().join(format!(
@@ -536,10 +618,8 @@ mod tests {
     #[test]
     fn retention_prunes_old_rows_and_caps_total() {
         let (dir, path) = temp_store("retention");
-        unsafe { std::env::set_var("MBX_HISTORY_RETENTION_ROWS", "3") };
-        unsafe { std::env::set_var("MBX_HISTORY_RETENTION_DAYS", "1") };
         {
-            let store = QueuedHistoryStore::open(&path, 32).unwrap();
+            let store = QueuedHistoryStore::open_with_limits(&path, 32, 3, 1).unwrap();
             for sequence in 0..5 {
                 store
                     .record(entry(
@@ -554,13 +634,12 @@ mod tests {
         }
         let store = QueuedHistoryStore::open(&path, 32).unwrap();
         assert!(store.count().unwrap() <= 3);
-        unsafe { std::env::remove_var("MBX_HISTORY_RETENTION_ROWS") };
-        unsafe { std::env::remove_var("MBX_HISTORY_RETENTION_DAYS") };
         drop(dir);
     }
 
     #[test]
     fn default_store_path_resolves_xdg_then_home() {
+        let _guard = history_env_lock();
         unsafe { std::env::set_var("XDG_DATA_HOME", "/xdg/data") };
         assert_eq!(
             default_store_path(),
@@ -588,6 +667,28 @@ mod tests {
         }
         let store = QueuedHistoryStore::open(&path, 32).unwrap();
         assert_eq!(store.count().unwrap(), 4);
+        drop(dir);
+    }
+
+    #[test]
+    fn row_cap_prune_keeps_every_row_under_the_limit() {
+        let (dir, path) = temp_store("under-cap");
+        {
+            let store = QueuedHistoryStore::open(&path, 64).unwrap();
+            for sequence in 0..40 {
+                store
+                    .record(entry(
+                        "s1",
+                        sequence,
+                        &format!("cmd {sequence}"),
+                        "/w",
+                        "2026-08-15T10:00:00Z",
+                    ))
+                    .unwrap();
+            }
+        }
+        let store = QueuedHistoryStore::open(&path, 64).unwrap();
+        assert_eq!(store.count().unwrap(), 40);
         drop(dir);
     }
 

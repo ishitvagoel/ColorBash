@@ -250,6 +250,20 @@ mod tests {
     }
 
     #[test]
+    fn hostile_sql_command_text_is_recorded_as_data() {
+        let (recorder, probe) = RecordingRecorder::shared();
+        let service = HistoryService::new(Box::new(recorder), Box::new(AllowAll));
+        let mut fields = record_fields();
+        fields[3] = "'; DROP TABLE history;--".to_owned();
+        let response = service.handle(6, "RECORD", &fields);
+        assert_eq!(response, HistoryResponse::Ack);
+        assert_eq!(
+            probe.entries.lock().unwrap()[0].command_text,
+            "'; DROP TABLE history;--"
+        );
+    }
+
+    #[test]
     fn substitute_error_is_constructible() {
         use crate::history::HistoryErrorKind;
         let error = HistoryError::new(HistoryErrorKind::StorageFailure, "substitute failure");

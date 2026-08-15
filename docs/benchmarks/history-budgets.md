@@ -77,7 +77,9 @@ Run against a populated store with the writer active:
 | Writer commit behind the queue | unmeasured end-to-end; only queue ack is budgeted | writer |
 
 The 100k-row corpus is the required scale for `G2`; a 1M-row run is recorded as
-an informational stress datapoint, not a gate.
+an informational stress datapoint, not a gate. Query p95 evidence for recent,
+selective prefix, and cwd is in `docs/benchmarks/2026-08-16-history-queries.md`.
+A many-match `git` prefix currently misses the 10 ms p95 budget.
 
 ## Reporting
 

@@ -17,6 +17,9 @@ mod storage;
 mod telemetry;
 mod transport;
 
+#[cfg(test)]
+mod corpus;
+
 use environment::RuntimeEnvironment;
 use prompt::PromptRenderer;
 use provider::{

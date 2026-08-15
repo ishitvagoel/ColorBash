@@ -5,9 +5,9 @@
 > brief remains `CODEX_MODERN_BASH_ARCHITECTURE.md`; its checkboxes describe the
 > intended program and are not a status tracker.
 
-- Last reviewed: 2026-08-15 UTC
+- Last reviewed: 2026-08-16 UTC
 - Current milestone: Phase 3A sidecar implemented; `G2` evidence remaining (`HIST-007`); `G1` accepted; `G0` validation remains
-- Active workstream: `G2` history-readiness evidence
+- Active workstream: remaining `HIST-007` `G2` evidence (contention, prompt-boundary write, permission, many-match prefix)
 - Next decision gate: `G2` history readiness (after remaining `HIST-007` evidence)
 - Editor-facing work is blocked by: `G2` history readiness and/or `G3` editor
   integration, as identified per phase
@@ -118,8 +118,9 @@ Not implemented:
 - enhanced Ctrl+R, ghost suggestions, completion UI, or live highlighting;
 - arbitrary key-injection coverage (Tab, arrows, Ctrl+R), the release platform
   matrix, or CI-linked baseline evidence;
-- 100k-row history budgets, contention, and `.bash_history` invariance evidence
-  required by `G2`; or
+- remaining `G2` evidence: contention, prompt-boundary write acknowledgement,
+  permission checks beyond mode bits, and many-match prefix latency (100k query
+  p95 and hostile inertness evidence exist); or
 - asynchronous feature IPC or the broader completion/history provider model.
 
 Known foundation debt:
@@ -284,7 +285,7 @@ latency budgets.
 | 0 | Research / architecture | `validation` | platform matrix and remaining `G0` evidence |
 | 1 | Bootstrap | `validation` | clean baseline/CI evidence and broader lifecycle tracing |
 | 2 | Prompt | `validation` | width model and representative prompt percentiles |
-| 3 | History | `in-progress` | Phase 3A slice implemented; `G2` budgets and invariance evidence pending |
+| 3 | History | `in-progress` | Phase 3A slice implemented; remaining `G2` contention, prompt-boundary write, many-match prefix, and permission evidence |
 | 4 | Ghost suggestions | `blocked` | `G2` and `G3` |
 | 5 | Completion | `discovery` | adapter experiment produces `G4`; popup waits for `G3` and `G4` |
 | 6 | Syntax highlighting | `blocked` | `G3`; intentionally after search/ghost/completion evidence |
@@ -366,8 +367,8 @@ accept or revise these details before implementation:
 - Bash's resulting history entry is the admission authority; `$BASH_COMMAND` is
   not a substitute and `HISTCMD` is not a stable identifier.
 - Capture Bash-normalized command text, starting cwd, completion timestamp, exit
-  status, nullable duration, session ID, event sequence, and diagnostic Bash
-  history number.
+  status, nullable duration, session ID, event sequence, and the diagnostic
+  `history 1` list number (not `HISTCMD`).
 - Use unique `(session_id, event_sequence)` retry idempotency.
 - Prefer `$XDG_DATA_HOME/mbx/history.sqlite3`, falling back to
   `$HOME/.local/share/mbx/history.sqlite3`.
@@ -387,9 +388,9 @@ accept or revise these details before implementation:
 | `HIST-005` | Add narrow recorder/search/policy and reader/writer ports | `complete` | `crates/cli/src/history.rs` ports plus policy and history-service substitutes |
 | `HIST-013` | Decide SQLite linkage/dependency and supported-platform packaging | `complete` | bundled rusqlite; measured +1.97 MiB release binary and first-build cost in ADR 0005 section 6a |
 | `HIST-012` | Define queue drain, shell-exit, crash, retry, and acceptable-loss semantics | `complete` | durability contract in `docs/history-phase3a-contract.md`; writer commits eagerly and Shutdown drains |
-| `HIST-006` | Implement SQLite schema, migrations, permissions, retention, and writer | `complete` | `crates/cli/src/storage.rs` schema v1, WAL, `0700`/`0600`, retention prune, bounded writer |
+| `HIST-006` | Implement SQLite schema, migrations, permissions, retention, and writer | `complete` | `crates/cli/src/storage.rs` schema v1, WAL, `0700`/`0600`, retention prune, batched writer |
 | `HIST-011` | Implement exclusions, no-log policy, disable/path/clear/delete controls | `complete` | `crates/cli/src/policy.rs` plus `mbx history path|count|clear|delete` and env controls |
-| `HIST-007` | Add opt-in Bash observation and bounded protocol ingestion | `validation` | `bash/history.bash`, MBX2 RECORD ingestion, and PTY recording tests; `G2` budgets/invariance remain |
+| `HIST-007` | Add opt-in Bash observation and bounded protocol ingestion | `validation` | `bash/history.bash`, MBX2 RECORD ingestion, PTY recording/invariance tests, seeded 100k corpus, hostile inertness, and query p95 in `docs/benchmarks/2026-08-16-history-queries.md`; contention, prompt-boundary write, many-match prefix, and extra permission checks remain |
 | `HIST-008` | Add recent, exact-prefix, cwd queries and deterministic ranking | `complete` | `mbx history search recent|prefix|cwd` with bounded limits and NOCASE prefix index |
 | `HIST-009` | Add bounded fuzzy ranking | `blocked` | `HIST-008`, deterministic-query evidence, and 100k+ benchmark |
 | `HIST-010` | Add repository context | `blocked` | history-scoped `GIT-003` root/branch provider subset |
@@ -521,10 +522,10 @@ controls, deterministic queries, MBX2 ingestion, and opt-in Bash observation
 (`HIST-005`–`HIST-008`, `HIST-011`–`HIST-013`). Capture stays disabled by
 default. Remaining before `G2`:
 
-1. `HIST-007` evidence: run the `HIST-004` 100k-row corpus and contention cases
-   at the recorded budgets; prove `.bash_history` invariance for
-   enable/disable/clear/delete; exercise hostile SQL/control rows and
-   permission checks end to end.
+1. `HIST-007` remaining `G2` evidence: contention cases, prompt-boundary write
+   acknowledgement, permission checks beyond mode bits, and many-match prefix
+   latency. 100k query p95, hostile inertness, and invariance/admission-parity
+   PTY evidence are recorded.
 2. `FND-001` / `G0`: CI evidence via the pushed baseline is pending the run.
 3. `PRM-002` remains discovery until the width model is designed from the
    `RSH-004` baseline; `EDT-001` stays blocked on `FND-001`.
@@ -589,3 +590,6 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-15 | Second review fixes: corrected the history-off `HISTCMD` evidence, clarified per-session writer topology, hardened parent PTY opening with `O_NOCTTY`, strengthened PS2/`history -a` regression evidence, and right-sized the exact near-limit Bash transport fixture budget. |
 | 2026-08-15 | Accepted `G1` (ADR 0005) and approved the `HIST-003` Phase 3A contract; implemented the full UI-free history slice: bundled SQLite linkage with measured size evidence, storage schema v1 with WAL/`0700`/`0600`/retention, narrow ports, exclusions/disable/clear/delete controls, deterministic queries, MBX2 RECORD ingestion, and opt-in Bash observation with PTY end-to-end tests. `G2` evidence remains. |
 | 2026-08-15 | Reconciled architecture, README, protocol, and gate status with that implemented slice: `G2` is `validation` rather than blocked by completed `G1`; MBX2 RECORD is specified as implemented; capture remains default-off until `G2` evidence. |
+| 2026-08-15 | Started the `HIST-007` `.bash_history` invariance and recorder admission-parity PTY slice; plan in `docs/history-g2-invariance-plan.md`. `G2` budgets/contention remain. |
+| 2026-08-15 | Completed the invariance/admission-parity PTY slice: paired `HISTFILE` comparisons for enable/disable/clear/delete/exit-flush, recorder parity with the `HIST-002` matrix, and recorder fixes for first-prompt skip, `history 1` parsing, and list-number drop keys (`M-026`–`M-028`). `G2` budgets/contention remain. |
+| 2026-08-16 | Corrected ADR 0005/`history_number` to the `history 1` list number, not `HISTCMD`. Completed the `HIST-004` corpus, hostile-inertness, and 100k query-percentile slice (`docs/history-g2-corpus-plan.md`, `docs/benchmarks/2026-08-16-history-queries.md`). Writer batching and under-cap prune skips (`M-029`, `M-030`). `G2` contention, prompt-boundary write, many-match prefix, and extra permission checks remain. |

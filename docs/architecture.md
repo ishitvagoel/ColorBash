@@ -76,7 +76,7 @@ crates/cli/src/
 
 crates/pty/          genuine POSIX PTY test driver; not a product path
 docs/                research, UX/compatibility contracts, and ADRs
-scripts/             explicit development setup and prompt/IPC benchmarks
+scripts/             explicit development setup and prompt/IPC/history benchmarks
 tests/bash/           module contracts, semantic corpus, and integration smoke
 ```
 
@@ -317,10 +317,11 @@ a concrete consumer establishes their contracts.
 
 The Phase 3A sidecar is implemented and stays off unless `MBX_HISTORY=1`. Bash's
 admitted history list is the capture authority: `history.bash` reads `history 1`
-at the prompt boundary, drops empty or excluded entries, and sends an MBX2
-`RECORD` over the existing coprocess with its own bounded deadline. Failure,
-queue saturation, or a missing helper drops enhancement data only and must not
-block prompt construction.
+at the prompt boundary after command completion (skipping the first prompt),
+drops empty or excluded entries, and sends an MBX2 `RECORD` over the existing
+coprocess with its own bounded deadline. The diagnostic `history_number` is the
+`history 1` list number, not `HISTCMD`. Failure, queue saturation, or a missing
+helper drops enhancement data only and must not block prompt construction.
 
 The helper opens `$XDG_DATA_HOME/mbx/history.sqlite3` (falling back to
 `$HOME/.local/share/mbx/history.sqlite3`) with directory mode `0700` and file
@@ -332,8 +333,12 @@ CLI operation (`mbx history search recent|prefix|cwd`), not an MBX2 query.
 `path`, `count`, `clear`, and `delete` are the privacy controls. Command text
 never enters traces.
 
-This slice does not enable history-driven UI. `G2` still requires 100k-row
-budgets, contention cases, and `.bash_history` invariance evidence.
+This slice does not enable history-driven UI. Invariance and admission-parity
+PTY evidence is in `crates/pty/tests/history_invariance.rs`. 100k query p95 and
+hostile inertness evidence is in `docs/benchmarks/2026-08-16-history-queries.md`
+and `crates/cli/src/corpus.rs`. `G2` still requires contention cases,
+prompt-boundary write acknowledgement, many-match prefix latency, and
+permission checks beyond mode bits.
 
 ## Compatibility and degradation
 

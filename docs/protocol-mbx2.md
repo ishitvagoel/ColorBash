@@ -1,7 +1,9 @@
 # MBX2 protocol — history record ingestion
 
-Status: implemented for the Phase 3A RECORD slice (`HIST-007`); `G2` evidence
-(100k-row budgets, contention, and `.bash_history` invariance) remains.
+Status: implemented for the Phase 3A RECORD slice (`HIST-007`). Remaining `G2`
+evidence is contention, prompt-boundary write acknowledgement, many-match
+prefix latency, and permission checks beyond mode bits. Invariance,
+admission-parity, hostile inertness, and 100k query p95 evidence are recorded.
 
 ## Purpose
 
@@ -42,6 +44,8 @@ MBX2<TAB>request-id<TAB>ERROR<TAB>kind
 
 - `RECORD` is the only data message in the Phase 3A slice; search remains a
   direct CLI operation and does not travel over the wire.
+- `history-number` is the list number from `history 1` for the newest admitted
+  entry, or `-` when absent. It is diagnostic only and is not `HISTCMD`.
 - `ERROR` carries a typed kind (`invalid`, `queue_full`, `storage`) and never
   command text.
 - Fields are already folded Bash-normalized text from the admission authority;

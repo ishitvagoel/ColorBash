@@ -106,7 +106,8 @@ file. Only interactive shells have an active history list.
 3. **Sequence and identity.** `HISTCMD` advances only for admitted entries,
    remains ahead after deletion, and is not a stable row identifier, so
    `(session_id, event_sequence)` from the sidecar's own counter is the stable
-   idempotency key, with `HISTCMD` retained only as a diagnostic number.
+   idempotency key. The stored diagnostic is the list number printed by
+   `history 1` for the newest admitted entry, not `HISTCMD`.
 4. **Drop behavior.** Commands Bash drops (space, dup, pattern, history-off) are
    dropped from the sidecar too; the sidecar never fabricates an entry.
 5. **Capture boundary.** Observation must occur when Bash has already folded and

@@ -483,3 +483,105 @@ to prevent recurrence, not to assign blame.
 - Evidence: `crates/pty/tests/driver.rs`,
   `crates/pty/tests/history_admission.rs`, `crates/cli/src/provider.rs`, and the
   warnings-denied Clippy gate.
+
+## M-026 — Greedy `history 1` stripping dropped a leading space
+
+- Discovered: 2026-08-15
+- Status: Fixed
+- Failed assumption: removing the longest prefix ending in two spaces from
+  `history 1` was equivalent to stripping the right-aligned number and its
+  two-space separator.
+- Impact: an admitted command that itself began with a space lost that space in
+  the sidecar, so the stored text was not the folded HISTFILE form.
+- Correction: the recorder parses `^[[:space:]]*[0-9]+  (.*)$` and keeps the
+  remainder, including a user-typed leading space.
+- Prevention: assert stored sidecar text against the exact folded HISTFILE form,
+  including leading spaces, rather than only substring presence.
+- Evidence: `bash/history.bash` and
+  `leading_space_is_preserved_when_admitted` in
+  `crates/pty/tests/history_invariance.rs`.
+
+## M-027 — `HISTCMD` was used as the non-admission drop key
+
+- Discovered: 2026-08-15
+- Status: Fixed
+- Failed assumption: if `history 1` still showed the previous entry, comparing
+  `HISTCMD` would detect that Bash had not admitted a new command.
+- Impact: while history was off, the recorder re-queued the same `set +o history`
+  row and never recorded the later admitted command, so omissions and later
+  admissions were both wrong.
+- Correction: the drop key is the list number printed by `history 1`, which is
+  the identity of the newest admitted entry. That same list number is the stored
+  diagnostic `history_number`. `HISTCMD` is not used for drop detection or
+  storage.
+- Prevention: treat `HISTCMD` as unstable; do not store it as `history_number`.
+  PTY tests must cover history-off followed by a later admitted command, not
+  only that omitted text is absent.
+- Evidence: `bash/history.bash` and `history_off_commands_are_not_recorded` in
+  `crates/pty/tests/history_invariance.rs`.
+
+## M-028 — The first prompt recorded a seeded `HISTFILE` entry
+
+- Discovered: 2026-08-15
+- Status: Fixed
+- Failed assumption: every prompt-boundary `history 1` read was a newly completed
+  command in this session.
+- Impact: loading a prior `.bash_history` made the sidecar record that old entry
+  before the user typed anything, violating the post-completion capture contract.
+- Correction: the recorder skips recording on the first prompt but still snapshots
+  the `history 1` list number and command text as the drop key. A seeded-file PTY
+  test asserts count 0 at the first prompt and after an empty Enter.
+- Prevention: session-start prompts are not completion boundaries; snapshot the
+  drop key without recording and test seeded `HISTFILE` plus empty Enter.
+- Evidence: `bash/history.bash` and `seeded_histfile_is_not_rewritten_on_append`
+  in `crates/pty/tests/history_invariance.rs`.
+
+## M-029 — Row-cap prune ran a full ordered delete under the limit
+
+- Discovered: 2026-08-16
+- Status: Fixed
+- Failed assumption: `DELETE ... LIMIT -1 OFFSET max_rows` would be cheap when
+  the store had fewer rows than the retention cap.
+- Impact: the writer pruned every 32 inserts with a full `ORDER BY` delete, so a
+  100k-row corpus load did not finish in minutes and could not produce `G2`
+  query evidence.
+- Correction: count first and skip the ordered delete when `count <= max_rows`.
+- Prevention: retention maintenance must be cheap on the common under-cap path;
+  a 100k load (or a batch larger than `WRITER_BATCH_SIZE`) is required evidence,
+  not only a handful of rows.
+- Evidence: `prune` in `crates/cli/src/storage.rs` and
+  `row_cap_prune_keeps_every_row_under_the_limit`.
+
+## M-030 — Writer autocommit made large ingest unbounded
+
+- Discovered: 2026-08-16
+- Status: Fixed
+- Failed assumption: WAL autocommit per insert was fast enough that batching
+  could wait; `HIST-012` "batches where practical" was treated as optional.
+- Impact: a 100k-row corpus fill saturated the queue and waited on per-row
+  commits, so query-percentile evidence still could not be collected after
+  `M-029`.
+- Correction: the writer opens `BEGIN IMMEDIATE` for each batch of
+  `WRITER_BATCH_SIZE` inserts and commits before prune; shutdown commits a
+  partial batch.
+- Prevention: ingest of the `HIST-004` 100k corpus is required writer evidence,
+  not only a handful of rows. Queue acknowledgement remains "accepted by the
+  queue", not "committed".
+- Evidence: `writer_loop` in `crates/cli/src/storage.rs` and the ignored
+  `load_100k_and_measure_query_percentiles` test.
+
+## M-031 — Failed batch commit left the writer in an open transaction
+
+- Discovered: 2026-08-16
+- Status: Fixed
+- Failed assumption: tracing a failed `COMMIT` and resetting `pending` was enough;
+  SQLite could still be inside the batch transaction.
+- Impact: the next `BEGIN IMMEDIATE` failed, every later record in that session
+  was dropped, and the uncommitted batch was lost on shutdown because `pending`
+  had already been cleared.
+- Correction: on batch or shutdown `COMMIT` failure, `ROLLBACK` before clearing
+  `pending`; prune only after a successful batch commit.
+- Prevention: every writer transaction path must pair failed commits with
+  rollback; do not prune inside a failed batch.
+- Evidence: `writer_loop` in `crates/cli/src/storage.rs`.
+

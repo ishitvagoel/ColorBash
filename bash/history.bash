@@ -30,22 +30,42 @@ _mbx_history_session_id() {
         "$seconds" "$fraction" "$BASHPID" "$RANDOM" "$RANDOM"
 }
 
+_mbx_history_parse_latest() {
+    local line=
+    line=$(history 1 2>/dev/null) || line=
+    if [[ $line =~ ^[[:space:]]*([0-9]+)[[:space:]][[:space:]](.*)$ ]]; then
+        _MBX_HISTORY_LATEST_NUMBER=${BASH_REMATCH[1]}
+        REPLY=${BASH_REMATCH[2]}
+        return 0
+    fi
+    return 1
+}
+
 _mbx_history_prompt() {
-    local entry number
-    local history_number=
+    local entry history_number=
 
     [[ ${_MBX_HISTORY_ENABLED:-0} == 1 ]] || return 0
     [[ ${_MBX_ENGINE_READY:-0} == 1 ]] || return 0
+    # The first prompt is not a command-completion boundary; HISTFILE may already
+    # contain prior sessions. Snapshot the drop key only, then record after
+    # commands complete.
+    if [[ ${_MBX_HISTORY_SAW_PROMPT:-0} != 1 ]]; then
+        _MBX_HISTORY_SAW_PROMPT=1
+        if _mbx_history_parse_latest; then
+            _MBX_HISTORY_LAST_ENTRY=$REPLY
+            _MBX_HISTORY_LAST_NUMBER=$_MBX_HISTORY_LATEST_NUMBER
+        fi
+        return 0
+    fi
 
-    # `history 1` prints the newest admitted entry as `  N  text` (right-aligned
-    # number, two-space separator). Bash stores the folded single-line form,
-    # which is exactly the admission authority; a missing entry means Bash did
-    # not admit one (history off, HISTCONTROL/HISTIGNORE drop) and there is
-    # nothing to record.
-    entry=$(history 1 2>/dev/null) || entry=
-    entry=${entry##*  }
+    # `history 1` prints `  N  text` (right-aligned list number, exactly two
+    # spaces, then the folded command). The list number is the drop key: HISTCMD
+    # is not a stable identifier and may be unset or still advance while history
+    # is off. Greedy `${var##*  }` would also eat a user-typed leading space.
+    _mbx_history_parse_latest || return 0
+    entry=$REPLY
+    history_number=$_MBX_HISTORY_LATEST_NUMBER
     [[ -n $entry ]] || return 0
-    [[ -n ${HISTCMD:-} ]] && history_number=$HISTCMD
     if [[ -n $_MBX_HISTORY_LAST_ENTRY && \
         "$entry" == "$_MBX_HISTORY_LAST_ENTRY" && \
         "$history_number" == "$_MBX_HISTORY_LAST_NUMBER" ]]; then
