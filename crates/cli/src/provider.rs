@@ -338,9 +338,12 @@ impl GitCommandRunner for BoundedGitCommandRunner {
                 }
             }
 
-            if stdout.is_some() && success.is_some() {
-                let stdout = stdout.take().expect("stdout presence was checked");
-                let success = success.expect("exit status presence was checked");
+            let completed = success.and_then(|success| {
+                stdout
+                    .take()
+                    .map(|stdout| GitCommandOutput { success, stdout })
+            });
+            if let Some(output) = completed {
                 if reader.join().is_err() {
                     return Err(ProviderError::typed(
                         ProviderErrorKind::Read,
@@ -353,7 +356,7 @@ impl GitCommandRunner for BoundedGitCommandRunner {
                         "Git inspection exceeded its deadline",
                     ));
                 }
-                return Ok(GitCommandOutput { success, stdout });
+                return Ok(output);
             }
 
             thread::sleep(
@@ -843,7 +846,10 @@ mod tests {
         .expect("the absolute trusted entry should resolve");
 
         assert!(executable.is_absolute());
-        assert_eq!(probed.borrow().as_slice(), &[executable.clone()]);
+        assert_eq!(
+            probed.borrow().as_slice(),
+            std::slice::from_ref(&executable)
+        );
         assert_eq!(
             GitCommandSpec::status(&executable, directory.path()).program,
             executable
