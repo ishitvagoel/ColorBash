@@ -1,0 +1,333 @@
+# MBX mistakes and prevention log
+
+This is a cumulative learning record for work performed by coding agents in this
+repository. Every agent must read it before planning or editing. The purpose is
+to prevent recurrence, not to assign blame.
+
+## Maintenance contract
+
+- Record only a confirmed mistake backed by code, test output, review evidence, or
+  a documented correction. Ordinary backlog, deferred scope, preferences, and
+  speculative risks belong in `docs/roadmap.md` or an ADR instead.
+- Give every mistake a stable ID, discovery date, and `Open`, `Mitigated`, or
+  `Fixed` status.
+- Include the failed assumption, observable impact, correction/current state,
+  prevention rule, and durable evidence.
+- Search by cause before adding an entry. If the same cause recurs, update and
+  append evidence to the existing entry rather than duplicating it.
+- Never delete a fixed entry. Status and evidence may be updated, but the original
+  lesson must remain visible.
+- Before handing off authorized edits, check whether a confirmed mistake needs a
+  new entry. When a fix lands, update the existing entry's status and evidence in
+  the same change. During read-only work, report the needed update instead.
+- Do not add empty "no mistakes" entries, blame people or agents, or include
+  credentials, private command contents, or sensitive logs.
+- During parallel work, one designated writer owns this file.
+
+## M-001 — Bash field codec contradicted MBX1
+
+- Discovered: 2026-08-15
+- Status: Fixed
+- Failed assumption: escaping `%`, tab, line feed, and carriage return was enough,
+  and decoders only needed the corresponding uppercase forms.
+- Impact: other control bytes could produce invalid requests, and lowercase or
+  general percent escapes were not decoded consistently with Rust.
+- Correction: `bash/protocol.bash` now implements the generic byte codec and the
+  cross-language behavior is exercised by module/integration tests.
+- Prevention: every protocol codec must share hostile-byte, lowercase-escape,
+  control-byte, and cross-language round-trip cases.
+- Evidence: `bash/protocol.bash`, `tests/bash/modules.bash`,
+  `tests/integration/protocol.bash`, and `docs/protocol.md`.
+
+## M-002 — Response parsing did not prove the exact field count
+
+- Discovered: 2026-08-15
+- Status: Fixed
+- Failed assumption: `IFS` plus `read` into a final `extra` variable would detect
+  every extra response field.
+- Impact: a trailing empty field could be accepted because `extra` was still
+  empty, weakening the protocol boundary.
+- Correction: response parsing now preserves fields and validates their exact
+  count.
+- Prevention: test consecutive separators, trailing empty fields, too few fields,
+  and too many fields for every response variant.
+- Evidence: `bash/protocol.bash` and `tests/bash/modules.bash`.
+
+## M-003 — Rust accepted a percent-decoded NUL
+
+- Discovered: 2026-08-15
+- Status: Fixed
+- Failed assumption: validating the encoded input was sufficient before percent
+  decoding.
+- Impact: `%00` could create a Rust string containing NUL even though MBX1 forbids
+  it and Bash variables cannot represent it.
+- Correction: the Rust decoder rejects NUL after decoding, and the protocol
+  contract documents the rule.
+- Prevention: validate invariants after every decoding/transformation boundary and
+  test them independently in all language implementations.
+- Evidence: `crates/protocol/src/lib.rs`, `docs/protocol.md`, and protocol tests.
+
+## M-004 — Fallback rendering lost safety-critical context
+
+- Discovered: 2026-08-15
+- Status: Fixed
+- Failed assumption: the Bash fallback only needed a generally usable prompt,
+  rather than semantic parity with the native renderer.
+- Impact: production and SSH context disappeared precisely when the helper failed.
+- Correction: fallback rendering consumes the same explicit flags/context and
+  retains production and SSH warnings. Focused tests cover production precedence
+  and SSH without production.
+- Prevention: run the same semantic-state matrix against coprocess, per-call, and
+  fallback paths. Treat danger context as required behavior, not decoration.
+- Evidence: `bash/fallback.bash`, `bash/config.bash`, and
+  `tests/bash/modules.bash`.
+
+## M-005 — Render paths independently interpreted policy and mutated `PS1`
+
+- Discovered: 2026-08-15
+- Status: Fixed
+- Failed assumption: coprocess, per-call, and fallback adapters could each compute
+  flags and update the prompt safely.
+- Impact: policy drift made adapters non-substitutable and directly enabled the
+  missing-context fallback behavior in `M-004`.
+- Correction: one immutable context/flag set is computed per prompt cycle; every
+  adapter returns via `REPLY`; only `bash/prompt.bash` commits `PS1`.
+- Prevention: adapters for one port must have the same input/output contract and
+  must not own coordinator state.
+- Evidence: `bash/config.bash`, `bash/engine.bash`, `bash/prompt.bash`, and
+  `tests/bash/modules.bash`.
+
+## M-006 — Git execution was weaker than the repository-code security claim
+
+- Discovered: 2026-08-15
+- Status: Fixed
+- Failed assumption: invoking bare `git status` was inherently free from
+  configured external execution and executable-selection risks.
+- Impact: Git could consult configured filesystem-monitor behavior, and an empty
+  or relative `PATH` entry could select a repository-local `git`, while the docs
+  claimed discovery did not execute repository code.
+- Correction: the provider resolves Git once from executable files in absolute
+  `PATH` entries, never falls back to bare `git`, and uses fixed arguments that
+  disable `core.fsmonitor`, color, and optional locks. Absolute `PATH` entries are
+  explicitly treated as trusted caller configuration.
+- Prevention: define subprocess specifications explicitly, disable execution
+  extension points, and test the constructed command and hostile repository
+  configuration before making security claims.
+- Evidence: `crates/cli/src/provider.rs`, its hostile `PATH` and
+  `core.fsmonitor` tests, and ADR 0007.
+
+## M-007 — Post-collection size checks were described as resource bounds
+
+- Discovered: 2026-08-15
+- Status: Mitigated
+- Failed assumption: checking `stdout.len()` after `Command::output()`, or checking
+  a Bash variable after `read`, limited the bytes acquired from a producer.
+- Impact: Git could run indefinitely and allocate more than 1 MiB before
+  rejection. A fast coprocess peer could likewise make Bash allocate an
+  arbitrarily large line before the 64-KiB decoder check ran; `read -t` limits
+  time, not bytes.
+- Correction: Git stdout is acquired through a `MAX+1` capped reader with a
+  deadline. The normal timeout path attempts direct-child kill/reap and reports a
+  typed cleanup failure if it cannot complete. Bash detects raw NUL, reads in
+  bounded chunks into at most the framing allowance, and rejects oversized
+  terminated or unterminated producers before collecting their complete output.
+- Current gap: Git cleanup is intentionally direct-child-only. An unexpected
+  descendant holding inherited stdout can outlive the provider, although the
+  detached capped reader cannot extend prompt return. Kernel stalls in
+  `spawn`/`kill`/`wait` are not independently cancellable.
+- Prevention: distinguish acceptance limits from acquisition limits. Require
+  capped reads, deadlines, child cleanup, and adversarial oversized/hanging tests.
+- Evidence: `crates/cli/src/provider.rs`, `bash/engine.bash`,
+  `bash/protocol.bash`, their hanging/oversize/NUL regression tests, ADR 0007,
+  and roadmap items `BST-006` and `PRM-003`.
+
+## M-008 — The timeout did not cover the complete fallback chain
+
+- Discovered: 2026-08-15
+- Status: Fixed
+- Failed assumption: a deadline on the coprocess read made prompt fallback
+  deadline-bounded.
+- Impact: after timeout, Bash invokes an unbounded per-call helper and then a
+  fallback that can start its own synchronous Git process. Coprocess cleanup also
+  performs an unbounded `wait` after sending `TERM`. Any of these steps can still
+  block the interactive prompt indefinitely.
+- Correction: one absolute deadline now covers request encoding and allocation,
+  coprocess exchange, bounded response decode, cleanup, per-call fallback, and
+  final process-free Bash fallback. Oversized logical paths, percent-heavy
+  fields, stalled helpers, and near-limit responses have focused deadline tests.
+- Prevention: assign one deadline budget to the whole operation, including retries
+  and fallback, and test it with deliberately hanging helpers/providers.
+- Evidence: `bash/engine.bash`, `docs/architecture.md`, and roadmap item
+  `PRM-003`.
+
+## M-009 — Direct helper color policy does not account for redirection
+
+- Discovered: 2026-08-15
+- Status: Open
+- Failed assumption: environment variables alone were enough to choose color for
+  every `mbx prompt` caller.
+- Impact: direct redirected helper output can contain color despite the UX contract
+  that redirected output is plain.
+- Current state: Bash supplies explicit capability flags correctly, but direct CLI
+  output capability remains unresolved.
+- Prevention: model caller-supplied capabilities separately from direct-process
+  defaults and test terminal versus piped stdout without breaking Bash command
+  substitution.
+- Evidence: `crates/cli/src/environment.rs`, `bash/config.bash`, and roadmap item
+  `PRM-002`.
+
+## M-010 — Shared startup captured prompt-only current-directory state eagerly
+
+- Discovered: 2026-08-15
+- Status: Fixed
+- Failed assumption: all commands could share one eager environment snapshot.
+- Impact: help, version, handshake, and socket commands could fail when invoked
+  from a deleted or otherwise unavailable current directory, even though only
+  prompt rendering needed it.
+- Correction: CLI parsing resolves prompt defaults lazily only for the `prompt`
+  command.
+- Prevention: capture side-effectful or fallible defaults at the narrowest use-case
+  boundary and add tests proving unrelated commands do not invoke them.
+- Evidence: `crates/cli/src/cli.rs`, `crates/cli/src/environment.rs`, and
+  `tests/integration/protocol.bash`.
+
+## M-011 — Child stdout was mistaken for the caller's terminal capability
+
+- Discovered: 2026-08-15
+- Status: Fixed
+- Failed assumption: the helper's `stdout.is_terminal()` was a universal color
+  default.
+- Impact: Bash per-call mode captures helper output through command substitution,
+  so the child always saw a pipe and silently lost requested color.
+- Correction: Bash owns and passes its terminal capability flags; Rust no longer
+  overrides them from command-substitution stdout. A focused test exercises the
+  actual color-enabled per-call command-substitution topology.
+- Current follow-up: direct-CLI redirected-output policy remains open in `M-009`.
+- Prevention: distinguish transport characteristics from end-user display
+  capabilities and test each adapter under its real process topology.
+- Evidence: `bash/config.bash`, `bash/engine.bash`,
+  `crates/cli/src/environment.rs`, and `tests/bash/modules.bash`.
+
+## M-012 — Crate-internal extension seams were not initially constructible
+
+- Discovered: 2026-08-15
+- Status: Fixed
+- Failed assumption: marking traits and outer types `pub` inside private modules
+  was sufficient for crate-internal substitutability.
+- Impact: another module could not construct `ProviderError` or a custom `Theme`,
+  so advertised provider/theme extension seams were not actually usable.
+- Correction: provider errors expose a constructor and theme fields are
+  constructible by sibling modules inside the crate. A sibling-module compile
+  test constructs both types through the intended crate-internal boundary.
+- Prevention: compile substitutes from the intended crate-internal consumer
+  module; review constructors, associated errors, DTO fields, and lifetimes, and
+  do not describe these private-module seams as an external public API.
+- Evidence: `crates/cli/src/provider.rs`, `crates/cli/src/prompt.rs`, and
+  `seam_contract_tests` in `crates/cli/src/lib.rs`.
+
+## M-013 — The first canonical roadmap draft contained circular gates
+
+- Discovered: 2026-08-15
+- Status: Fixed
+- Failed assumption: a phase could both be blocked by a gate and contain the work
+  required to produce that gate, and early research could depend on later editor
+  experiments without deadlocking phase completion.
+- Impact: Phase 0 and completion could never complete as written. Phase 3A and
+  full Phase 3 also had an ambiguous exit, and several absolute history guarantees
+  were not technically measurable.
+- Correction: gate-producing completion experiments are separate from popup work;
+  Phase 0 exits at `G0`; `G2` is explicitly a Phase 3A gate; later phase exits have
+  stable deliverables; history guarantees use controlled comparisons and bounded
+  budgets.
+- Prevention: for every gate, identify exactly one producer set and its downstream
+  consumers, then check the dependency graph for cycles. Express interactive and
+  stateful guarantees as measurable bounds or controlled comparisons rather than
+  unexplained `never` claims.
+- Evidence: `docs/roadmap.md` gate map, `G0`-`G5`, phase tables, and change log.
+
+## M-014 — An ambiguous patch changed the wrong repeated status lines
+
+- Discovered: 2026-08-15
+- Status: Fixed
+- Failed assumption: multiple identical `- Status: Fixed` lines could be patched
+  safely without including each entry heading as context.
+- Impact: the patch temporarily changed the statuses of `M-001`, `M-005`, and
+  `M-010` instead of all intended entries.
+- Correction: every affected status was checked against its heading and restored
+  to its then-intended value; all later status changes are likewise anchored to
+  the stable entry heading.
+- Prevention: anchor edits to repeated Markdown fields with the stable entry ID or
+  heading, then immediately verify the complete ID-to-status mapping.
+- Evidence: the current `MISTAKES.md` ID/status map and the post-edit schema check.
+
+## M-015 — The framing limit depended on the line-ending convention
+
+- Discovered: 2026-08-15
+- Status: Fixed
+- Failed assumption: reading at most `MAX_MESSAGE_BYTES + 2` bytes and checking
+  the count before trimming covered EOF, LF, and CRLF uniformly.
+- Impact: the Rust transport accepts an exactly 64-KiB protocol line followed by
+  LF but rejects the same line followed by CRLF. Equivalent peers therefore get
+  different behavior at the documented boundary.
+- Correction: both clients normalize EOF/LF/CRLF framing before applying the
+  65,536-byte payload limit, and Rust/Bash tests cover `MAX-1`, `MAX`, and
+  `MAX+1` under every terminator.
+- Prevention: define whether delimiters are inside the payload limit, normalize
+  them before applying that limit, and test `MAX-1`, `MAX`, and `MAX+1` with EOF,
+  LF, and CRLF.
+- Evidence: `crates/cli/src/transport.rs`, `docs/protocol.md`, and roadmap item
+  `BST-006`.
+
+## M-016 — Bash fallback sanitization covered only selected controls
+
+- Discovered: 2026-08-15
+- Status: Fixed
+- Failed assumption: replacing escape, tab, line feed, carriage return, and Bash
+  expansion characters was equivalent to rejecting the full control range.
+- Impact: other C0 bytes and DEL can reach fallback `PS1`, so the native and
+  fallback renderers do not satisfy the same terminal-safety contract.
+- Correction: the fallback replaces every C0 byte, DEL, `$`, backticks, and
+  backslashes, and native/per-call/fallback paths share a hostile-input corpus.
+- Prevention: define one renderer safety postcondition for every adapter and run
+  the same C0, DEL, expansion-character, length, and hostile-context corpus against
+  native and fallback output.
+- Evidence: `bash/fallback.bash`, `crates/cli/src/prompt.rs`, and roadmap item
+  `PRM-007`.
+
+## M-017 — Per-call prompt serialization discarded unknown flag bits
+
+- Discovered: 2026-08-15
+- Status: Fixed
+- Failed assumption: translating the currently known flag bits into named CLI
+  switches was equivalent to forwarding the additive `PromptFlags` value.
+- Impact: the coprocess path preserves unknown bits, while per-call mode silently
+  drops them. A newly added capability can therefore change meaning when the
+  transport falls back, violating the adapter-substitution contract.
+- Correction: `mbx prompt --flags <u32>` accepts the complete additive value;
+  Bash per-call mode forwards it directly, and later named switches mutate known
+  bits without discarding unknown ones. All adapters have parity tests.
+- Prevention: preserve additive values through every transport representation and
+  test an unknown bit across coprocess, per-call, and fallback adapters before
+  adding a new flag.
+- Evidence: `bash/config.bash`, `bash/engine.bash`, `docs/protocol.md`, and roadmap
+  item `PRM-008`.
+
+## M-018 — Provider absence and cache outcomes were initially conflated
+
+- Discovered: 2026-08-15
+- Status: Mitigated
+- Failed assumption: every nonzero Git exit could be represented as repository
+  absence, and successful-cache tests were enough to define cache behavior.
+- Impact: a status failure after repository discovery could disappear without a
+  typed diagnostic, while negative and transient-error caching had no explicit,
+  regression-tested policy.
+- Correction: a fixed worktree preflight distinguishes ordinary absence from a
+  later typed `CommandFailure`. `Some`, `None`, and `Err` results are deliberately
+  cached for the bounded one-second TTL, with deterministic expiry, invalidation,
+  and capacity tests.
+- Current gap: a rare fatal preflight failure remains indistinguishable from a
+  non-repository because the provider deliberately does not acquire or expose Git
+  stderr.
+- Prevention: specify presence, absence, and failure independently, then define
+  cacheability, TTL, diagnostics, and refresh behavior for each outcome.
+- Evidence: `crates/cli/src/provider.rs`, its provider/cache tests, and ADR 0007.

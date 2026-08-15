@@ -53,8 +53,10 @@ Font is installed. `NO_COLOR`, redirected output, and `TERM=dumb` use plain text
   prompt cycle where practical.
 - Production context must be explicit configuration, never inferred from an
   unreliable host-name heuristic.
-- Git metadata may describe repository state but must never invoke repository
-  scripts or render raw terminal controls.
+- Git metadata may describe repository state but must never select executables or
+  scripts through repository data or implicit/relative lookup, or render raw
+  terminal controls. Caller-supplied absolute `PATH` entries are trusted
+  configuration.
 - Motion is absent; terminal rendering should feel immediate and stable.
 - Full-screen programs own the terminal while running. MBX writes only during the
   Bash prompt lifecycle.
@@ -103,4 +105,3 @@ guides, and command palettes remain design requirements, not prototype claims.
 Each must insert or propose ordinary Bash text and must never auto-execute. The
 Readline research and ADR 0003 define the validation needed before those designs
 are implemented.
-

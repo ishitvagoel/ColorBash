@@ -1,0 +1,561 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT=$(cd -- "${BASH_SOURCE[0]%/*}/../.." && pwd -P)
+MBX_TEST_BIN=${1:-"$ROOT/target/debug/mbx"}
+
+fail() {
+    printf 'FAIL: %s\n' "$1" >&2
+    exit 1
+}
+
+assert_eq() {
+    local expected=$1
+    local actual=$2
+    local message=$3
+    if [[ $actual != "$expected" ]]; then
+        printf 'FAIL: %s\n  expected: %q\n    actual: %q\n' \
+            "$message" "$expected" "$actual" >&2
+        exit 1
+    fi
+}
+
+assert_status() {
+    local expected=$1
+    local message=$2
+    shift 2
+    local actual=0
+
+    "$@" || actual=$?
+    assert_eq "$expected" "$actual" "$message"
+}
+
+source "$ROOT/bash/protocol.bash"
+source "$ROOT/bash/config.bash"
+source "$ROOT/bash/fallback.bash"
+source "$ROOT/bash/engine.bash"
+source "$ROOT/bash/prompt.bash"
+
+hostile_field=$'a%\t\n\r\e\177\303\251'
+_mbx_escape_field "$hostile_field"
+assert_eq 'a%25%09%0A%0D%1B%7F%C3%A9' "$REPLY" \
+    'the Bash protocol encoder did not escape every unsafe byte'
+encoded_field=$REPLY
+_mbx_unescape_field "$encoded_field"
+assert_eq "$hostile_field" "$REPLY" 'the Bash field codec did not round-trip'
+
+_mbx_unescape_field '%5c%4a'
+assert_eq '\J' "$REPLY" 'lowercase percent escapes were not decoded'
+for malformed_field in '%' '%0' '%0Z' '%GG' '%00'; do
+    if _mbx_unescape_field "$malformed_field"; then
+        fail "malformed protocol field was accepted: $malformed_field"
+    fi
+done
+
+_mbx_protocol_decode_pong 7 $'MBX1\t7\tPONG' || fail 'valid PONG response was rejected'
+if _mbx_protocol_decode_pong 7 $'MBX1\t7\tPONG\t'; then
+    fail 'PONG response with an extra empty field was accepted'
+fi
+_mbx_protocol_decode_prompt 8 $'MBX1\t8\tPROMPT\t'
+assert_eq '' "$REPLY" 'an empty prompt payload did not retain its field'
+if _mbx_protocol_decode_prompt 8 $'MBX1\t8\tPROMPT\t\tshifted'; then
+    fail 'consecutive separators bypassed prompt field-count validation'
+fi
+if _mbx_protocol_decode_prompt 8 $'MBX1\t8\tPROMPT\tbad%0Z'; then
+    fail 'a malformed prompt payload was accepted'
+fi
+if _mbx_protocol_decode_prompt 8 $'MBX1\t8\tPROMPT\tbad\evalue'; then
+    fail 'an unescaped response control character was accepted'
+fi
+
+unset NO_COLOR MBX_COLOR SSH_TTY
+TERM=dumb
+MBX_ICONS=nerd
+SSH_CONNECTION='client server'
+MBX_PRODUCTION_CONTEXT=1
+MBX_DISABLE_GIT=1
+_mbx_prompt_flags
+expected_flags=$((_MBX_FLAG_NO_COLOR | _MBX_FLAG_NERD_ICONS | _MBX_FLAG_SSH | \
+    _MBX_FLAG_PRODUCTION | _MBX_FLAG_DISABLE_GIT))
+assert_eq "$expected_flags" "$REPLY" 'prompt environment policy produced the wrong flags'
+
+assert_status 2 'the coprocess adapter accepted an incomplete context' \
+    _mbx_prompt_from_coprocess 0 - /tmp
+assert_status 2 'the per-call adapter accepted an incomplete context' \
+    _mbx_prompt_per_call 0 - /tmp
+assert_status 2 'the fallback adapter accepted an incomplete context' \
+    _mbx_fallback_prompt 0 - /tmp
+
+unknown_flag=$((1 << 20))
+forward_flags=$((expected_flags | unknown_flag))
+PS1=unchanged
+MBX_BIN=/bin/echo
+MBX_RENDER_TIMEOUT=.25
+_mbx_prompt_per_call 7 2500 /tmp/project "$forward_flags"
+assert_eq unchanged "$PS1" 'the per-call adapter mutated PS1'
+assert_eq \
+    "prompt --cwd /tmp/project --status 7 --flags $forward_flags --duration-ms 2500" \
+    "$REPLY" 'the per-call adapter did not preserve the raw additive flags'
+
+PS1=unchanged
+_mbx_fallback_prompt 5 2500 /home/test/work \
+    "$((_MBX_FLAG_NO_COLOR | _MBX_FLAG_DISABLE_GIT))"
+assert_eq unchanged "$PS1" 'the fallback adapter mutated PS1'
+assert_eq '/home/test/work  exit 5  2s\n> ' "$REPLY" \
+    'the fallback adapter did not render the explicit context'
+
+# Even with repository rendering enabled, the last-resort prompt must remain a
+# builtin-only path and must not discover or invoke Git.
+command() { fail 'the fallback invoked command'; }
+git() { fail 'the fallback invoked git'; }
+_mbx_fallback_prompt 0 - /tmp "$_MBX_FLAG_NO_COLOR"
+assert_eq '/tmp\n> ' "$REPLY" 'the process-free fallback changed its base prompt'
+unset -f command git
+
+HOSTNAME='prod$host'
+USER='root\user'
+_mbx_fallback_prompt 0 - /srv/app \
+    "$((_MBX_FLAG_NO_COLOR | _MBX_FLAG_DISABLE_GIT | _MBX_FLAG_PRODUCTION | _MBX_FLAG_SSH))"
+assert_eq '! PROD · prod?host · root?user  /srv/app\n> ' "$REPLY" \
+    'production did not retain precedence over SSH in the fallback'
+
+HOSTNAME=$'remote\001$host`name\\tail'
+_mbx_fallback_prompt 0 - /srv/app \
+    "$((_MBX_FLAG_NO_COLOR | _MBX_FLAG_DISABLE_GIT | _MBX_FLAG_SSH))"
+assert_eq 'ssh: remote??host?name?tail  /srv/app\n> ' "$REPLY" \
+    'the SSH-only fallback lost or failed to sanitize its context'
+
+# Build one hostile corpus for every renderer: all representable C0 controls,
+# DEL, and the three characters that Bash expands while decoding PS1.
+hostile_controls=
+for ((control = 1; control <= 31; control++)); do
+    printf -v octal '%03o' "$control"
+    printf -v byte '%b' "\\$octal"
+    hostile_controls+=$byte
+done
+printf -v byte '%b' '\177'
+hostile_controls+=$byte
+hostile_controls+='$'
+hostile_controls+='`'
+hostile_controls+='\'
+printf -v hostile_replacement '%*s' 35 ''
+hostile_replacement=${hostile_replacement// /?}
+hostile_cwd="/tmp/$hostile_controls"
+safe_cwd="/tmp/$hostile_replacement"
+native_flags=$((_MBX_FLAG_NO_COLOR | _MBX_FLAG_ASCII_ICONS | \
+    _MBX_FLAG_DISABLE_GIT | unknown_flag))
+expected_hostile_prompt="${safe_cwd}\\n> "
+
+for ((control = 1; control <= 31; control++)); do
+    ((control == 9)) && continue
+    printf -v octal '%03o' "$control"
+    printf -v byte '%b' "\\$octal"
+    if _mbx_protocol_validate_line "MBX1${byte}unsafe"; then
+        fail "the optimized protocol scan accepted raw control byte $control"
+    fi
+done
+if _mbx_protocol_validate_line $'MBX1\177unsafe'; then
+    fail 'the optimized protocol scan accepted raw DEL'
+fi
+
+_mbx_sanitize_text "$hostile_controls"
+assert_eq "$hostile_replacement" "$REPLY" \
+    'the fallback sanitizer did not replace the complete hostile corpus'
+_mbx_fallback_prompt 0 - "$hostile_cwd" "$native_flags"
+assert_eq "$expected_hostile_prompt" "$REPLY" \
+    'the fallback renderer violated the shared hostile-state contract'
+
+[[ -x $MBX_TEST_BIN ]] || fail "mbx binary is missing: $MBX_TEST_BIN"
+MBX_BIN=$MBX_TEST_BIN
+MBX_RENDER_TIMEOUT=.25
+_mbx_prompt_per_call 0 - "$hostile_cwd" "$native_flags" || \
+    fail 'the per-call adapter rejected the hostile corpus'
+assert_eq "$expected_hostile_prompt" "$REPLY" \
+    'the per-call renderer violated the shared hostile-state contract'
+
+# Run the real CLI below command substitution with color explicitly enabled.
+# Its stdout is therefore a pipe, so only the forwarded capability flags can
+# preserve color; ambient isatty inference cannot make this pass.
+color_flags=$((_MBX_FLAG_ASCII_ICONS | _MBX_FLAG_DISABLE_GIT | unknown_flag))
+colored_prompt=$(
+    _mbx_prompt_per_call 0 - /tmp/color "$color_flags" || exit 1
+    printf '%s' "$REPLY"
+)
+[[ $colored_prompt == *'\[\e['* ]] || \
+    fail 'real command substitution stripped color from the per-call adapter'
+
+MBX_IPC_MODE=coprocess
+MBX_DISABLE_RENDERER=0
+MBX_IPC_TIMEOUT=.25
+_mbx_engine_start || fail 'the coprocess engine did not become ready'
+PS1=unchanged
+_mbx_prompt_from_coprocess 7 2500 /tmp/project "$native_flags" || \
+    fail 'the coprocess prompt adapter failed'
+assert_eq unchanged "$PS1" 'the coprocess adapter mutated PS1'
+assert_eq '/tmp/project  exit 7  2.5s\n> ' "$REPLY" \
+    'the coprocess adapter returned an unexpected prompt'
+_mbx_prompt_from_coprocess 0 - "$hostile_cwd" "$native_flags" || \
+    fail 'the coprocess adapter rejected the hostile corpus'
+assert_eq "$expected_hostile_prompt" "$REPLY" \
+    'the coprocess renderer violated the shared hostile-state contract'
+_mbx_engine_stop
+
+wait_for_deferred_reap() {
+    local deadline
+
+    _mbx_deadline_after .50
+    deadline=$REPLY
+    while [[ -n ${_MBX_DEFERRED_CHILD_PIDS:-} ]]; do
+        _mbx_reap_children
+        [[ -z ${_MBX_DEFERRED_CHILD_PIDS:-} ]] && return 0
+        _mbx_deadline_remaining "$deadline" >/dev/null || \
+            fail 'a terminated Bash-owned helper was not reaped'
+    done
+}
+wait_for_deferred_reap
+
+MBX_BIN=/bin/true
+MBX_IPC_MODE=auto
+if _mbx_engine_start; then
+    fail 'engine startup reported success without a successful handshake'
+fi
+assert_eq 0 "${_MBX_ENGINE_READY:-missing}" 'failed engine startup left an invalid ready state'
+[[ -z ${_MBX_ENGINE_CHILD_PID:-}${_MBX_ENGINE_IN_FD:-}${_MBX_ENGINE_OUT_FD:-} ]] || \
+    fail 'failed engine startup retained process resources'
+_mbx_engine_stop
+_mbx_engine_stop
+wait_for_deferred_reap
+
+run_bounded_read_case() {
+    local size=$1
+    local terminator=$2
+    local should_accept=$3
+    local label=$4
+    local payload fd producer deadline result=
+    local actual_status=0
+
+    printf -v payload '%*s' "$size" ''
+    exec {fd}< <(printf '%s%s' "$payload" "$terminator")
+    producer=$!
+    _mbx_deadline_after .50
+    deadline=$REPLY
+    if _mbx_read_bounded_response "$fd" "$deadline"; then
+        result=$REPLY
+    else
+        actual_status=$?
+    fi
+    exec {fd}<&-
+    if kill -0 "$producer" 2>/dev/null; then
+        kill -KILL "$producer" 2>/dev/null || true
+    fi
+    wait "$producer" 2>/dev/null || true
+
+    if ((should_accept == 1)); then
+        ((actual_status == 0)) || fail "$label was rejected"
+        [[ $result == "$payload" ]] || fail "$label returned a truncated payload"
+    elif ((actual_status == 0)); then
+        fail "$label bypassed the MAX+1 acquisition guard"
+    fi
+}
+
+for terminator_name in EOF LF CRLF; do
+    case $terminator_name in
+        EOF) terminator= ;;
+        LF) terminator=$'\n' ;;
+        CRLF) terminator=$'\r\n' ;;
+    esac
+    run_bounded_read_case "$((_MBX_PROTOCOL_MAX_MESSAGE_BYTES - 1))" \
+        "$terminator" 1 "MAX-1/$terminator_name"
+    run_bounded_read_case "$_MBX_PROTOCOL_MAX_MESSAGE_BYTES" \
+        "$terminator" 1 "MAX/$terminator_name"
+    run_bounded_read_case "$((_MBX_PROTOCOL_MAX_MESSAGE_BYTES + 1))" \
+        "$terminator" 0 "MAX+1/$terminator_name"
+done
+
+emit_multi_mib_response() {
+    local terminator=$1
+    local completion_marker=$2
+    local block
+
+    # Produce 2 MiB without first constructing it in the test process. If the
+    # bounded reader stops at MAX+1, closing its fd interrupts this producer
+    # before it can finish and create the marker.
+    for ((block = 0; block < 32; block++)); do
+        printf '%65536s' '' || return 1
+    done
+    [[ $terminator == LF ]] && printf '\n'
+    : >"$completion_marker"
+}
+
+run_multi_mib_rejection() {
+    local terminator=$1
+    local label=$2
+    local completion_marker=${TMPDIR:-/tmp}/colorbash-oversize-$BASHPID-$RANDOM
+    local fd producer deadline started_us elapsed_us
+
+    rm -f -- "$completion_marker"
+    exec {fd}< <(emit_multi_mib_response "$terminator" "$completion_marker" 2>/dev/null)
+    producer=$!
+    _mbx_deadline_after .25
+    deadline=$REPLY
+    _mbx_clock_now_us
+    started_us=$REPLY
+    if _mbx_read_bounded_response "$fd" "$deadline"; then
+        fail "$label multi-MiB response bypassed the MAX+1 acquisition guard"
+    fi
+    _mbx_clock_now_us
+    elapsed_us=$((REPLY - started_us))
+    exec {fd}<&-
+    if kill -0 "$producer" 2>/dev/null; then
+        kill -KILL "$producer" 2>/dev/null || true
+    fi
+    wait "$producer" 2>/dev/null || true
+
+    ((elapsed_us < 400000)) || fail "$label multi-MiB rejection was not prompt"
+    [[ ! -e $completion_marker ]] || \
+        fail "$label multi-MiB producer was collected in full before rejection"
+    rm -f -- "$completion_marker"
+}
+
+run_multi_mib_rejection EOF 'unterminated'
+run_multi_mib_rejection LF 'LF-terminated'
+
+# Bash normally drops NUL while reading. The empty delimiter makes it observable
+# and rejects even a valid frame hidden behind a leading NUL.
+exec {nul_fd}< <(printf '\0MBX1\t1\tPONG\n')
+nul_pid=$!
+_mbx_deadline_after .25
+if _mbx_read_bounded_response "$nul_fd" "$REPLY"; then
+    fail 'a NUL-prefixed valid frame bypassed the acquisition guard'
+fi
+exec {nul_fd}<&-
+wait "$nul_pid" 2>/dev/null || true
+
+exec {nul_fd}< <(printf 'M\0BX1\t1\tPONG\n')
+nul_pid=$!
+_mbx_deadline_after .25
+if _mbx_read_bounded_response "$nul_fd" "$REPLY"; then
+    fail 'an embedded NUL bypassed the bulk acquisition guard'
+fi
+exec {nul_fd}<&-
+wait "$nul_pid" 2>/dev/null || true
+
+# Exercise the exact-MAX CRLF lookahead's negative branch with an actual pending
+# byte. A non-LF byte must never be mistaken for the remainder of CRLF.
+printf -v max_payload '%*s' "$_MBX_PROTOCOL_MAX_MESSAGE_BYTES" ''
+exec {bad_lookahead_fd}< <(printf '%s\rZ' "$max_payload")
+bad_lookahead_pid=$!
+_mbx_deadline_after .25
+if _mbx_read_bounded_response "$bad_lookahead_fd" "$REPLY"; then
+    fail 'the exact-MAX CRLF lookahead accepted a non-LF byte'
+fi
+exec {bad_lookahead_fd}<&-
+wait "$bad_lookahead_pid" 2>/dev/null || true
+
+exec {stalled_lookahead_fd}< <(printf '%s\r' "$max_payload"; exec sleep 60)
+stalled_lookahead_pid=$!
+_mbx_deadline_after .03
+lookahead_deadline=$REPLY
+_mbx_clock_now_us
+lookahead_started_us=$REPLY
+if _mbx_read_bounded_response "$stalled_lookahead_fd" "$lookahead_deadline"; then
+    fail 'the exact-MAX CRLF lookahead accepted a missing LF'
+fi
+_mbx_clock_now_us
+lookahead_elapsed_us=$((REPLY - lookahead_started_us))
+exec {stalled_lookahead_fd}<&-
+kill -KILL "$stalled_lookahead_pid" 2>/dev/null || true
+wait "$stalled_lookahead_pid" 2>/dev/null || true
+((lookahead_elapsed_us < 200000)) || \
+    fail 'the exact-MAX CRLF lookahead exceeded its absolute deadline'
+
+stalling_bin="$ROOT/tests/bash/fixtures/stalling-mbx.bash"
+marker=${TMPDIR:-/tmp}/colorbash-stall-$BASHPID-$RANDOM
+rm -f -- "$marker"
+export MBX_STALL_PROMPT_MARKER=$marker
+
+# Request framing rejects a raw cwd that cannot possibly fit before entering the
+# per-byte escape loop or allocating a protocol request.
+printf -v oversized_logical_pwd '%*s' "$_MBX_PROTOCOL_MAX_MESSAGE_BYTES" ''
+_mbx_clock_now_us
+started_us=$REPLY
+if _mbx_protocol_encode_prompt 1 "$oversized_logical_pwd" 0 - 0; then
+    fail 'the outbound encoder accepted a request larger than the MBX1 maximum'
+fi
+failed_request=$REPLY
+_mbx_clock_now_us
+elapsed_us=$((REPLY - started_us))
+((elapsed_us < 100000)) || fail 'oversized request preflight entered the slow encoder'
+assert_eq '' "$failed_request" 'oversized request preflight retained a partial frame'
+
+# The five-argument codec API remains valid. A printable-ASCII cwd that exactly
+# fills the remaining frame capacity must take the native fast path and produce
+# a request at, but never beyond, MAX.
+printf -v request_prefix '%s\t%s\tPROMPT\t' "$_MBX_PROTOCOL_MAGIC" 1
+printf -v request_suffix '\t%s\t%s\t%s' 0 - 0
+near_limit_size=$((_MBX_PROTOCOL_MAX_MESSAGE_BYTES - \
+    ${#request_prefix} - ${#request_suffix}))
+printf -v exactly_fitting_cwd '%*s' "$near_limit_size" ''
+_mbx_clock_now_us
+started_us=$REPLY
+_mbx_protocol_encode_prompt 1 "$exactly_fitting_cwd" 0 - 0 || \
+    fail 'an exactly fitting printable-ASCII request was rejected'
+encoded_request=$REPLY
+_mbx_clock_now_us
+elapsed_us=$((REPLY - started_us))
+assert_eq "$_MBX_PROTOCOL_MAX_MESSAGE_BYTES" "${#encoded_request}" \
+    'the exactly fitting request did not land on the MBX1 boundary'
+((elapsed_us < 100000)) || fail 'printable-ASCII request bypassed the native fast path'
+unset encoded_request
+
+# Percent must use the escape loop. Its cooperative deadline prevents an
+# escape-heavy value from spending seconds constructing a doomed request.
+printf -v escape_heavy_logical_pwd '%%%.0s' {1..22000}
+_mbx_deadline_after .03
+escape_deadline=$REPLY
+_mbx_clock_now_us
+started_us=$REPLY
+if _mbx_protocol_encode_prompt \
+    1 "$escape_heavy_logical_pwd" 0 - 0 _mbx_deadline_remaining "$escape_deadline"; then
+    fail 'an oversized escape-heavy request was accepted'
+fi
+_mbx_clock_now_us
+elapsed_us=$((REPLY - started_us))
+((elapsed_us < 200000)) || fail 'escape-heavy request encoding escaped its deadline'
+
+# A healthy handshake followed by an oversized logical PWD must still reach the
+# builtin fallback within one render budget. Per-call may use only what remains;
+# it cannot receive a fresh timeout after coprocess framing fails.
+MBX_BIN=$stalling_bin
+MBX_IPC_MODE=coprocess
+MBX_IPC_TIMEOUT=.25
+MBX_RENDER_TIMEOUT=.03
+_mbx_engine_start || fail 'the oversized-PWD fixture did not complete its handshake'
+_mbx_clock_now_us
+started_us=$REPLY
+PWD=$oversized_logical_pwd _mbx_update_prompt 0 -
+_mbx_clock_now_us
+elapsed_us=$((REPLY - started_us))
+((elapsed_us < 200000)) || fail 'oversized request fallback escaped the render deadline'
+assert_eq 0 "${_MBX_ENGINE_READY:-missing}" \
+    'oversized request framing left the coprocess marked ready'
+(( ${#PS1} < 1024 )) || fail 'the oversized logical PWD replaced the bounded fallback'
+wait_for_deferred_reap
+rm -f -- "$marker"
+
+# A safe near-limit cwd must be encoded and sent through the healthy coprocess.
+# Its stalled response consumes the existing budget and cannot grant per-call a
+# fresh timeout.
+printf -v request_prefix '%s\t%s\tPROMPT\t' "$_MBX_PROTOCOL_MAGIC" 2
+printf -v request_suffix '\t%s\t%s\t%s' 0 - "$expected_flags"
+near_limit_size=$((_MBX_PROTOCOL_MAX_MESSAGE_BYTES - \
+    ${#request_prefix} - ${#request_suffix}))
+printf -v near_limit_logical_pwd '%*s' "$near_limit_size" ''
+serve_prompt_marker=${TMPDIR:-/tmp}/colorbash-serve-prompt-$BASHPID-$RANDOM
+rm -f -- "$marker" "$serve_prompt_marker"
+export MBX_STALL_SERVE_PROMPT_MARKER=$serve_prompt_marker
+_mbx_engine_start || fail 'the near-limit-PWD fixture did not complete its handshake'
+_mbx_clock_now_us
+started_us=$REPLY
+PWD=$near_limit_logical_pwd _mbx_update_prompt 0 -
+_mbx_clock_now_us
+elapsed_us=$((REPLY - started_us))
+((elapsed_us < 200000)) || fail 'near-limit request encoding escaped the render deadline'
+[[ -e $serve_prompt_marker ]] || fail 'the fitting near-limit request was not sent'
+[[ ! -e $marker ]] || fail 'near-limit rendering granted per-call a second budget'
+assert_eq 0 "${_MBX_ENGINE_READY:-missing}" \
+    'expired near-limit request encoding left the coprocess marked ready'
+(( ${#PS1} < 1024 )) || fail 'the near-limit logical PWD replaced the bounded fallback'
+wait_for_deferred_reap
+unset MBX_STALL_SERVE_PROMPT_MARKER
+rm -f -- "$serve_prompt_marker"
+unset oversized_logical_pwd exactly_fitting_cwd near_limit_logical_pwd \
+    escape_heavy_logical_pwd
+
+# A direct per-call timeout exercises process-substitution $! ownership and
+# proves that the child is killed and later reaped without an unbounded wait.
+MBX_BIN=$stalling_bin
+MBX_RENDER_TIMEOUT=.03
+_mbx_clock_now_us
+started_us=$REPLY
+if _mbx_prompt_per_call 0 - /tmp "$native_flags"; then
+    fail 'a stalling per-call helper produced a prompt'
+fi
+_mbx_clock_now_us
+elapsed_us=$((REPLY - started_us))
+((elapsed_us < 200000)) || fail 'the per-call helper exceeded its absolute deadline'
+[[ -e $marker ]] || fail 'the process-substitution helper was not actually started'
+[[ -n ${_MBX_DEFERRED_CHILD_PIDS:-} ]] || \
+    fail 'the timed-out process-substitution child was not retained for safe reaping'
+wait_for_deferred_reap
+rm -f -- "$marker"
+
+# A syntactically valid near-MAX response with thousands of percent escapes is
+# fully acquired before decoding. Decoding must still share the render deadline
+# rather than extending prompt latency by seconds.
+response_marker=${TMPDIR:-/tmp}/colorbash-response-$BASHPID-$RANDOM
+rm -f -- "$response_marker" "$marker"
+export MBX_STALL_RESPONSE_MODE=percent-heavy
+export MBX_STALL_RESPONSE_MARKER=$response_marker
+MBX_BIN=$stalling_bin
+MBX_IPC_MODE=coprocess
+MBX_IPC_TIMEOUT=.50
+MBX_RENDER_TIMEOUT=.20
+_mbx_engine_start || fail 'the percent-heavy fixture did not complete its handshake'
+_mbx_clock_now_us
+started_us=$REPLY
+_mbx_update_prompt 0 -
+_mbx_clock_now_us
+elapsed_us=$((REPLY - started_us))
+((elapsed_us < 400000)) || fail 'percent-heavy decoding escaped the render deadline'
+[[ -e $response_marker ]] || fail 'the near-MAX response was not fully emitted before fallback'
+[[ ! -e $marker ]] || fail 'percent-heavy decoding granted per-call a second budget'
+(( ${#PS1} < 1024 )) || fail 'the expired percent-heavy response replaced the fallback prompt'
+assert_eq 0 "${_MBX_ENGINE_READY:-missing}" \
+    'the expired percent-heavy coprocess remained marked ready'
+wait_for_deferred_reap
+unset MBX_STALL_RESPONSE_MODE MBX_STALL_RESPONSE_MARKER
+rm -f -- "$response_marker"
+
+# The coprocess consumes the one render budget. Cleanup must be nonblocking and
+# the coordinator must not start a fresh per-call process with a new timeout.
+MBX_IPC_MODE=coprocess
+MBX_IPC_TIMEOUT=.25
+MBX_RENDER_TIMEOUT=.04
+_mbx_engine_start || fail 'the stalling fixture did not complete its handshake'
+_mbx_clock_now_us
+started_us=$REPLY
+_mbx_update_prompt 0 -
+_mbx_clock_now_us
+elapsed_us=$((REPLY - started_us))
+((elapsed_us < 200000)) || fail 'the fallback chain exceeded one overall render deadline'
+assert_eq 0 "${_MBX_ENGINE_READY:-missing}" \
+    'a timed-out coprocess remained marked ready'
+[[ ! -e $marker ]] || fail 'the coordinator granted per-call a second timeout budget'
+[[ -n $PS1 ]] || fail 'the deadline path did not commit the builtin fallback'
+wait_for_deferred_reap
+unset MBX_STALL_PROMPT_MARKER
+
+MBX_BIN=/bin/echo
+MBX_IPC_MODE=per-call
+MBX_RENDER_TIMEOUT=.25
+MBX_DISABLE_RENDERER=0
+_MBX_ENGINE_READY=0
+_mbx_update_prompt 9 2500
+assert_eq \
+    "prompt --cwd $PWD --status 9 --flags $expected_flags --duration-ms 2500" \
+    "$PS1" 'the prompt coordinator did not commit the per-call result'
+
+ps1_writer_count=0
+for bash_module in "$ROOT"/bash/*.bash; do
+    while IFS= read -r source_line; do
+        if [[ $source_line =~ ^[[:space:]]*PS1= ]]; then
+            ((ps1_writer_count += 1))
+            [[ ${bash_module##*/} == prompt.bash ]] || \
+                fail "${bash_module##*/} writes PS1 outside the coordinator"
+        fi
+    done <"$bash_module"
+done
+assert_eq 1 "$ps1_writer_count" 'prompt.bash is not the sole PS1 writer'
+
+printf 'PASS: focused Bash module contracts\n'

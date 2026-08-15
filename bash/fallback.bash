@@ -3,47 +3,70 @@
 
 _mbx_sanitize_text() {
     local value=${1-}
-    value=${value//$'\e'/?}
-    value=${value//$'\n'/?}
-    value=${value//$'\r'/?}
-    value=${value//$'\t'/ }
-    value=${value//\\/?}
-    value=${value//\$/?}
-    value=${value//\`/?}
-    REPLY=${value:0:256}
-}
+    local sanitized= byte
+    local code index
+    local LC_ALL=C
 
-_mbx_color_enabled() {
-    [[ -t 1 ]] || return 1
-    [[ ${TERM:-dumb} != dumb ]] || return 1
-    [[ -z ${NO_COLOR+x} ]] || return 1
-    [[ ${MBX_COLOR:-auto} != never ]]
+    # PS1 is later interpreted by Bash. Bound both the work and result while
+    # replacing terminal controls and the characters that enable another round
+    # of prompt expansion. Bash variables cannot contain NUL; every other C0
+    # byte and DEL is handled here.
+    for ((index = 0; index < ${#value} && index < 256; index++)); do
+        byte=${value:index:1}
+        printf -v code '%d' "'$byte"
+        if ((code < 32 || code == 127)) || [[ $byte == '$' || $byte == \` || $byte == \\ ]]; then
+            sanitized+='?'
+        else
+            sanitized+=$byte
+        fi
+    done
+    REPLY=$sanitized
 }
 
 _mbx_fallback_prompt() {
-    local status=${1:-0}
-    local duration_ms=${2:--}
-    local path=${PWD/#"${HOME:-}"/~}
-    local branch=
+    (($# == 4)) || return 2
+
+    local status=$1
+    local duration_ms=$2
+    local cwd=$3
+    local flags=$4
+    local path=$cwd
+    local context=
+    local context_color=
     local first_line=
+    local host user
     local arrow='>'
+
+    if [[ -n ${HOME:-} ]]; then
+        if [[ $cwd == "$HOME" ]]; then
+            path='~'
+        elif [[ $cwd == "$HOME/"* ]]; then
+            path="~${cwd:${#HOME}}"
+        fi
+    fi
 
     _mbx_sanitize_text "$path"
     path=$REPLY
 
-    if [[ ${MBX_DISABLE_GIT:-0} != 1 ]] && command -v git >/dev/null 2>&1; then
-        branch=$(command git -C "$PWD" symbolic-ref --quiet --short HEAD 2>/dev/null) || branch=
-        if [[ -n $branch ]]; then
-            _mbx_sanitize_text "$branch"
-            branch="  git:$REPLY"
-        fi
+    if ((flags & _MBX_FLAG_PRODUCTION)); then
+        _mbx_sanitize_text "${HOSTNAME:-host}"
+        host=$REPLY
+        _mbx_sanitize_text "${USER:-user}"
+        user=$REPLY
+        context="! PROD · ${host} · ${user}"
+        context_color='1;38;5;196'
+    elif ((flags & _MBX_FLAG_SSH)); then
+        _mbx_sanitize_text "${HOSTNAME:-remote}"
+        host=$REPLY
+        context="ssh: ${host}"
+        context_color='1;38;5;215'
     fi
 
-    if _mbx_color_enabled; then
-        first_line="\\[\\e[1;38;5;117m\\]${path}\\[\\e[0m\\]"
-        if [[ -n $branch ]]; then
-            first_line+="\\[\\e[38;5;114m\\]${branch}\\[\\e[0m\\]"
+    if (( (flags & _MBX_FLAG_NO_COLOR) == 0 )); then
+        if [[ -n $context ]]; then
+            first_line="\\[\\e[${context_color}m\\]${context}\\[\\e[0m\\]  "
         fi
+        first_line+="\\[\\e[1;38;5;117m\\]${path}\\[\\e[0m\\]"
         if (( status != 0 )); then
             first_line+="  \\[\\e[1;38;5;203m\\]exit ${status}\\[\\e[0m\\]"
         fi
@@ -52,7 +75,10 @@ _mbx_fallback_prompt() {
         fi
         arrow='\[\e[1;38;5;81m\]>\[\e[0m\]'
     else
-        first_line="${path}${branch}"
+        if [[ -n $context ]]; then
+            first_line="${context}  "
+        fi
+        first_line+="${path}"
         if (( status != 0 )); then
             first_line+="  exit ${status}"
         fi
@@ -63,4 +89,3 @@ _mbx_fallback_prompt() {
 
     REPLY="${first_line}\\n${arrow} "
 }
-

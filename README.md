@@ -8,15 +8,32 @@ This repository currently implements the architecture-discovery slice from the
 project brief:
 
 - a small Bash loader with status-preserving prompt hooks;
-- a dependency-free Rust helper and versioned protocol;
+- a modular Bash integration with separate protocol, configuration, engine,
+  orchestration, fallback, and hook boundaries;
+- a dependency-free Rust helper with a thin composition root, narrow injected
+  interfaces, and a versioned protocol;
 - a compact adaptive prompt with path, Git, failure, duration, SSH, and explicit
   production states;
-- automatic coprocess IPC with per-process and Bash-only fallbacks;
+- an injected Git repository-status provider with capped 50-ms refreshes and a
+  bounded one-second warm cache (broader provider families remain deferred);
+- bounded automatic coprocess IPC with per-call and process-free Bash fallbacks
+  sharing one render deadline;
 - reproducible process, coprocess, and Unix-socket benchmarks;
-- Bash compatibility smoke tests and architectural decision records.
+- focused Rust/Bash module-contract tests, compatibility smoke tests, and
+  architectural decision records.
 
 Completion, history, autosuggestions, and live highlighting are deliberately not
 implemented yet. The foundation must be validated before those features begin.
+
+The helper now separates CLI parsing, environment capture, application dispatch,
+request handling, rendering, providers, transports, and telemetry. Its internal
+`PromptRendering`, `PromptSegmentProvider`, `RepositoryStatusProvider`, and
+`RequestHandler` interfaces are the current extension and test seams. MBX1 keeps
+prompt flags as a compatible integer on the wire while Rust uses the typed
+`PromptFlags` view; Bash computes the matching flag set once for every rendering
+path. See
+[`docs/architecture.md`](docs/architecture.md) for dependency direction and the
+precise limits of the current provider implementation.
 
 ## Try the prototype
 
@@ -50,6 +67,7 @@ MBX_ICONS=nerd                  # opt in to Nerd Font glyphs
 MBX_DISABLE_GIT=1               # omit Git discovery
 MBX_DISABLE_RENDERER=1          # use the Bash-only fallback
 MBX_IPC_MODE=coprocess          # auto | coprocess | per-call | off
+MBX_RENDER_TIMEOUT=0.10         # total native/fallback attempt budget in seconds
 MBX_PRODUCTION_CONTEXT=1        # show the prominent production state
 MBX_ENABLE_DURATION_TIMING=1    # opt in only when no DEBUG trap is already used
 MBX_LOG=trace                   # helper timing/events; never logs command text
@@ -63,18 +81,29 @@ command.
 
 ```bash
 bash tests/run.bash
+MBX_BENCH_ITERATIONS=1000 bash scripts/benchmark-prompt.bash target/release/mbx
 MBX_BENCH_ITERATIONS=1000 bash scripts/benchmark-ipc.bash target/release/mbx
 ```
 
-The benchmark needs permission to create a local Unix-domain socket. See
+The IPC benchmark needs permission to create a local Unix-domain socket. See
 [`docs/architecture.md`](docs/architecture.md) for the current recommendation and
 the reassessment gate.
 
 ## Documentation
 
+Agent work starts with [`AGENTS.md`](AGENTS.md), which requires reading the
+cumulative [`MISTAKES.md`](MISTAKES.md) before planning or editing.
+
+- [`docs/roadmap.md`](docs/roadmap.md) — canonical delivery status, gates, and
+  next work
+- [`docs/solid-hardening-checklist.md`](docs/solid-hardening-checklist.md) —
+  completed bounded SOLID findings and validation evidence
 - [`docs/architecture.md`](docs/architecture.md)
 - [`docs/ux-spec.md`](docs/ux-spec.md)
 - [`docs/bash-compatibility.md`](docs/bash-compatibility.md)
 - [`docs/protocol.md`](docs/protocol.md)
 - [`docs/research/bash-readline-investigation.md`](docs/research/bash-readline-investigation.md)
+- [`docs/benchmarks/`](docs/benchmarks/)
 - [`docs/adr/`](docs/adr/)
+- [`CODEX_MODERN_BASH_ARCHITECTURE.md`](CODEX_MODERN_BASH_ARCHITECTURE.md) —
+  originating product brief and long-term intent

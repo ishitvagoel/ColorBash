@@ -12,6 +12,15 @@ fail() {
 handshake=$("$MBX_TEST_BIN" handshake)
 [[ $handshake == 'mbx/0.1.0 ready' ]] || fail 'CLI handshake failed'
 
+deleted_cwd=$(mktemp -d "${TMPDIR:-/tmp}/mbx-deleted-cwd.XXXXXXXX")
+version_without_cwd=$(
+    cd "$deleted_cwd"
+    rmdir "$deleted_cwd"
+    "$MBX_TEST_BIN" --version
+)
+[[ $version_without_cwd == 'mbx 0.1.0' ]] || \
+    fail 'a non-prompt command unexpectedly required a working directory'
+
 ping=$(printf 'MBX1\t17\tPING\n' | "$MBX_TEST_BIN" serve --stdio)
 [[ $ping == $'MBX1\t17\tPONG' ]] || fail 'stdio PING/PONG failed'
 
@@ -27,4 +36,3 @@ plain=$(TERM=dumb "$MBX_TEST_BIN" prompt --cwd /tmp/project --status 0 --ascii -
 [[ $plain == '/tmp/project\n> ' ]] || fail 'plain prompt fallback changed'
 
 printf 'PASS: helper protocol integration\n'
-

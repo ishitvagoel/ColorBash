@@ -11,7 +11,18 @@ simple enough for Bash to produce and validate with builtins.
 Each UTF-8 message occupies one line. Fields are separated by a tab. Literal `%`,
 control characters, tabs, and line breaks inside a field are percent-encoded as
 uppercase UTF-8 bytes. Decoders accept upper- or lowercase hex and reject malformed
-escapes. Unescaped line terminators and NUL are invalid.
+escapes. Unescaped line terminators are invalid. NUL is rejected even after
+percent decoding because Bash variables cannot represent it.
+
+The encoded message payload is at most 65,536 bytes; an LF or CRLF framing
+delimiter is not part of that payload limit. A final EOF may delimit the last
+message. Rust and Bash normalize EOF/LF/CRLF before applying the payload limit and
+share `MAX-1`, `MAX`, and `MAX+1` boundary tests for every terminator. Reads are
+capped at the payload plus the two-byte CRLF allowance. Bash reads under the C
+locale in bounded chunks and treats raw NUL as an observable forbidden delimiter,
+so it does not first allocate an arbitrary peer line. Prompt request encoding
+preflights fixed framing overhead and escaped-field growth before producing a
+line.
 
 Requests:
 
@@ -44,12 +55,24 @@ prompt transport/fallback.
 | 5 | 32 | Git lookup disabled |
 
 Unknown bits must be ignored within MBX1 so additive capability flags remain
-forward-compatible.
+forward-compatible. Coprocess requests and Bash fallback carry the raw value;
+per-call mode forwards that same integer through `mbx prompt --flags <u32>`.
+Named CLI options applied later mutate only their known bits, preserving all
+others.
 
 ## Security properties and limits
 
 - Unix sockets are created with mode `0600` and never replace an existing path.
-- Message and Git output sizes are bounded.
+- Rust transport reads and writes enforce the 64-KiB payload limit before handing
+  messages across the transport/application boundary. Transport owns response
+  correlation IDs; a handler returns response content only.
+- Bash bounds inbound acquisition and outbound construction, rejects raw or
+  decoded NUL, and applies the one render deadline while encoding, reading,
+  splitting, and percent-decoding.
+- Git stdout uses a true 1-MiB-plus-one capped read and a maximum 50-ms refresh
+  deadline. The normal timeout path attempts direct-child kill/reap and reports a
+  typed cleanup failure if that cannot complete; descendant-tree termination is
+  outside the current provider contract.
 - Prompt rendering strips characters that Bash may expand from untrusted display
   values, including `$`, backticks, and backslashes.
 - Protocol fields are data; neither endpoint evaluates them as shell source.
@@ -58,4 +81,3 @@ forward-compatible.
 MBX1 is a foundation protocol, not a complete provider schema. History and
 completion will require structured payloads; an incompatible framing or trust
 change must become MBX2 rather than silently changing MBX1.
-
