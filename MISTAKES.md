@@ -331,3 +331,64 @@ to prevent recurrence, not to assign blame.
 - Prevention: specify presence, absence, and failure independently, then define
   cacheability, TTL, diagnostics, and refresh behavior for each outcome.
 - Evidence: `crates/cli/src/provider.rs`, its provider/cache tests, and ADR 0007.
+
+## M-019 — PTY wait predicates could over-read past the next prompt
+
+- Discovered: 2026-08-15
+- Status: Fixed
+- Failed assumption: waiting for an output marker with a PTY read loop returned
+  exactly up to that marker, so a following wait for the next prompt would
+  observe it.
+- Impact: a single read chunk can contain the matched output plus the trailing
+  prompt, so the subsequent wait for the prompt timed out or matched stale
+  echo; history dump reads through PTY echo raced with prompt timing and could
+  return partial or empty content.
+- Correction: waits that must observe a full output-plus-prompt sequence use one
+  predicate requiring every needle in one read (`wait_all`). History content is
+  read from the `HISTFILE` on disk after a sourced dump script prints a marker
+  that never appears in typed-command echo, so assertions never depend on
+  readline echo or prompt timing.
+- Prevention: when a test needs both a command's output and the following
+  prompt, wait for both in a single read; never re-wait after a match that may
+  have consumed the trailing prompt. Read file artifacts from disk when the
+  assertion is about file contents.
+- Evidence: `crates/pty/tests/history_admission.rs`,
+  `crates/pty/tests/multiline_width.rs`, and
+  `docs/research/bash-history-admission.md`.
+
+## M-020 — History-off `HISTCMD` behavior was asserted without evidence
+
+- Discovered: 2026-08-15
+- Status: Fixed
+- Failed assumption: commands typed while history was disabled would still
+  advance `HISTCMD`, and the research note recorded that behavior without a
+  focused PTY assertion.
+- Impact: the history capture contract could use an incorrect sequence model and
+  treat omitted commands as admitted events.
+- Correction: the PTY characterization now asserts that `HISTCMD` does not
+  advance during history-off commands, that `set -o history` itself is omitted
+  when read while history is disabled, and the research/ADR evidence describes
+  the admitted-entry-only counter accurately.
+- Prevention: every Bash capture-semantic claim must have a controlled PTY test;
+  do not promote an unverified shell assumption into an evidence document.
+- Evidence: `crates/pty/tests/history_admission.rs`,
+  `docs/research/bash-history-admission.md`, and ADR 0005.
+
+## M-021 — Near-limit Bash transport timing was under-budgeted in a regression test
+
+- Discovered: 2026-08-15
+- Status: Fixed
+- Failed assumption: a maximum-size, printable-ASCII MBX1 request would always
+  reach a Bash fixture within a 30-ms render budget, independent of host load
+  and Bash pipe-copy speed.
+- Impact: the canonical module suite reported that a fitting request was not
+  sent even though the protocol encoder accepted the exact 64-KiB frame; the
+  test produced a false negative for bounded transport behavior.
+- Correction: the near-limit stalled-helper fixture now uses an explicit 100-ms
+  render budget and retains a 200-ms end-to-end bound while still proving that
+  no second per-call budget is granted.
+- Prevention: distinguish protocol acceptance limits from transport acquisition
+  budgets and benchmark max-size Bash writes before choosing a regression-test
+  deadline.
+- Evidence: `tests/bash/modules.bash`, `bash/engine.bash`, and the passing
+  canonical suite.

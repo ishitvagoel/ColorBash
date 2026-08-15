@@ -6,10 +6,9 @@
 > intended program and are not a status tracker.
 
 - Last reviewed: 2026-08-15 UTC
-- Current milestone: SOLID foundation hardening complete; `G0` validation remains
-- Active workstream: none; awaiting user direction after completing
-  `docs/solid-hardening-checklist.md`
-- Next decision gate: `G0` foundation stability
+- Current milestone: history groundwork evidence and contracts complete (`HIST-001`, `HIST-002`, `HIST-003`, `HIST-004`, `RSH-004`); acceptance and `G0` validation remain
+- Active workstream: none; awaiting `G1` acceptance of the expanded ADR 0005 and `FND-001`/`G0` baseline review
+- Next decision gate: `G1` history privacy/data contract acceptance
 - Editor-facing work is blocked by: `G2` history readiness and/or `G3` editor
   integration, as identified per phase
 
@@ -96,8 +95,8 @@ Implemented foundation:
   render deadline;
 - a fixed-spec Git provider with capped acquisition, a 50-ms refresh deadline,
   typed failure diagnostics, and a bounded one-second warm cache;
-- Rust unit tests plus Bash module, protocol-integration, and compatibility smoke
-  suites; and
+- Rust unit tests plus Bash module, protocol-integration, compatibility smoke,
+  and genuine PTY driver/foundation suites; and
 - architecture, UX, compatibility, protocol, research, benchmark, and ADR
   documentation.
 
@@ -111,8 +110,8 @@ Not implemented:
 
 - history capture, storage, query, privacy controls, or ranking;
 - enhanced Ctrl+R, ghost suggestions, completion UI, or live highlighting;
-- a real PTY test driver, signal/resize/key-injection coverage, or the release
-  platform matrix; or
+- arbitrary key-injection coverage (Tab, arrows, Ctrl+R), the release platform
+  matrix, or CI-linked baseline evidence; or
 - asynchronous feature IPC or the broader completion/history provider model.
 
 Known foundation debt:
@@ -131,8 +130,12 @@ Known foundation debt:
 - the controlled warm-Git benchmark passes provisional targets, but representative
   dirty/large repositories, cold refresh, fallback, PTY, and platform percentile
   evidence remain `PRM-004` work;
-- terminal capability and display-width handling do not yet cover 16/256/true
-  color, wide/combining glyphs, or resize;
+- terminal capability and formal display-width handling do not yet cover
+  16/256/true color or width math; PTY round-trip evidence exists for
+  wide/combining glyphs and resize;
+- the PTY driver in `crates/pty/src/sys.rs` is Linux/WSL-accurate; the macOS
+  values for `O_CLOEXEC`, `poll`'s `nfds_t`, and `ptsname_r` must be verified
+  before the `HRD-001` macOS leg (`O_NOCTTY` is already cfg-split);
 - duration timing is opt-in because composing arbitrary DEBUG traps is unsafe;
 - tracing is intentionally minimal;
 - the experimental socket server is sequential, and abrupt termination can leave
@@ -184,7 +187,7 @@ Pass only when:
 
 ### G1 — History privacy and data contract
 
-Status: `not-started`
+Status: `validation`; acceptance decision pending on the expanded ADR 0005
 
 Blocks enabling history capture. Pass only after ADR 0005 is accepted with:
 
@@ -270,10 +273,10 @@ latency budgets.
 
 | Phase | Name | Status | Principal unfinished condition |
 | ---: | --- | --- | --- |
-| 0 | Research / architecture | `validation` | PTY, multiline, width, resize, and platform evidence |
+| 0 | Research / architecture | `validation` | platform matrix and remaining `G0` evidence |
 | 1 | Bootstrap | `validation` | clean baseline/CI evidence and broader lifecycle tracing |
-| 2 | Prompt | `validation` | capability/width model and representative PTY/prompt percentiles |
-| 3 | History | `discovery` | accept `G1`; no implementation exists |
+| 2 | Prompt | `validation` | width model and representative prompt percentiles |
+| 3 | History | `discovery` | accept `G1`; groundwork contracts and evidence are complete |
 | 4 | Ghost suggestions | `blocked` | `G2` and `G3` |
 | 5 | Completion | `discovery` | adapter experiment produces `G4`; popup waits for `G3` and `G4` |
 | 6 | Syntax highlighting | `blocked` | `G3`; intentionally after search/ghost/completion evidence |
@@ -290,8 +293,8 @@ latency budgets.
 | `FND-001` | Review and land the SOLID refactor as a clean baseline | `validation` | canonical suite plus reviewed commit/CI evidence |
 | `FND-002` | Make transport own response correlation/framing postconditions and test `RequestHandler` substitutes directly | `complete` | `crates/cli/src/service.rs`, `transport.rs`, and direct substitute/oversize/correlation tests |
 | `FND-003` | Complete port-contract tests for full prompt mapping, ping isolation, provider error/disable behavior, and crate-internal seam construction | `complete` | service, prompt-provider, disabled-provider, and sibling seam tests in `crates/cli/src/` |
-| `PTY-001` | Genuine PTY driver for input, signal, resize, and terminal-state probes | `ready` | shared by `G0`, `HIST-002`, `G3`, and `G4` |
-| `EDT-001` | Non-destructive `bind -x` insertion/redisplay feasibility prototype | `blocked` | `FND-001`, `PTY-001`; produces the `G3` decision |
+| `PTY-001` | Genuine PTY driver for input, signal, resize, and terminal-state probes | `complete` | `crates/pty` driver tests plus foundation prompt/helper/Ctrl+C/Ctrl+Z/resize/`stty -g` coverage |
+| `EDT-001` | Non-destructive `bind -x` insertion/redisplay feasibility prototype | `blocked` | `FND-001`; produces the `G3` decision |
 
 ### Phase 0 — Research and architecture
 
@@ -302,7 +305,7 @@ Outcome: prove the hybrid Bash/Rust foundation without changing Bash execution.
 | `RSH-001` | Architecture, UX, compatibility, and initial ADR set | `complete` | `docs/architecture.md`, `docs/ux-spec.md`, `docs/bash-compatibility.md`, `docs/adr/` |
 | `RSH-002` | Bash lifecycle, Readline, and completion investigation | `complete` | `docs/research/bash-readline-investigation.md` |
 | `RSH-003` | Per-call, coprocess, and socket transport comparison | `complete` | ADR 0004 and `docs/benchmarks/2026-08-15-ipc.md` |
-| `RSH-004` | Multiline/display-width/resize PTY validation | `not-started` | `PTY-001` |
+| `RSH-004` | Multiline/display-width/resize PTY validation | `complete` | `crates/pty/tests/multiline_width.rs` and `docs/research/multiline-width-pty.md` |
 | `RSH-005` | Reassess editor architecture with experimental evidence | `superseded` | tracked explicitly by `G3` and `G4` |
 
 Exit condition: `G0`. Editor go/no-go evidence is a later pre-editor condition in
@@ -316,8 +319,8 @@ degradation.
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
 | `BST-001` | Rust workspace, Bash loader, and development setup | `complete` | `Cargo.toml`, `bash/init.bash`, `scripts/dev-setup.bash` |
-| `BST-002` | Interactive guard, idempotence, status preservation, and fallback | `validation` | shell suites exist; real PTY evidence is `PTY-001` |
-| `BST-003` | MBX1 coprocess and per-call adapters | `validation` | bounded protocol/module tests pass; real PTY evidence remains `PTY-001` |
+| `BST-002` | Interactive guard, idempotence, status preservation, and fallback | `validation` | shell suites plus PTY lifecycle/failure tests; platform matrix remains `HRD-001` |
+| `BST-003` | MBX1 coprocess and per-call adapters | `validation` | bounded protocol/module tests pass; PTY helper-crash coverage exists; platform matrix remains |
 | `BST-004` | Debug/trace logging without command text | `validation` | minimal Rust trace exists; broader lifecycle diagnostics deferred |
 | `BST-005` | CI and canonical verification suite | `validation` | `.github/workflows/ci.yml`, `tests/run.bash`; clean baseline pending |
 | `BST-006` | Enforce a terminator-independent 64-KiB boundary and cap Bash response acquisition before allocation | `complete` | Rust/Bash `MAX-1`/`MAX`/`MAX+1` EOF/LF/CRLF, NUL, and oversized-producer tests |
@@ -332,10 +335,10 @@ Outcome: an adaptive, semantic, safe prompt that remains fast under failure.
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
 | `PRM-001` | Path, Git, status, duration, SSH, production, icon, and theme segments | `validation` | Rust/Bash renderers and semantic tests |
-| `PRM-002` | Capability, redirected-output, visible-width, and resize model | `discovery` | PTY and Unicode-width design required |
+| `PRM-002` | Capability, redirected-output, visible-width, and resize model | `discovery` | `RSH-004` PTY baseline exists; width model and redirected-output policy design required |
 | `PRM-003` | End-to-end deadline, capped Git acquisition, and warm cache | `complete` | one Bash deadline, capped 50-ms Git refresh, 128-entry/1-s cache, failure tests, and `docs/benchmarks/2026-08-15-solid-hardening.md` |
-| `PRM-004` | Full prompt p50/p95/p99 benchmark matrix | `blocked` | representative repositories plus `PTY-001`/platform and fallback workloads; controlled warm case recorded |
-| `PRM-005` | Real PTY prompt, wrap, signal, resize, and restoration tests | `blocked` | shared `PTY-001` harness |
+| `PRM-004` | Full prompt p50/p95/p99 benchmark matrix | `blocked` | representative repositories plus platform and fallback workloads; controlled warm case recorded |
+| `PRM-005` | Real PTY prompt, wrap, signal, resize, and restoration tests | `complete` | lifecycle, helper failure, Ctrl+C/Z, resize, `stty -g`, multiline, narrow wrap, and wide-glyph coverage |
 | `PRM-006` | Decide opt-in duration policy or explicit preexec adapter | `discovery` | must not compose arbitrary DEBUG traps silently |
 | `PRM-007` | Give native and fallback adapters one explicit input/safety contract and shared hostile-state corpus | `complete` | explicit four-field context, shared C0/DEL/expansion corpus, production precedence, and SSH-only test |
 | `PRM-008` | Preserve raw additive prompt flags across coprocess, per-call, and fallback paths | `complete` | raw `--flags` CLI boundary plus coprocess/per-call/fallback unknown-bit tests |
@@ -360,19 +363,19 @@ accept or revise these details before implementation:
 - Use unique `(session_id, event_sequence)` retry idempotency.
 - Prefer `$XDG_DATA_HOME/mbx/history.sqlite3`, falling back to
   `$HOME/.local/share/mbx/history.sqlite3`.
-- Use a bounded queue and dedicated writer so the prompt does not synchronously
-  wait on database locks. Full queues and storage errors drop enhancement data
-  according to the accepted durability contract.
+- Use a bounded queue and per-session writer so the prompt does not
+  synchronously wait on database locks. Full queues and storage errors drop
+  enhancement data according to the accepted durability contract.
 - Reject NUL, invalid UTF-8, empty, and oversized commands without truncation.
 - Begin with deterministic recent, exact-prefix, and cwd queries. Add fuzzy
   ranking only over a bounded candidate set.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `HIST-001` | Expand and accept ADR 0005 threat/data/protocol contract | `ready` | produces the `G1` decision |
-| `HIST-002` | PTY characterize Bash admission and multiline behavior | `blocked` | `PTY-001` |
-| `HIST-003` | Approve the Phase 3A vertical-slice contract | `blocked` | `HIST-001`, `HIST-002` |
-| `HIST-004` | Define datasets, contention cases, and benchmark budgets | `ready` | complete before storage implementation |
+| `HIST-001` | Expand and accept ADR 0005 threat/data/protocol contract | `validation` | expanded ADR 0005 covers the full `G1` checklist; acceptance decision pending |
+| `HIST-002` | PTY characterize Bash admission and multiline behavior | `complete` | `crates/pty/tests/history_admission.rs` and `docs/research/bash-history-admission.md` |
+| `HIST-003` | Approve the Phase 3A vertical-slice contract | `validation` | `docs/history-phase3a-contract.md` drafted; approval pending |
+| `HIST-004` | Define datasets, contention cases, and benchmark budgets | `complete` | `docs/benchmarks/history-budgets.md` |
 | `HIST-005` | Add narrow recorder/search/policy and reader/writer ports | `blocked` | `FND-001`, `HIST-003` |
 | `HIST-013` | Decide SQLite linkage/dependency and supported-platform packaging | `blocked` | `HIST-003`, `HIST-004`; update ADR 0002/0005 with size/platform evidence |
 | `HIST-012` | Define queue drain, shell-exit, crash, retry, and acceptable-loss semantics | `blocked` | `HIST-003`; required before writer/ingestion |
@@ -420,7 +423,7 @@ line. Do not move completion functions into a subprocess unless live-state and
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `COMP-001` | Build a non-popup stock-completion adapter harness | `blocked` | `FND-001`, shared `PTY-001`; produces `G4` evidence |
+| `COMP-001` | Build a non-popup stock-completion adapter harness | `blocked` | `FND-001`; produces `G4` evidence |
 | `COMP-002` | Prove file and one `-F` function's exact insertion parity | `blocked` | `COMP-001`; produces the `G4` decision |
 | `COMP-003` | Add typed candidate metadata and bounded ranking | `blocked` | `G4` |
 | `COMP-004` | Add popup navigation and terminal-safe rendering | `blocked` | `G3`, `G4`, `COMP-003` |
@@ -505,12 +508,21 @@ Exit condition: `G5` after every `HRD-*` item is complete.
 
 ## Immediate next work
 
-The user-approved SOLID foundation checklist is complete. No roadmap
-implementation is currently authorized. `PTY-001`, history work, provider
-expansion, and every later roadmap phase remain paused even where their dependency
-status says `ready`; resume only after new user direction. `FND-001` and `G0`
-remain in validation rather than being inferred complete from this working-tree
-result.
+History groundwork evidence (`HIST-002`/`RSH-004`), contracts (`HIST-001`,
+`HIST-003`, `HIST-004`), and PTY-based prompt validation (`PRM-005`) are
+complete. Do not start editor UI, history capture, provider expansion, or later
+phases. Authorized follow-ups, in order:
+
+1. `G1`: accept the expanded ADR 0005 (the `HIST-001` decision), then approve
+   the `HIST-003` vertical-slice contract.
+2. `FND-001` / `G0`: review and land the baseline; link clean-tree CI evidence.
+3. `HIST-005` onward: ports, storage, and recorder only after `G1` acceptance
+   and `HIST-003` approval.
+4. `PRM-002` remains discovery until a width model is designed from the
+   `RSH-004` baseline.
+
+`EDT-001` stays blocked on `FND-001`. `G0` stays `validation` until the reviewed
+baseline and CI evidence exist.
 
 ## Provisional performance and safety budgets
 
@@ -565,3 +577,7 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-15 | Added the post-refactor SOLID contract audit: response-envelope ownership, bounded/terminator-independent framing, port-contract evidence, fallback safety, and additive-flag parity. |
 | 2026-08-15 | Started the bounded SOLID hardening checklist and paused PTY, history, and later roadmap work by explicit user direction. |
 | 2026-08-15 | Completed the bounded SOLID hardening checklist: transport owns envelopes, MBX1 acquisition is capped across terminators, prompt adapters share one context/deadline/safety contract, Git refresh is capped/cached, and focused/canonical/release evidence is recorded. `FND-001`/`G0` remain validation; no later phase was started. |
+| 2026-08-15 | Completed `PTY-001`: std-only POSIX PTY driver with bounded read/write, resize, signal, and termios/`stty` probes, plus foundation coverage for prompt lifecycle, helper failure, Ctrl+C, Ctrl+Z, resize, and terminal restoration. `FND-001`/`G0` remain validation. |
+| 2026-08-15 | Completed the history groundwork slice: `HIST-002` PTY admission characterization (HISTCONTROL/HISTIGNORE/history-off/`history -s`/multiline folding/renumbering/exit flush), `RSH-004` multiline/width/resize PTY validation, `PRM-005` completion, expanded ADR 0005 to the full `G1` contract, drafted the `HIST-003` Phase 3A contract and `HIST-004` benchmark budgets. `G1` acceptance and `G0` baseline review remain open. |
+| 2026-08-15 | Review fixes: corrected the not-implemented list after `RSH-004` completion (arbitrary key injection remains open), recorded the PTY driver macOS constants as `HRD-001` pre-work, removed dead driver API surface, and fixed the `visible_text` CSI/OSC terminator handling. |
+| 2026-08-15 | Second review fixes: corrected the history-off `HISTCMD` evidence, clarified per-session writer topology, hardened parent PTY opening with `O_NOCTTY`, strengthened PS2/`history -a` regression evidence, and right-sized the exact near-limit Bash transport fixture budget. |
