@@ -1,40 +1,188 @@
-# ADR 0005: Preserve Bash history and add a local sidecar later
+# ADR 0005: History sidecar — privacy, capture, data, and protocol contract
 
-Status: Proposed; implementation deferred
+Status: Proposed; ready for acceptance (G1 decision pending)
+
+This ADR expands the earlier one-page sketch of the same record. The expanded
+contract is the deliverable of roadmap item `HIST-001` and the acceptance test
+for gate `G1`. Acceptance does not authorize capture; capture additionally
+requires `G2`.
 
 ## Context
 
-Search and ranking need cwd, repository, time, duration, status, host, and session
-metadata. `.bash_history` remains the compatibility source and may encode user
-privacy choices through `HISTCONTROL` and related settings.
+Search and ranking need command text plus cwd, time, status, duration, host,
+and session metadata. `.bash_history` is the compatibility source and encodes
+user privacy choices through `HISTCONTROL`, `HISTIGNORE`, and history settings.
+The product must enhance search without replacing Bash history, without logging
+command text anywhere except a local, user-owned store, and without ever
+blocking the interactive prompt.
+
+PTY evidence in `docs/research/bash-history-admission.md` (`HIST-002`)
+establishes how Bash actually admits entries: folding, filtering, renumbering,
+and exit-flush behavior. This ADR binds the sidecar to that observed authority.
 
 ## Decision
 
-Do not replace or rewrite Bash history. In the history phase, add an optional local
-sidecar database owned by the user, with SQLite as the leading candidate. Capture
-only at the prompt lifecycle boundary, respect commands omitted by Bash history
-policy where observable, provide exclusions, and disable all command-text
-telemetry.
+### 1. Scope and authority
+
+- The sidecar is optional and opt-in. Disabled by default; `.bash_history` is
+  never written, truncated, or rewritten by MBX.
+- Bash's resulting history list is the admission authority. The sidecar records
+  command text only when Bash has admitted an entry at the prompt boundary after
+  command completion, and it records the same folded, filtered text Bash stores.
+- `$BASH_COMMAND`, `HISTCMD`, readline input, and `PROMPT_COMMAND` arguments are
+  never used as the record source or as stable identifiers.
+- `(session_id, event_sequence)` is the unique idempotency key, where
+  `event_sequence` is a monotonic counter owned by the recorder (not `HISTCMD`).
+  `HISTCMD` is retained only as a diagnostic number.
+
+### 2. Threat model and disclosure
+
+- **Disclosure:** command text is sensitive. The store is plaintext SQLite
+  local to the user, with filesystem permissions as the primary boundary. There
+  is no encryption at rest and none is claimed.
+- **Threats considered:** other local users reading the database (blocked by
+  permissions), repository data or command text reaching terminal control
+  (blocked by sanitization and parameterization), SQL injection from hostile
+  command text (blocked by parameterized statements only), exfiltration
+  (blocked by no network paths and no telemetry), and accidental leakage through
+  logs (blocked by the no-command-text logging rule).
+- **Out of scope:** protecting the store from the account owner, kernel-level
+  attacks, or a compromised shell process.
+
+### 3. Capture semantics (from `HIST-002` evidence)
+
+- Commands Bash drops are dropped by the sidecar: leading-space under
+  `ignorespace`, consecutive duplicates under `ignoredups`, `ignoreboth`
+  combinations, `HISTIGNORE` matches, and all commands typed while history is
+  disabled. The sidecar never fabricates an entry.
+- Multiline commands are recorded in the folded single-entry form Bash stores
+  (for example `if true; then echo x; fi`), never as separate lines.
+- `history -s` injections appear in the sidecar because they appear in Bash's
+  list; they are never executed by MBX.
+- **Ambiguity rule:** if the recorder cannot match a completed command to an
+  admitted history entry (for example renumbering races or concurrent
+  mutation), it drops the record. A diagnostic counter increments; diagnostics
+  never contain command text.
+- **Drop rule:** commands exceeding the accepted maximum, containing NUL or
+  invalid UTF-8, or empty are rejected without truncation and counted.
+
+### 4. Recorded fields
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `session_id` | UUIDv4 string | generated once per shell session |
+| `event_sequence` | integer | monotonic recorder counter |
+| `history_number` | integer | diagnostic Bash `HISTCMD` value, not an identifier |
+| `command_text` | text | folded Bash-normalized command text |
+| `start_cwd` | text | starting working directory |
+| `completed_at` | text | completion timestamp (UTC ISO-8601) |
+| `status` | integer | exit status of the completed command |
+| `duration_ms` | integer or NULL | NULL when timing is disabled or unknown |
+| `host` | text | hostname |
+| `user` | text | username |
+
+`status`/`duration_ms` attach at the prompt boundary after completion; an entry
+whose status cannot be attributed drops per the ambiguity rule.
+
+### 5. Storage, permissions, and lifecycle
+
+- Path: `$XDG_DATA_HOME/mbx/history.sqlite3`, falling back to
+  `$HOME/.local/share/mbx/history.sqlite3`.
+- The `mbx` directory is created with mode `0700`; the database, WAL, and SHM
+  files are created with mode `0600`; umask-visible permissions are verified by
+  tests. Existing files are never made more permissive.
+- Controls (implemented in `HIST-011`):
+  - disable: setting or env var disables capture entirely; no store is created;
+  - path inspection: report the store path without reading its contents;
+  - clear: delete all rows, keeping the store;
+  - delete: remove the database, WAL, and SHM files.
+- Retention: configurable row/time cap with a default bounded value; pruning
+  runs in the writer, never in the prompt path.
+
+### 6. Schema, versioning, and migrations
+
+- SQLite schema v1 with `PRAGMA user_version = 1`; migrations are forward-only
+  and applied by the writer before use.
+- Indexes: `(completed_at DESC)`, `(command_text COLLATE NOCASE)` prefix
+  support, `(start_cwd)`, and the unique `(session_id, event_sequence)`.
+- The schema stores values only through parameterized statements; command text
+  is inert data, never SQL or terminal control.
+
+### 7. Concurrency, durability, and idempotency
+
+- Each Bash session has one bounded writer queue and writer connection. SQLite
+  WAL plus its bounded `busy_timeout` serializes mutations across sessions; no
+  shared history daemon is assumed for the MVP.
+- The prompt path enqueues (bounded queue, acknowledgement p95 < 2 ms, p99 <
+  5 ms) and never waits on database locks. Full queues and storage errors drop
+  enhancement data according to the accepted durability contract in `HIST-012`.
+- Retries use the `(session_id, event_sequence)` key so duplicates are
+  impossible; concurrent shells never share an idempotency key.
+- Retention, corruption, and lock-contention behavior are exercised by tests
+  before `G2`.
+
+### 8. Exclusions and secret policy
+
+- Whole-record exclusions: env-var patterns (independent of `HISTIGNORE`, which
+  remains Bash's own filter) remove a record before it is stored.
+- Best-effort secret policy: the record is plaintext; MBX attempts no secret
+  redaction inside stored command text. Documentation discloses this. Exclusion
+  patterns are the supported mechanism for secret-bearing commands.
+- No-command-text logging: diagnostics, traces, and error messages report kinds,
+  counts, and paths only. Command text never enters telemetry, logs, or remote
+  services.
+
+### 9. Protocol decision: MBX2, not MBX1 extension
+
+- History capture/search is **not** added to MBX1. MBX1 remains the bounded,
+  prompt-oriented request/response protocol with additive flag bits.
+- The interactive features need typed results, generation IDs, cancellation,
+  and stale-response rejection. These are an incompatible framing/trust change
+  and therefore become **MBX2**, per the boundary already stated in
+  `docs/protocol.md`.
+- MBX2 is specified as a separate document before `HIST-007`; the existing
+  coprocess/socket transports and their bounds are the baseline for its framing.
+
+### 10. Sequencing
+
+- No capture code ships before `G1` acceptance and the `HIST-003` slice
+  contract.
+- Writer/storage (`HIST-006`), exclusions/controls (`HIST-011`), Bash
+  observation (`HIST-007`), and deterministic queries (`HIST-008`) each land
+  behind the port boundaries defined in `HIST-005` and `HIST-012`/`HIST-013`.
 
 ## Alternatives
 
-- Extending the flat history file cannot represent/query metadata safely.
-- Replacing Bash history breaks tooling and shell behavior.
-- Remote sync is outside MVP privacy and reliability boundaries.
+- Extending the flat history file cannot represent or query metadata safely.
+- Replacing Bash history breaks tooling, shell behavior, and the `HISTCONTROL`
+  contract.
+- Remote or encrypted storage is outside MVP privacy and reliability bounds.
+- Extending MBX1 ad hoc would silently change an accepted wire contract.
 
 ## Consequences
 
-Enhanced search can be disabled or deleted independently. Two stores require
-deduplication and clear retention rules.
+- Enhanced search can be disabled or deleted independently of Bash.
+- Two stores require controlled deduplication: Bash history remains the
+  compatibility source; the sidecar is the enhancement index.
+- Users must be told that stored command text is plaintext local data.
 
 ## Risks
 
-Commands may contain secrets; concurrent shells can race; crash timing can mismatch
-status and command; database growth and migrations need bounds.
+- Commands may contain secrets (mitigated by exclusions and disclosure).
+- Concurrent shells can race (mitigated by idempotency keys, per-session writer
+  queues, and SQLite's cross-session locking).
+- Crash timing can mismatch status and command (mitigated by the ambiguity
+  rule and prompt-boundary attribution).
+- Database growth and migrations need bounds (retention and forward-only
+  migrations).
 
 ## Validation plan
 
-Write a privacy threat model and schema ADR update, test 100k+ rows and concurrent
-sessions, verify `HISTCONTROL` cases, redact/exclude known secret forms, and prove
-that disabling/removing the sidecar leaves Bash history unchanged.
-
+- `G1` (this ADR): threat model, capture semantics, schema, permissions,
+  controls, and the MBX2 decision accepted with review.
+- `G2` evidence: PTY admission suite (`HIST-002`, done), same-command
+  `.bash_history` invariance comparison, 100k+ row search/write benchmarks
+  (`HIST-004` budgets), contention and permission tests, hostile SQL/control
+  inertness, and command-text-free diagnostics.
+- Every claim in this ADR maps to a test in `HIST-005`–`HIST-008`,
+  `HIST-011`–`HIST-013` before `G2` passes.

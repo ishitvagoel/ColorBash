@@ -52,9 +52,14 @@ interactive Bash. The suite compares semantic markers for:
 Additional tests confirm that noninteractive sourcing is a no-op, a pre-existing
 DEBUG trap is preserved, and a missing helper uses the Bash fallback.
 
+A genuine PTY suite in `crates/pty` covers interactive prompt lifecycle, helper
+failure, Ctrl+C, Ctrl+Z, resize, and `stty -g` restoration. Piped interactive
+Bash is still not treated as terminal evidence.
+
 Run:
 
 ```bash
+bash tests/run.bash
 bash tests/bash/smoke.bash target/debug/mbx
 ```
 

@@ -64,6 +64,7 @@ crates/cli/src/
   transport.rs       stdio/Unix-socket server and client adapters
   telemetry.rs       opt-in trace output
 
+crates/pty/          genuine POSIX PTY test driver; not a product path
 docs/                research, UX/compatibility contracts, and ADRs
 scripts/             explicit development setup and prompt/IPC benchmarks
 tests/bash/           module contracts, semantic corpus, and integration smoke
@@ -311,6 +312,11 @@ highlighting:
 6. decide whether duration timing remains opt-in or integrates with an existing
    preexec framework through an explicit adapter.
 
-The roadmap, not this architecture description, selects the next slice. PTY,
-history, provider expansion, highlighting, and completion remain paused pending
-new user direction; editor-facing work also remains blocked on its recorded gates.
+The roadmap, not this architecture description, selects the next slice. A genuine
+PTY driver now covers foundation prompt lifecycle, helper failure, Ctrl+C,
+Ctrl+Z, resize, `stty -g` restoration, multiline continuation, narrow wrap,
+resize-mid-line, and wide/combining glyph round trips (`docs/research/
+multiline-width-pty.md`), and the Bash history admission corpus
+(`docs/research/bash-history-admission.md`). History capture, provider
+expansion, highlighting, and completion remain gated; editor-facing work still
+requires `G3`/`G4`, and history capture requires `G1`/`G2`.

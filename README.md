@@ -19,8 +19,8 @@ project brief:
 - bounded automatic coprocess IPC with per-call and process-free Bash fallbacks
   sharing one render deadline;
 - reproducible process, coprocess, and Unix-socket benchmarks;
-- focused Rust/Bash module-contract tests, compatibility smoke tests, and
-  architectural decision records.
+- focused Rust/Bash module-contract tests, genuine PTY driver tests,
+  compatibility smoke tests, and architectural decision records.
 
 Completion, history, autosuggestions, and live highlighting are deliberately not
 implemented yet. The foundation must be validated before those features begin.
