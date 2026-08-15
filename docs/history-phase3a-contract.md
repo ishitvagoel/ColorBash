@@ -114,6 +114,8 @@ The slice is complete when:
 
 ## Non-goals for approval
 
-Approval of this contract does not approve capture enablement; capture remains
-gated on `G2`. It does not approve the MBX2 wire details; those are a separate
-specification deliverable under `HIST-007`.
+Approval of this contract did not approve default capture enablement; capture
+remains off unless `MBX_HISTORY=1` and product enablement still requires `G2`.
+MBX2 RECORD framing is specified in `docs/protocol-mbx2.md` and implemented for
+this slice. Later MBX2 kinds (generation IDs, cancellation, search-over-the-wire)
+remain out of scope.

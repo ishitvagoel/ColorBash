@@ -78,6 +78,8 @@ others.
 - Protocol fields are data; neither endpoint evaluates them as shell source.
 - There is no execute-command message.
 
-MBX1 is a foundation protocol, not a complete provider schema. History and
-completion will require structured payloads; an incompatible framing or trust
-change must become MBX2 rather than silently changing MBX1.
+MBX1 is a foundation protocol, not a complete provider schema. History RECORD
+ingestion is specified separately as MBX2 (`docs/protocol-mbx2.md`) rather than
+by extending MBX1. Completion and later interactive features that need typed
+results, generation IDs, or cancellation remain a later MBX2 revision, not an
+MBX1 change.

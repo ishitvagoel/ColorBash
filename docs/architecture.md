@@ -1,16 +1,17 @@
 # Foundation architecture
 
-Status: implemented prototype with the foundation code split into focused,
-substitutable modules. The editor features still require the reassessment work
+Status: implemented prototype with the foundation prompt slice plus a UI-free,
+opt-in history sidecar. Editor features still require the reassessment work
 described below.
 
 ## Scope
 
-This phase validates the smallest useful vertical slice: interactive Bash calls a
-native helper, receives presentation data, and continues to execute commands with
-ordinary Bash semantics. It includes a prompt prototype and transport evidence;
-it intentionally stops before completion, history, ghost suggestions, or syntax
-highlighting.
+The implemented prototype is the hybrid Bash/Rust prompt path plus the Phase 3A
+history sidecar. Interactive Bash calls a native helper, receives presentation
+data, and continues to execute commands with ordinary Bash semantics. When
+explicitly enabled, Bash also observes admitted history and enqueues records
+without modifying `.bash_history`. Ghost suggestions, completion UI, live
+highlighting, and enhanced Ctrl+R remain gated.
 
 ## System boundary
 
@@ -22,7 +23,7 @@ Bash parser and execution ───────► programs / jobs / pipelines
     │
     │ PROMPT_COMMAND status + optional DEBUG timing
     ▼
-Bash integration ── MBX1 request ──► Rust helper
+Bash integration ── MBX1 PROMPT ──► Rust helper
     │                                  │
     │                                  ├─ validate and dispatch request
     │                                  ├─ inspect Git through bounded/cache adapter
@@ -30,26 +31,31 @@ Bash integration ── MBX1 request ──► Rust helper
     │                                  └─ sanitize and render presentation
     ◄──────────── MBX1 response ────────┘
     │
+    │ optional MBX2 RECORD (MBX_HISTORY=1)
+    └──────────────────────────────► helper writer queue ──► local SQLite
+    │
     ▼
 PS1 presentation
 ```
 
 Bash owns parsing, expansion, execution, jobs, traps, exit codes, aliases,
 functions, programmable completion, and history. The Rust process cannot execute
-the command line. Its current inputs are only prompt context: working directory,
-last status, optional duration, and capability flags.
+the command line. Prompt rendering still takes only prompt context: working
+directory, last status, optional duration, and capability flags. History capture
+is a separate opt-in path that treats command text as inert data.
 
 ## Repository and module boundaries
 
 ```text
 bash/
   init.bash          composition root and module loading
-  protocol.bash      MBX1 constants, field codec, response validation
+  protocol.bash      MBX1/MBX2 constants, field codec, response validation
   config.bash        environment-to-flag and transport-selection policy
   engine.bash        coprocess lifecycle and native transport adapters
   prompt.bash        fallback orchestration; the only prompt-path PS1 writer
   fallback.bash      Bash-only prompt renderer
   hooks.bash         PROMPT_COMMAND and optional DEBUG integration
+  history.bash       opt-in admitted-entry observation and MBX2 RECORD send
 
 crates/protocol/     dependency-free MBX1 wire model and PromptFlags value type
 crates/cli/src/
@@ -58,9 +64,13 @@ crates/cli/src/
   cli.rs             side-effect-free argument parsing
   environment.rs     one-time process environment capture
   app.rs             top-level command/use-case dispatch
-  service.rs         transport-independent request handling
+  service.rs         transport-independent MBX1 request handling
+  history.rs         history ports, entry type, and drop-rule validation
+  history_service.rs MBX2 RECORD/PING handling behind HistoryHandler
+  policy.rs          opt-in and exclusion policy from the environment
   prompt.rs          prompt policy, segments, theme, and sanitization
   provider.rs        repository-status port and current Git adapter
+  storage.rs         SQLite schema, WAL writer queue, queries, and controls
   transport.rs       stdio/Unix-socket server and client adapters
   telemetry.rs       opt-in trace output
 
@@ -73,7 +83,7 @@ tests/bash/           module contracts, semantic corpus, and integration smoke
 The source-file split is a boundary, not merely an organizational convention.
 The Rust binary delegates immediately to the library composition root. The Bash
 loader only resolves paths, sources modules in dependency order, selects the
-binary, starts the engine, and installs hooks.
+binary, starts the engine, and installs prompt and optional history hooks.
 
 ## Dependency direction
 
@@ -90,9 +100,14 @@ main.rs ──► lib.rs composition root
                │          └─► RepositoryStatusProvider ◄── Git adapter
                │
                └─► app ──► ProtocolService ──► PromptRendering
-                         └─► transport ─────► RequestHandler
+                         │
+                         ├─► transport ─────► RequestHandler
+                         └─► HistoryService ──► HistoryRecorder
+                                           └──► HistoryPolicy
+               History CLI ──► HistorySearch / HistoryControl
 
 crates/cli ──► crates/protocol
+crates/cli ──► rusqlite (bundled; history store only)
 ```
 
 The important production dependency direction is toward abstractions:
@@ -106,11 +121,15 @@ The important production dependency direction is toward abstractions:
   Git itself.
 - `lib.rs` constructs `GitRepositoryStatusProvider` and injects it into the
   standard renderer.
+- history CLI and MBX2 handling depend on `HistoryPolicy`, `HistoryRecorder`,
+  `HistorySearch`, and `HistoryControl`; `app.rs` opens the store only after
+  `MBX_HISTORY=1` is established.
 - `crates/protocol` has no dependency on the CLI crate or its adapters.
 
 `app.rs` remains an outer application shell: it owns stdout flushing, server
-selection, socket-client commands, and benchmark dispatch. Prompt policy and
-request handling remain usable without those process-level effects.
+selection, socket-client commands, history-control dispatch, and benchmark
+dispatch. Prompt policy and request handling remain usable without those
+process-level effects.
 
 ## SOLID application and extension seams
 
@@ -118,19 +137,21 @@ The refactor applies SOLID as design guidance rather than treating each file as
 an independent subsystem:
 
 - **Single responsibility:** argument parsing, environment capture, request
-  dispatch, rendering, repository inspection, transport, and telemetry have
-  separate change boundaries. Bash likewise separates protocol, policy,
-  lifecycle, orchestration, rendering, and hooks.
+  dispatch, rendering, repository inspection, history policy/storage, transport,
+  and telemetry have separate change boundaries. Bash likewise separates
+  protocol, policy, lifecycle, orchestration, rendering, hooks, and history
+  observation.
 - **Open/closed:** a prompt capability can implement `PromptSegmentProvider` and
   be added to the renderer's ordered provider list. A different repository
   implementation can implement `RepositoryStatusProvider` without changing the
   repository segment.
-- **Liskov substitution:** direct request-handler, renderer, and repository
-  substitutes exercise success and failure contracts. Provider absence/failure
-  omits only its segment, and disabling Git never calls the provider.
+- **Liskov substitution:** direct request-handler, renderer, repository, and
+  history substitutes exercise success and failure contracts. Provider
+  absence/failure omits only its segment, disabling Git never calls the
+  provider, and a disabled history policy never opens the store.
 - **Interface segregation:** `PromptRendering`, `PromptSegmentProvider`,
-  `RepositoryStatusProvider`, and `RequestHandler` each expose one operation
-  needed by their consumer.
+  `RepositoryStatusProvider`, `RequestHandler`, and the history ports each
+  expose the operations needed by their consumer.
 - **Dependency inversion:** services and adapters receive those ports; the
   composition root is responsible for choosing concrete implementations.
 
@@ -142,12 +163,18 @@ The main extension and test seams are:
 | prompt rendering | `PromptRendering` | `PromptRenderer`; service tests inject a stub renderer |
 | prompt composition | `PromptSegmentProvider` list | ordered built-in segments or injected providers |
 | repository state | `RepositoryStatusProvider` | Git adapter or an in-memory static provider |
+| history policy | `HistoryPolicy` | `EnvironmentHistoryPolicy` or allow/deny substitutes |
+| history record | `HistoryRecorder` | `QueuedHistoryStore` or recording substitutes |
+| history search | `HistorySearch` | SQLite reader or in-memory substitutes |
+| history controls | `HistoryControl` | path/count/clear/delete on the same store |
+| MBX2 handling | `HistoryHandler` | `HistoryService`; transport injects it only when history is enabled |
 | stream exchange | generic `BufRead`/`Write` in `ClientSession` | Unix streams or in-memory cursors |
 | CLI defaults | injected lazy defaults resolver | captured environment or explicit test values |
 | Bash adapters | arguments plus `REPLY` result | real engine/fallback or focused function tests |
 
 These are internal seams, not a public extension API or general plugin system.
-They are deliberately narrow interfaces for the implemented prompt slice.
+They are deliberately narrow interfaces for the implemented prompt and history
+slices.
 
 The bounded post-refactor SOLID audit is implemented and recorded in
 `docs/solid-hardening-checklist.md`: transport owns correlation/framing,
@@ -180,7 +207,8 @@ it sources the modules in their dependency order and preserves existing
 `PROMPT_COMMAND` entries by converting them to an array and placing two MBX
 callbacks around them:
 
-1. `_mbx_capture_status` runs first, captures `$?`, and returns that same status.
+1. `_mbx_capture_status` runs first, captures `$?`, optionally records the last
+   admitted history entry, and returns that same status.
 2. Existing prompt callbacks run in their original order.
 3. `_mbx_render_prompt` runs last and also returns the captured status.
 
@@ -188,7 +216,7 @@ callbacks around them:
 flags), chooses an adapter, and commits the selected result to `PS1`. The native
 coprocess adapter, per-call adapter, and Bash fallback return their candidate via
 `REPLY`; none writes `PS1` directly. This makes fallback order testable without
-installing interactive hooks.
+installing interactive hooks. History observation never writes `PS1`.
 
 Command-duration timing needs a pre-execution signal. Bash's `DEBUG` trap is the
 viable prototype hook, but Bash cannot safely discover and compose an arbitrary
@@ -285,6 +313,28 @@ preflight failure is treated as absence because stderr is deliberately not
 acquired. Generic detection/completion/diagnostic providers remain deferred until
 a concrete consumer establishes their contracts.
 
+## Opt-in history sidecar
+
+The Phase 3A sidecar is implemented and stays off unless `MBX_HISTORY=1`. Bash's
+admitted history list is the capture authority: `history.bash` reads `history 1`
+at the prompt boundary, drops empty or excluded entries, and sends an MBX2
+`RECORD` over the existing coprocess with its own bounded deadline. Failure,
+queue saturation, or a missing helper drops enhancement data only and must not
+block prompt construction.
+
+The helper opens `$XDG_DATA_HOME/mbx/history.sqlite3` (falling back to
+`$HOME/.local/share/mbx/history.sqlite3`) with directory mode `0700` and file
+mode `0600`. A bounded in-process queue acknowledges enqueue; a per-session
+writer commits schema v1 in WAL mode, applies retention, and treats
+`(session_id, event_sequence)` as the idempotency key. `ACK` means the record
+was accepted by the queue, not that SQLite has committed. Search is a direct
+CLI operation (`mbx history search recent|prefix|cwd`), not an MBX2 query.
+`path`, `count`, `clear`, and `delete` are the privacy controls. Command text
+never enters traces.
+
+This slice does not enable history-driven UI. `G2` still requires 100k-row
+budgets, contention cases, and `.bash_history` invariance evidence.
+
 ## Compatibility and degradation
 
 - Noninteractive shells are untouched.
@@ -294,8 +344,11 @@ a concrete consumer establishes their contracts.
 - Coprocess failure falls back without disabling the shell.
 - Native and fallback rendering replace the complete C0/DEL range and Bash
   expansion characters using a shared hostile-state corpus.
-- The helper has no third-party runtime or crate dependencies.
+- The protocol crate has no third-party dependencies. The helper bundles
+  `rusqlite` for the history store (ADR 0005 section 6a) and otherwise uses the
+  standard library.
 - No MBX path evaluates user or repository text as Bash.
+- The history sidecar never writes, truncates, or rewrites `.bash_history`.
 
 ## Reassessment gate
 
@@ -317,6 +370,7 @@ PTY driver now covers foundation prompt lifecycle, helper failure, Ctrl+C,
 Ctrl+Z, resize, `stty -g` restoration, multiline continuation, narrow wrap,
 resize-mid-line, and wide/combining glyph round trips (`docs/research/
 multiline-width-pty.md`), and the Bash history admission corpus
-(`docs/research/bash-history-admission.md`). History capture, provider
-expansion, highlighting, and completion remain gated; editor-facing work still
-requires `G3`/`G4`, and history capture requires `G1`/`G2`.
+(`docs/research/bash-history-admission.md`). The opt-in history sidecar is
+implemented; `G2` budgets and invariance evidence remain. Provider expansion,
+highlighting, and completion remain gated. Editor-facing work still requires
+`G3`/`G4`.

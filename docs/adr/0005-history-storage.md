@@ -4,8 +4,9 @@ Status: Accepted (2026-08-15, G1 decision)
 
 This ADR expands the earlier one-page sketch of the same record. The expanded
 contract is the deliverable of roadmap item `HIST-001` and the acceptance test
-for gate `G1`. Acceptance does not authorize capture; capture additionally
-requires `G2`.
+for gate `G1`. Acceptance did not authorize default-on capture. The Phase 3A
+path is implemented and remains off unless `MBX_HISTORY=1`; product enablement
+still requires `G2` evidence.
 
 ## Context
 
@@ -155,8 +156,9 @@ whose status cannot be attributed drops per the ambiguity rule.
   and stale-response rejection. These are an incompatible framing/trust change
   and therefore become **MBX2**, per the boundary already stated in
   `docs/protocol.md`.
-- MBX2 is specified as a separate document before `HIST-007`; the existing
-  coprocess/socket transports and their bounds are the baseline for its framing.
+- MBX2 RECORD framing is specified in `docs/protocol-mbx2.md` and implemented
+  for Phase 3A ingestion. The existing coprocess/socket transports and their
+  bounds remain the framing baseline. Later MBX2 kinds are a later revision.
 
 ### 10. Sequencing
 

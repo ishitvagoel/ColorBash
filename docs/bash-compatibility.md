@@ -17,8 +17,10 @@ presentation; it may not reinterpret a command.
 6. Helper startup, timeout, malformed response, or exit cannot prevent the next
    prompt from being constructed.
 7. MBX does not replace `complete`, `.bash_history`, `cd`, or any Bash builtin.
-8. No suggestion or generated text is executed by this foundation.
-9. Prompt data from paths, Git, environment, or IPC is treated as untrusted.
+8. The optional history sidecar records Bash-admitted entries only when
+   `MBX_HISTORY=1` and never writes, truncates, or rewrites `.bash_history`.
+9. No suggestion or generated text is executed by this foundation.
+10. Prompt data from paths, Git, environment, or IPC is treated as untrusted.
 
 ## Hook findings
 
@@ -53,7 +55,8 @@ Additional tests confirm that noninteractive sourcing is a no-op, a pre-existing
 DEBUG trap is preserved, and a missing helper uses the Bash fallback.
 
 A genuine PTY suite in `crates/pty` covers interactive prompt lifecycle, helper
-failure, Ctrl+C, Ctrl+Z, resize, and `stty -g` restoration. Piped interactive
+failure, Ctrl+C, Ctrl+Z, resize, and `stty -g` restoration, plus history
+admission characterization and opt-in sidecar recording. Piped interactive
 Bash is still not treated as terminal evidence.
 
 Run:

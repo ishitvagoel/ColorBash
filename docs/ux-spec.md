@@ -100,8 +100,9 @@ No helper / limited terminal:
 
 ## Deferred editor UX
 
-Ghost suggestions, completion menus, history search, highlighting, multiline
-guides, and command palettes remain design requirements, not prototype claims.
-Each must insert or propose ordinary Bash text and must never auto-execute. The
-Readline research and ADR 0003 define the validation needed before those designs
-are implemented.
+Ghost suggestions, completion menus, interactive history search, highlighting,
+multiline guides, and command palettes remain design requirements, not prototype
+claims. The opt-in sidecar can store and query history from the CLI; it does not
+provide an editor UI. Each later feature must insert or propose ordinary Bash
+text and must never auto-execute. The Readline research and ADR 0003 define the
+validation needed before those designs are implemented.

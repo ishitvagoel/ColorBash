@@ -6,9 +6,9 @@
 > intended program and are not a status tracker.
 
 - Last reviewed: 2026-08-15 UTC
-- Current milestone: history implementation slice in progress (`HIST-005` onward); `G1` accepted; `G0` validation remains
-- Active workstream: Phase 3A history sidecar implementation
-- Next decision gate: `G2` history readiness (after `HIST-007`/`HIST-008` evidence)
+- Current milestone: Phase 3A sidecar implemented; `G2` evidence remaining (`HIST-007`); `G1` accepted; `G0` validation remains
+- Active workstream: `G2` history-readiness evidence
+- Next decision gate: `G2` history readiness (after remaining `HIST-007` evidence)
 - Editor-facing work is blocked by: `G2` history readiness and/or `G3` editor
   integration, as identified per phase
 
@@ -42,7 +42,8 @@ removed work to `deferred` or `superseded` instead of silently deleting it.
 | `docs/architecture.md` | What the implementation currently is and where its boundaries are |
 | `docs/adr/` | Why consequential decisions are proposed, accepted, or superseded |
 | `docs/bash-compatibility.md` | Bash semantics and compatibility contract |
-| `docs/protocol.md` | Wire behavior, encoding, bounds, and protocol security contract |
+| `docs/protocol.md` | MBX1 wire behavior, encoding, bounds, and protocol security contract |
+| `docs/protocol-mbx2.md` | MBX2 history-record wire behavior |
 | Code plus reproducible tests | Observed runtime behavior; they do not redefine product intent |
 | Tests and benchmark records | Evidence required to pass gates and mark work complete |
 | `MISTAKES.md` | Confirmed lessons and prevention rules from prior work |
@@ -72,31 +73,36 @@ silently overwrite an accepted decision.
 
 ## Current baseline
 
-The repository is a foundation prototype, not the MVP. Its current SOLID
-refactor exists in the working tree and must be reviewed and landed as a distinct
-baseline before unrelated feature work is layered on it.
+The repository is a foundation prototype plus a UI-free history sidecar, not the
+MVP. The SOLID refactor still needs a reviewed, CI-linked baseline (`FND-001` /
+`G0`) while `G2` evidence is collected.
 
 Implemented foundation:
 
 - a small interactive-only Bash loader with idempotent sourcing and
   status-preserving prompt hooks;
-- separate Bash protocol, configuration, engine, coordinator, fallback, and hook
-  modules with one `PS1` writer;
+- separate Bash protocol, configuration, engine, coordinator, fallback, hook,
+  and history-observation modules with one `PS1` writer;
 - a thin Rust composition root and separate CLI, environment, application,
-  service, prompt, provider, transport, and telemetry modules;
-- narrow `RequestHandler`, `PromptRendering`, `PromptSegmentProvider`, and
-  `RepositoryStatusProvider` ports;
+  service, prompt, provider, history, storage, transport, and telemetry modules;
+- narrow `RequestHandler`, `PromptRendering`, `PromptSegmentProvider`,
+  `RepositoryStatusProvider`, and history policy/recorder/search/control ports;
 - the MBX1 prompt protocol with a 64-KiB acceptance rule, correlation IDs, typed
   prompt flags, lossless additive-flag forwarding, bounded cross-language field
   encoding, and terminator-independent acquisition limits;
+- MBX2 RECORD ingestion for opt-in history capture, sharing MBX1 framing bounds;
 - an adaptive prompt with path, Git status, nonzero status, optional duration,
   SSH, production context, semantic roles, and icon/color fallbacks;
 - coprocess, per-call, and process-free Bash-only degradation paths sharing one
   render deadline;
 - a fixed-spec Git provider with capped acquisition, a 50-ms refresh deadline,
   typed failure diagnostics, and a bounded one-second warm cache;
+- an opt-in SQLite history sidecar with schema v1, WAL, `0700`/`0600`
+  permissions, retention, exclusions, path/count/clear/delete controls, and
+  deterministic recent/prefix/cwd queries; capture remains off unless
+  `MBX_HISTORY=1`;
 - Rust unit tests plus Bash module, protocol-integration, compatibility smoke,
-  and genuine PTY driver/foundation suites; and
+  and genuine PTY driver/foundation/history suites; and
 - architecture, UX, compatibility, protocol, research, benchmark, and ADR
   documentation.
 
@@ -108,10 +114,12 @@ linked, so this does not complete `FND-001` or `G0`.
 
 Not implemented:
 
-- history capture, storage, query, privacy controls, or ranking;
+- fuzzy history ranking or repository-context history fields;
 - enhanced Ctrl+R, ghost suggestions, completion UI, or live highlighting;
 - arbitrary key-injection coverage (Tab, arrows, Ctrl+R), the release platform
-  matrix, or CI-linked baseline evidence; or
+  matrix, or CI-linked baseline evidence;
+- 100k-row history budgets, contention, and `.bash_history` invariance evidence
+  required by `G2`; or
 - asynchronous feature IPC or the broader completion/history provider model.
 
 Known foundation debt:
@@ -195,14 +203,15 @@ versioning, migrations, retention, concurrency, and idempotency; whole-record
 exclusions, best-effort secret policy, and no-command-text logging; storage
 path, `0700` directory and user-only database/WAL/SHM permissions; disable,
 path inspection, clear, and deletion behavior; and the explicit MBX2 protocol
-decision. History capture may now be built; it must remain disabled until `G2`
-evidence passes.
+decision. History capture is implemented and remains off unless `MBX_HISTORY=1`.
+Default-on product enablement still requires `G2` evidence.
 
 ### G2 — History sidecar and search readiness
 
-Status: `blocked` by `G1`
+Status: `validation`
 
-Blocks history-driven UI. Pass only when:
+Blocks history-driven UI. Implementation of the UI-free Phase 3A slice exists;
+this gate remains open until the evidence below is recorded. Pass only when:
 
 - a controlled same-command comparison shows that enabling, disabling, clearing,
   and deleting the sidecar causes no additional `.bash_history` changes beyond
@@ -545,9 +554,10 @@ they become release promises.
   condition.
 - Completion functions depend on live shell state and `compopt`; asynchronous or
   subprocess execution can change semantics.
-- MBX1 is sequential and prompt-oriented. Interactive features may need typed
-  results, generation IDs, cancellation, and stale-response rejection. Decide
-  MBX2 through an ADR rather than extending MBX1 ad hoc.
+- MBX1 is sequential and prompt-oriented. History RECORD uses MBX2 on the same
+  coprocess. Interactive features may still need typed results, generation IDs,
+  cancellation, and stale-response rejection as a later MBX2 revision, not an
+  MBX1 change.
 - A single sequential coprocess can suffer head-of-line blocking.
 - Unicode scalar counts are not display widths. Combining characters, wide
   glyphs, wrapping, `SIGWINCH`, tmux, and SSH need PTY evidence.
@@ -578,3 +588,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-15 | Review fixes: corrected the not-implemented list after `RSH-004` completion (arbitrary key injection remains open), recorded the PTY driver macOS constants as `HRD-001` pre-work, removed dead driver API surface, and fixed the `visible_text` CSI/OSC terminator handling. |
 | 2026-08-15 | Second review fixes: corrected the history-off `HISTCMD` evidence, clarified per-session writer topology, hardened parent PTY opening with `O_NOCTTY`, strengthened PS2/`history -a` regression evidence, and right-sized the exact near-limit Bash transport fixture budget. |
 | 2026-08-15 | Accepted `G1` (ADR 0005) and approved the `HIST-003` Phase 3A contract; implemented the full UI-free history slice: bundled SQLite linkage with measured size evidence, storage schema v1 with WAL/`0700`/`0600`/retention, narrow ports, exclusions/disable/clear/delete controls, deterministic queries, MBX2 RECORD ingestion, and opt-in Bash observation with PTY end-to-end tests. `G2` evidence remains. |
+| 2026-08-15 | Reconciled architecture, README, protocol, and gate status with that implemented slice: `G2` is `validation` rather than blocked by completed `G1`; MBX2 RECORD is specified as implemented; capture remains default-off until `G2` evidence. |

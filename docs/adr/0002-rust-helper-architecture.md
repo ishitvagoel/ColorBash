@@ -38,3 +38,9 @@ Build on Linux, WSL, and macOS; measure release startup and resident process
 latency; test helper crash/restart; require benchmarks and ADR updates before major
 runtime dependencies.
 
+## Current implementation note
+
+ADR 0005 section 6a amends the standard-library-only stance for the measured
+history store: `rusqlite` 0.32 with bundled SQLite. The protocol crate remains
+dependency-free.
+

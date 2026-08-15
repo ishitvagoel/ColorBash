@@ -25,7 +25,7 @@ If a request is for review or planning only, do not implement feature code.
 - Current plan and status: `docs/roadmap.md`
 - Implemented architecture and decisions: `docs/architecture.md`, `docs/adr/`
 - Bash, protocol, and UX contracts: `docs/bash-compatibility.md`,
-  `docs/protocol.md`, `docs/ux-spec.md`
+  `docs/protocol.md`, `docs/protocol-mbx2.md`, `docs/ux-spec.md`
 - Investigation evidence: `docs/research/`, `docs/benchmarks/`, and tests
 - Prior mistakes and prevention: `MISTAKES.md`
 

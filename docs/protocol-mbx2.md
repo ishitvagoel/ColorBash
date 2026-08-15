@@ -1,6 +1,7 @@
 # MBX2 protocol — history record ingestion
 
-Status: proposed for the Phase 3A history slice (`HIST-007`)
+Status: implemented for the Phase 3A RECORD slice (`HIST-007`); `G2` evidence
+(100k-row budgets, contention, and `.bash_history` invariance) remains.
 
 ## Purpose
 
