@@ -123,8 +123,11 @@ fn termios_probe_sees_isig_at_the_readline_prompt() {
     let mut session = spawn_bash();
     wait_for(&mut session, "PTY# ");
     let termios = session.termios().expect("tcgetattr on master");
+    #[cfg(target_os = "linux")]
     const ISIG: u32 = 0x0001;
-    assert_eq!(termios.c_lflag as u32 & ISIG, ISIG);
+    #[cfg(target_os = "macos")]
+    const ISIG: u64 = 0x0001;
+    assert_eq!(termios.c_lflag & ISIG, ISIG);
     session
         .write_str("printf 'STTY:%s:END\\n' \"$(stty -g)\"\n", deadline(2))
         .expect("write");

@@ -287,7 +287,7 @@ fn history_dash_s_injects_without_executing() {
     let output = wait_all(&mut session, &["\nreal-output", "HIST# "]);
     let text = visible_text(&output);
     assert!(
-        !lines(&text).iter().any(|line| *line == "injected-marker"),
+        !lines(&text).contains(&"injected-marker"),
         "injected command must not execute; output={text:?}"
     );
     let dump = dump_history(&mut session, home.path(), &home.histfile());

@@ -462,3 +462,21 @@ to prevent recurrence, not to assign blame.
   resource until the positive enablement value has been established.
 - Evidence: `bash/history.bash`, `crates/cli/src/policy.rs`,
   `crates/pty/tests/history_recording.rs`, and the focused Bash module suite.
+
+## M-025 — Newer Clippy rejected test-only type and membership idioms
+
+- Discovered: 2026-08-15
+- Status: Fixed
+- Failed assumption: test code accepted by the minimum Rust toolchain would
+  remain warning-free under the newer stable Clippy used by CI.
+- Impact: CI's warnings-as-errors gate rejected a Linux no-op `u32` cast and a
+  manual slice membership scan, so the otherwise passing PTY suite could not
+  compile under Rust 1.97.
+- Correction: the termios assertion now uses target-specific `ISIG` types for
+  Linux and macOS without a cast, and the history assertion uses slice
+  `contains()` directly.
+- Prevention: keep CI on stable Clippy, fix new lints without blanket allows,
+  and model platform-dependent FFI widths explicitly rather than casting tests
+  to the current host type.
+- Evidence: `crates/pty/tests/driver.rs`,
+  `crates/pty/tests/history_admission.rs`, and the warnings-denied Clippy gate.
