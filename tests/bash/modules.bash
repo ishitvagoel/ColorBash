@@ -565,6 +565,8 @@ for bash_module in "$ROOT"/bash/*.bash; do
     [[ $(<"$bash_module") != *MBX_DBG* ]] || \
         fail "${bash_module##*/} contains the forbidden MBX_DBG channel"
 done
+[[ $(<"$ROOT/bash/history.bash") != *chmod* ]] || \
+    fail 'history.bash must not spawn chmod on the prompt path'
 
 # History module contract: MBX2 record encoding, ACK decoding, exclusions,
 # and the fork-free epoch-to-ISO conversion.

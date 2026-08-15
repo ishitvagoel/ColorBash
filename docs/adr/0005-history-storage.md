@@ -207,7 +207,9 @@ whose status cannot be attributed drops per the ambiguity rule.
   `.bash_history` invariance comparison (`crates/pty/tests/history_invariance.rs`,
   done); hostile SQL/control inertness (done); 100k-row search p95 for recent,
   selective prefix, and cwd (`docs/benchmarks/2026-08-16-history-queries.md`);
-  many-match prefix latency; prompt-boundary write acknowledgement; contention
+  prompt-boundary write acknowledgement (`docs/benchmarks/2026-08-16-history-write-ack.md`;
+  correctness recorded; percentile budget still open on development WSL);
+  concurrent-writer contention; many-match prefix latency; WAL crash/corrupt;
   and permission tests; and command-text-free diagnostics.
 - Every claim in this ADR maps to a test in `HIST-005`–`HIST-008`,
   `HIST-011`–`HIST-013` before `G2` passes.

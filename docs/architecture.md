@@ -336,9 +336,12 @@ never enters traces.
 This slice does not enable history-driven UI. Invariance and admission-parity
 PTY evidence is in `crates/pty/tests/history_invariance.rs`. 100k query p95 and
 hostile inertness evidence is in `docs/benchmarks/2026-08-16-history-queries.md`
-and `crates/cli/src/corpus.rs`. `G2` still requires contention cases,
-prompt-boundary write acknowledgement, many-match prefix latency, and
-permission checks beyond mode bits.
+and `crates/cli/src/corpus.rs`. Prompt-boundary write-ack PTY and release
+percentile evidence is in `crates/pty/tests/history_write_ack.rs` and
+`docs/benchmarks/2026-08-16-history-write-ack.md` (correctness recorded;
+percentile budget still open on development WSL). `G2` still requires
+prompt-boundary write-ack budget pass, many-match prefix latency, permission
+checks beyond mode bits, and WAL crash/corrupt evidence.
 
 ## Compatibility and degradation
 

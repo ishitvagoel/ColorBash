@@ -74,6 +74,10 @@ impl TempHome {
     pub fn store_path(&self) -> PathBuf {
         self.data_home().join("mbx/history.sqlite3")
     }
+
+    pub fn ack_samples_path(&self) -> PathBuf {
+        self.data_home().join("mbx/history-ack-samples")
+    }
 }
 
 impl Drop for TempHome {
@@ -83,13 +87,39 @@ impl Drop for TempHome {
 }
 
 pub fn spawn_history_shell(home: &Path, extra_env: &[(&str, &str)]) -> PtySession {
-    spawn_history_shell_rc(home, extra_env, "")
+    spawn_history_shell_with_timeouts(home, extra_env, "1.0", "1.0")
+}
+
+pub fn spawn_history_shell_production_timeouts(
+    home: &Path,
+    extra_env: &[(&str, &str)],
+) -> PtySession {
+    spawn_history_shell_with_timeouts(home, extra_env, "0.10", "0.10")
+}
+
+pub fn spawn_history_shell_with_timeouts(
+    home: &Path,
+    extra_env: &[(&str, &str)],
+    ipc_timeout: &str,
+    history_timeout: &str,
+) -> PtySession {
+    spawn_history_shell_rc_with_timeouts(home, extra_env, "", ipc_timeout, history_timeout)
 }
 
 pub fn spawn_history_shell_rc(
     home: &Path,
     extra_env: &[(&str, &str)],
     rc_prelude: &str,
+) -> PtySession {
+    spawn_history_shell_rc_with_timeouts(home, extra_env, rc_prelude, "1.0", "1.0")
+}
+
+fn spawn_history_shell_rc_with_timeouts(
+    home: &Path,
+    extra_env: &[(&str, &str)],
+    rc_prelude: &str,
+    ipc_timeout: &str,
+    history_timeout: &str,
 ) -> PtySession {
     fs::write(
         home.join("rc.bash"),
@@ -118,8 +148,8 @@ pub fn spawn_history_shell_rc(
         // These PTY cases assert history semantics, not the production 100 ms
         // transport budget. Keep their exchanges bounded but tolerant of
         // heavily parallel CI load; focused Bash tests cover deadline behavior.
-        .env("MBX_IPC_TIMEOUT", "1.0")
-        .env("MBX_HISTORY_TIMEOUT", "1.0")
+        .env("MBX_IPC_TIMEOUT", ipc_timeout)
+        .env("MBX_HISTORY_TIMEOUT", history_timeout)
         .cwd(home)
         .winsize(WinSize { rows: 24, cols: 80 });
     for &(key, value) in extra_env {
@@ -266,4 +296,33 @@ pub fn disabled_env<'a>(
     let mut env = vec![("XDG_DATA_HOME", data_home), ("HISTFILE", histfile)];
     env.extend_from_slice(extra);
     env
+}
+
+pub fn read_ack_samples(path: &Path) -> Vec<u64> {
+    fs::read_to_string(path)
+        .unwrap_or_default()
+        .lines()
+        .filter(|line| !line.is_empty())
+        .map(|line| {
+            line.parse::<u64>()
+                .unwrap_or_else(|_| panic!("sample line is not an unsigned integer: {line:?}"))
+        })
+        .collect()
+}
+
+pub fn assert_ack_samples_digits_only(path: &Path, forbidden: &str) {
+    let text = fs::read_to_string(path).expect("ack sample file must exist");
+    assert!(
+        !text.contains(forbidden),
+        "ack sample file must not contain forbidden text"
+    );
+    for line in text.lines() {
+        if line.is_empty() {
+            continue;
+        }
+        assert!(
+            line.chars().all(|character| character.is_ascii_digit()),
+            "ack sample line must be digits only: {line:?}"
+        );
+    }
 }

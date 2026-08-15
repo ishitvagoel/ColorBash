@@ -345,14 +345,18 @@ to prevent recurrence, not to assign blame.
   return partial or empty content. The pattern later recurred in the Phase 3A
   recording tests: they sent `exit` after matching command output but before
   proving the following prompt/history exchange had completed, so parallel runs
-  lost the final expected row during helper teardown.
+  lost the final expected row during helper teardown. It recurred again in the
+  HIST-007 write-ack W-5 harness, which ran `true` and waited only for `> `, so
+  a leftover prompt could satisfy the wait before ACK samples were written
+  (first release run collected 0 samples).
 - Correction: waits that must observe a full output-plus-prompt sequence use one
   predicate requiring every needle in one read (`wait_all`). History content is
   read from the `HISTFILE` on disk after a sourced dump script prints a marker
   that never appears in typed-command echo, so assertions never depend on
   readline echo or prompt timing. History-recording tests likewise wait for
   output plus the next prompt, then poll for the asynchronous commit while the
-  helper remains alive before exiting the shell.
+  helper remains alive before exiting the shell. Write-ack W-5 now types
+  `echo bench-{n}` and `wait_all`s for the echoed marker plus `> `.
 - Prevention: when a test needs both a command's output and the following
   prompt, wait for both in a single read; never re-wait after a match that may
   have consumed the trailing prompt. Synchronize on asynchronous artifacts
@@ -360,7 +364,8 @@ to prevent recurrence, not to assign blame.
   assertion is about file contents.
 - Evidence: `crates/pty/tests/history_admission.rs`,
   `crates/pty/tests/history_recording.rs`,
-  `crates/pty/tests/multiline_width.rs`, and
+  `crates/pty/tests/multiline_width.rs`,
+  `crates/pty/tests/history_write_ack.rs`, and
   `docs/research/bash-history-admission.md`.
 
 ## M-020 — History-off `HISTCMD` behavior was asserted without evidence

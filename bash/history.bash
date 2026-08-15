@@ -104,6 +104,34 @@ _mbx_history_excluded() {
     return 1
 }
 
+_mbx_history_ack_bench_enabled() {
+    [[ ${MBX_HISTORY:-0} == 1 && ${MBX_HISTORY_ACK_BENCH:-0} == 1 ]]
+}
+
+_mbx_history_ack_sample_path() {
+    local data_home=${XDG_DATA_HOME:-}
+    if [[ -z $data_home ]]; then
+        data_home=${HOME:-}/.local/share
+    fi
+    REPLY=$data_home/mbx/history-ack-samples
+}
+
+_mbx_history_ack_sample() {
+    local elapsed_us=$1
+    local path dir
+
+    _mbx_history_ack_bench_enabled || return 0
+    _mbx_history_ack_sample_path
+    path=$REPLY
+    dir=${path%/*}
+    [[ -d $dir ]] || mkdir -p "$dir" 2>/dev/null || return 0
+    if [[ ! -f $path ]]; then
+        # umask in a subshell so the interactive shell's umask is unchanged.
+        ( umask 077; : >"$path" ) 2>/dev/null || return 0
+    fi
+    printf '%u\n' "$elapsed_us" >>"$path" 2>/dev/null || true
+}
+
 _mbx_history_record() {
     local entry=$1
     local history_number=$2
@@ -115,6 +143,7 @@ _mbx_history_record() {
     local host=${HOSTNAME:-}
     local user=${USER:-}
     local read_ok=0
+    local ack_started_us= ack_elapsed_us=
 
     [[ -n $completed_at ]] || return 1
     _mbx_history_iso_utc "${completed_at%%.*}" || return 1
@@ -124,6 +153,10 @@ _mbx_history_record() {
     deadline=$REPLY
     ((_MBX_REQUEST_ID += 1))
     request_id=$_MBX_REQUEST_ID
+
+    if _mbx_history_ack_bench_enabled && _mbx_now_us; then
+        ack_started_us=$REPLY
+    fi
 
     _mbx_protocol_encode_history_record \
         "$request_id" "$_MBX_HISTORY_SESSION_ID" "$_MBX_HISTORY_SEQUENCE" \
@@ -140,6 +173,12 @@ _mbx_history_record() {
         # path degrades cleanly instead of consuming a stale frame.
         _mbx_engine_stop
         return 1
+    fi
+    if [[ -n $ack_started_us ]] && _mbx_now_us; then
+        ack_elapsed_us=$((REPLY - ack_started_us))
+        if ((ack_elapsed_us >= 0)); then
+            _mbx_history_ack_sample "$ack_elapsed_us"
+        fi
     fi
     return 0
 }
