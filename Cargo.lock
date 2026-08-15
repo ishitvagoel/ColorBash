@@ -12,3 +12,7 @@ dependencies = [
 [[package]]
 name = "mbx-protocol"
 version = "0.1.0"
+
+[[package]]
+name = "mbx-pty"
+version = "0.1.0"

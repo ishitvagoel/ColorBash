@@ -454,6 +454,7 @@ printf -v near_limit_logical_pwd '%*s' "$near_limit_size" ''
 serve_prompt_marker=${TMPDIR:-/tmp}/colorbash-serve-prompt-$BASHPID-$RANDOM
 rm -f -- "$marker" "$serve_prompt_marker"
 export MBX_STALL_SERVE_PROMPT_MARKER=$serve_prompt_marker
+MBX_RENDER_TIMEOUT=.10
 _mbx_engine_start || fail 'the near-limit-PWD fixture did not complete its handshake'
 _mbx_clock_now_us
 started_us=$REPLY
