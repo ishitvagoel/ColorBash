@@ -108,6 +108,21 @@ whose status cannot be attributed drops per the ambiguity rule.
 - The schema stores values only through parameterized statements; command text
   is inert data, never SQL or terminal control.
 
+### 6a. SQLite linkage decision (`HIST-013`)
+
+- Linkage: `rusqlite` 0.32 with the `bundled` SQLite feature. Bundled linkage
+  compiles SQLite into the binary, removing any dependency on a system SQLite
+  dev package; this is the portability requirement for Linux, WSL, and macOS
+  support.
+- Measured cost on the development WSL2/Linux environment: release binary grew
+  from 604,664 bytes to 2,626,336 bytes (+1.97 MiB) once the storage code is
+  linked; a cold first build adds roughly 51 s for `libsqlite3-sys`; incremental
+  rebuilds are unaffected. First-use latency and memory are bounded by the
+  queue/writer design, not by the linkage.
+- Packaging consequence: the bundled binary ships SQLite; no runtime library is
+  required. This amends ADR 0002's standard-library-only stance for the
+  measured history feature need.
+
 ### 7. Concurrency, durability, and idempotency
 
 - Each Bash session has one bounded writer queue and writer connection. SQLite

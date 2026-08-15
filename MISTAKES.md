@@ -342,17 +342,24 @@ to prevent recurrence, not to assign blame.
 - Impact: a single read chunk can contain the matched output plus the trailing
   prompt, so the subsequent wait for the prompt timed out or matched stale
   echo; history dump reads through PTY echo raced with prompt timing and could
-  return partial or empty content.
+  return partial or empty content. The pattern later recurred in the Phase 3A
+  recording tests: they sent `exit` after matching command output but before
+  proving the following prompt/history exchange had completed, so parallel runs
+  lost the final expected row during helper teardown.
 - Correction: waits that must observe a full output-plus-prompt sequence use one
   predicate requiring every needle in one read (`wait_all`). History content is
   read from the `HISTFILE` on disk after a sourced dump script prints a marker
   that never appears in typed-command echo, so assertions never depend on
-  readline echo or prompt timing.
+  readline echo or prompt timing. History-recording tests likewise wait for
+  output plus the next prompt, then poll for the asynchronous commit while the
+  helper remains alive before exiting the shell.
 - Prevention: when a test needs both a command's output and the following
   prompt, wait for both in a single read; never re-wait after a match that may
-  have consumed the trailing prompt. Read file artifacts from disk when the
+  have consumed the trailing prompt. Synchronize on asynchronous artifacts
+  before terminating their producer, and read file artifacts from disk when the
   assertion is about file contents.
 - Evidence: `crates/pty/tests/history_admission.rs`,
+  `crates/pty/tests/history_recording.rs`,
   `crates/pty/tests/multiline_width.rs`, and
   `docs/research/bash-history-admission.md`.
 
@@ -392,3 +399,66 @@ to prevent recurrence, not to assign blame.
   deadline.
 - Evidence: `tests/bash/modules.bash`, `bash/engine.bash`, and the passing
   canonical suite.
+
+## M-022 — `fc -ln -1` in a command substitution lags the newest history entry
+
+- Discovered: 2026-08-15
+- Status: Fixed
+- Failed assumption: `fc -ln -1` inside `$(...)` returns the newest Bash-admitted
+  history entry at the prompt boundary, matching `history 1`.
+- Impact: the history recorder observed a stale entry (the previous command) at
+  every prompt, producing duplicate and misattributed records; the research
+  doc's admission-authority evidence could not be honored.
+- Correction: the recorder reads `history 1` instead and strips the
+  right-aligned number plus two-space separator, preserving a user-typed
+  leading space; Bash 5.2.21 `fc` in a command substitution lags by one entry.
+- Prevention: validate admission-reading primitives against `history 1` under
+  a genuine PTY before wiring capture, and assert stored text against the
+  folded HISTFILE form.
+- Evidence: `bash/history.bash`, `crates/pty/tests/history_recording.rs`, and
+  `docs/research/bash-history-admission.md`.
+
+## M-023 — Temporary history debugging leaked command text and broke compilation
+
+- Discovered: 2026-08-15
+- Status: Fixed
+- Failed assumption: ad hoc `MBX_DBG` file loggers were safe to leave across the
+  Bash recorder, Rust ingestion/writer, helper startup, and PTY scaffolding while
+  diagnosing tests.
+- Impact: both debug branches treated `var_os` as a `Result` instead of an
+  `Option`, preventing the crate from compiling. The writer branch also copied
+  sensitive command text into an unmanaged debug file outside the protected
+  SQLite store. Bash-side cycle/exclusion/exchange diagnostics likewise copied
+  full history entries, while PTY scaffolding enabled and dumped those files,
+  contradicting the accepted no-command-text logging contract.
+- Correction: the Rust and Bash debug channels, helper redirection, and PTY dump
+  scaffolding were removed. Storage errors continue through the standard trace
+  path, whose diagnostic contains only the typed failure kind.
+- Prevention: history diagnostics must use the standard command-text-free trace
+  boundary. Add a focused assertion with sentinel secret text whenever a new
+  diagnostic is introduced; never add local debug output for a history record.
+  The Bash module contract rejects any reintroduced `MBX_DBG` channel.
+- Evidence: `bash/history.bash`, `bash/engine.bash`,
+  `crates/cli/src/storage.rs`,
+  `storage_failure_diagnostic_exposes_only_the_typed_kind`,
+  `crates/pty/tests/history_recording.rs`, `tests/bash/modules.bash`, and the
+  passing canonical suite.
+
+## M-024 — Unset history configuration enabled the opt-in sidecar
+
+- Discovered: 2026-08-15
+- Status: Fixed
+- Failed assumption: treating only `MBX_HISTORY=0` as disabled was equivalent to
+  making enhanced history opt-in.
+- Impact: an unset variable enabled Bash capture and made every helper server
+  open or create the history store without explicit consent. This contradicted
+  the accepted privacy contract and could also make unrelated helper handshakes
+  fail when the default data directory was unavailable.
+- Correction: Bash and Rust now enable history only for the exact value
+  `MBX_HISTORY=1`. History CLI tests opt in explicitly, and a PTY regression test
+  proves that the unset default creates no store.
+- Prevention: every opt-in feature must test absent, explicit-off, and
+  explicit-on configuration. Composition roots must not allocate an opt-in
+  resource until the positive enablement value has been established.
+- Evidence: `bash/history.bash`, `crates/cli/src/policy.rs`,
+  `crates/pty/tests/history_recording.rs`, and the focused Bash module suite.

@@ -275,7 +275,7 @@ latency budgets.
 | 0 | Research / architecture | `validation` | platform matrix and remaining `G0` evidence |
 | 1 | Bootstrap | `validation` | clean baseline/CI evidence and broader lifecycle tracing |
 | 2 | Prompt | `validation` | width model and representative prompt percentiles |
-| 3 | History | `in-progress` | Phase 3A vertical slice implementing; `G2` evidence pending |
+| 3 | History | `in-progress` | Phase 3A slice implemented; `G2` budgets and invariance evidence pending |
 | 4 | Ghost suggestions | `blocked` | `G2` and `G3` |
 | 5 | Completion | `discovery` | adapter experiment produces `G4`; popup waits for `G3` and `G4` |
 | 6 | Syntax highlighting | `blocked` | `G3`; intentionally after search/ghost/completion evidence |
@@ -375,13 +375,13 @@ accept or revise these details before implementation:
 | `HIST-002` | PTY characterize Bash admission and multiline behavior | `complete` | `crates/pty/tests/history_admission.rs` and `docs/research/bash-history-admission.md` |
 | `HIST-003` | Approve the Phase 3A vertical-slice contract | `complete` | `docs/history-phase3a-contract.md` approved |
 | `HIST-004` | Define datasets, contention cases, and benchmark budgets | `complete` | `docs/benchmarks/history-budgets.md` |
-| `HIST-005` | Add narrow recorder/search/policy and reader/writer ports | `ready` | `FND-001`, `HIST-003` |
-| `HIST-013` | Decide SQLite linkage/dependency and supported-platform packaging | `ready` | `HIST-003`, `HIST-004`; update ADR 0002/0005 with size/platform evidence |
-| `HIST-012` | Define queue drain, shell-exit, crash, retry, and acceptable-loss semantics | `ready` | `HIST-003`; required before writer/ingestion |
-| `HIST-006` | Implement SQLite schema, migrations, permissions, retention, and writer | `blocked` | `FND-001`, `HIST-005`, `HIST-012`, `HIST-013` |
-| `HIST-011` | Implement exclusions, no-log policy, disable/path/clear/delete controls | `blocked` | `HIST-005`, `HIST-006`; required by `G2` |
-| `HIST-007` | Add opt-in Bash observation and bounded protocol ingestion | `blocked` | `FND-001`, `HIST-006`, `HIST-011`, `HIST-012`, protocol ADR decision |
-| `HIST-008` | Add recent, exact-prefix, cwd queries and deterministic ranking | `blocked` | `HIST-006` |
+| `HIST-005` | Add narrow recorder/search/policy and reader/writer ports | `complete` | `crates/cli/src/history.rs` ports plus policy and history-service substitutes |
+| `HIST-013` | Decide SQLite linkage/dependency and supported-platform packaging | `complete` | bundled rusqlite; measured +1.97 MiB release binary and first-build cost in ADR 0005 section 6a |
+| `HIST-012` | Define queue drain, shell-exit, crash, retry, and acceptable-loss semantics | `complete` | durability contract in `docs/history-phase3a-contract.md`; writer commits eagerly and Shutdown drains |
+| `HIST-006` | Implement SQLite schema, migrations, permissions, retention, and writer | `complete` | `crates/cli/src/storage.rs` schema v1, WAL, `0700`/`0600`, retention prune, bounded writer |
+| `HIST-011` | Implement exclusions, no-log policy, disable/path/clear/delete controls | `complete` | `crates/cli/src/policy.rs` plus `mbx history path|count|clear|delete` and env controls |
+| `HIST-007` | Add opt-in Bash observation and bounded protocol ingestion | `validation` | `bash/history.bash`, MBX2 RECORD ingestion, and PTY recording tests; `G2` budgets/invariance remain |
+| `HIST-008` | Add recent, exact-prefix, cwd queries and deterministic ranking | `complete` | `mbx history search recent|prefix|cwd` with bounded limits and NOCASE prefix index |
 | `HIST-009` | Add bounded fuzzy ranking | `blocked` | `HIST-008`, deterministic-query evidence, and 100k+ benchmark |
 | `HIST-010` | Add repository context | `blocked` | history-scoped `GIT-003` root/branch provider subset |
 
@@ -507,17 +507,18 @@ Exit condition: `G5` after every `HRD-*` item is complete.
 
 ## Immediate next work
 
-`G1` is accepted and the `HIST-003` Phase 3A contract is approved. The Phase 3A
-vertical slice is now in progress in dependency order:
+The Phase 3A vertical slice is implemented: ports, SQLite schema/writer,
+controls, deterministic queries, MBX2 ingestion, and opt-in Bash observation
+(`HIST-005`–`HIST-008`, `HIST-011`–`HIST-013`). Capture stays disabled by
+default. Remaining before `G2`:
 
-1. `HIST-012` durability semantics, then `HIST-013` SQLite linkage evidence.
-2. `HIST-005` ports, `HIST-006` schema/writer, `HIST-011` controls,
-   `HIST-008` deterministic queries, then `HIST-007` observation/ingestion.
-3. Capture stays disabled until `G2` evidence passes; no editor UI before `G2`.
-4. `FND-001` / `G0`: CI evidence via the pushed baseline is pending the run.
-
-`EDT-001` stays blocked on `FND-001`. `PRM-002` remains discovery until the
-width model is designed from the `RSH-004` baseline.
+1. `HIST-007` evidence: run the `HIST-004` 100k-row corpus and contention cases
+   at the recorded budgets; prove `.bash_history` invariance for
+   enable/disable/clear/delete; exercise hostile SQL/control rows and
+   permission checks end to end.
+2. `FND-001` / `G0`: CI evidence via the pushed baseline is pending the run.
+3. `PRM-002` remains discovery until the width model is designed from the
+   `RSH-004` baseline; `EDT-001` stays blocked on `FND-001`.
 
 ## Provisional performance and safety budgets
 
@@ -576,3 +577,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-15 | Completed the history groundwork slice: `HIST-002` PTY admission characterization (HISTCONTROL/HISTIGNORE/history-off/`history -s`/multiline folding/renumbering/exit flush), `RSH-004` multiline/width/resize PTY validation, `PRM-005` completion, expanded ADR 0005 to the full `G1` contract, drafted the `HIST-003` Phase 3A contract and `HIST-004` benchmark budgets. `G1` acceptance and `G0` baseline review remain open. |
 | 2026-08-15 | Review fixes: corrected the not-implemented list after `RSH-004` completion (arbitrary key injection remains open), recorded the PTY driver macOS constants as `HRD-001` pre-work, removed dead driver API surface, and fixed the `visible_text` CSI/OSC terminator handling. |
 | 2026-08-15 | Second review fixes: corrected the history-off `HISTCMD` evidence, clarified per-session writer topology, hardened parent PTY opening with `O_NOCTTY`, strengthened PS2/`history -a` regression evidence, and right-sized the exact near-limit Bash transport fixture budget. |
+| 2026-08-15 | Accepted `G1` (ADR 0005) and approved the `HIST-003` Phase 3A contract; implemented the full UI-free history slice: bundled SQLite linkage with measured size evidence, storage schema v1 with WAL/`0700`/`0600`/retention, narrow ports, exclusions/disable/clear/delete controls, deterministic queries, MBX2 RECORD ingestion, and opt-in Bash observation with PTY end-to-end tests. `G2` evidence remains. |

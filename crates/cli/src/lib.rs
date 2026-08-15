@@ -7,9 +7,13 @@
 mod app;
 mod cli;
 mod environment;
+mod history;
+mod history_service;
+mod policy;
 mod prompt;
 mod provider;
 mod service;
+mod storage;
 mod telemetry;
 mod transport;
 

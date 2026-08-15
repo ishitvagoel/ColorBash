@@ -1,3 +1,4 @@
+use crate::history_service::{HistoryHandler, MBX2_MAGIC};
 use crate::service::RequestHandler;
 use crate::telemetry::trace_message;
 use mbx_protocol::{MAX_MESSAGE_BYTES, Request, Response, ResponseKind};
@@ -8,23 +9,31 @@ use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-pub fn serve_stdio(handler: &dyn RequestHandler) -> Result<(), String> {
+pub fn serve_stdio(
+    handler: &dyn RequestHandler,
+    history: Option<Box<dyn HistoryHandler>>,
+) -> Result<(), String> {
     let stdin = io::stdin();
     let stdout = io::stdout();
     serve_connection(
         &mut stdin.lock(),
         &mut BufWriter::new(stdout.lock()),
         handler,
+        history.as_deref(),
     )
 }
 
-pub fn serve_socket(path: &Path, handler: &dyn RequestHandler) -> Result<(), String> {
+pub fn serve_socket(
+    path: &Path,
+    handler: &dyn RequestHandler,
+    history: Option<Box<dyn HistoryHandler>>,
+) -> Result<(), String> {
     let (listener, _cleanup) = bind_socket(path)?;
 
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-                if let Err(error) = serve_socket_connection(stream, handler) {
+                if let Err(error) = serve_socket_connection(stream, handler, history.as_deref()) {
                     trace_message(&format!("socket_client_error detail={error}"));
                 }
             }
@@ -35,7 +44,11 @@ pub fn serve_socket(path: &Path, handler: &dyn RequestHandler) -> Result<(), Str
     Ok(())
 }
 
-fn serve_socket_connection(stream: UnixStream, handler: &dyn RequestHandler) -> Result<(), String> {
+fn serve_socket_connection(
+    stream: UnixStream,
+    handler: &dyn RequestHandler,
+    history: Option<&dyn HistoryHandler>,
+) -> Result<(), String> {
     stream
         .set_read_timeout(Some(Duration::from_secs(30)))
         .map_err(io_error)?;
@@ -44,19 +57,28 @@ fn serve_socket_connection(stream: UnixStream, handler: &dyn RequestHandler) -> 
         &mut BufReader::new(reader_stream),
         &mut BufWriter::new(stream),
         handler,
+        history,
     )
 }
 
-/// Shared request loop used by every server-side stream adapter.
+/// Shared request loop used by every server-side stream adapter. MBX2 frames
+/// (history records) dispatch to the optional history handler; MBX1 frames go
+/// to the prompt request handler.
 fn serve_connection(
     reader: &mut impl BufRead,
     writer: &mut impl Write,
     handler: &dyn RequestHandler,
+    history: Option<&dyn HistoryHandler>,
 ) -> Result<(), String> {
     let mut line = String::new();
     loop {
         if read_bounded_line(reader, &mut line)? == 0 {
             return Ok(());
+        }
+        if line.starts_with(&format!("{MBX2_MAGIC}\t")) {
+            let response = handle_mbx2_line(&line, history);
+            write_message(writer, &response)?;
+            continue;
         }
         let response = match Request::decode(&line) {
             Ok(request) => Response {
@@ -69,6 +91,34 @@ fn serve_connection(
             },
         };
         write_message(writer, &response.encode())?;
+    }
+}
+
+fn handle_mbx2_line(line: &str, history: Option<&dyn HistoryHandler>) -> String {
+    let Some(handler) = history else {
+        return crate::history_service::encode_mbx2_error(0, "unsupported");
+    };
+    let mut fields = line.split('\t');
+    let magic = fields.next().unwrap_or_default();
+    if magic != MBX2_MAGIC {
+        return crate::history_service::encode_mbx2_error(0, "invalid");
+    }
+    let request_id = match fields.next().and_then(|value| value.parse::<u64>().ok()) {
+        Some(id) => id,
+        None => return crate::history_service::encode_mbx2_error(0, "invalid"),
+    };
+    let kind = fields.next().unwrap_or_default();
+    let rest: Vec<String> = fields.map(str::to_owned).collect();
+    match handler.handle(request_id, kind, &rest) {
+        crate::history_service::HistoryResponse::Pong => {
+            crate::history_service::encode_mbx2(request_id, "PONG")
+        }
+        crate::history_service::HistoryResponse::Ack => {
+            crate::history_service::encode_mbx2(request_id, "ACK")
+        }
+        crate::history_service::HistoryResponse::Error(kind) => {
+            crate::history_service::encode_mbx2_error(request_id, &kind)
+        }
     }
 }
 
@@ -223,7 +273,7 @@ mod tests {
         let mut writer = Vec::new();
         let handler = RecordingHandler::returning(ResponseKind::Prompt("sentinel".to_owned()));
 
-        serve_connection(&mut reader, &mut writer, &handler).unwrap();
+        serve_connection(&mut reader, &mut writer, &handler, None).unwrap();
 
         assert_eq!(
             String::from_utf8(writer).unwrap(),
@@ -246,11 +296,101 @@ mod tests {
             RecordingHandler::returning(ResponseKind::Prompt("x".repeat(MAX_MESSAGE_BYTES)));
 
         assert_eq!(
-            serve_connection(&mut reader, &mut writer, &handler).unwrap_err(),
+            serve_connection(&mut reader, &mut writer, &handler, None).unwrap_err(),
             "encoded message exceeds protocol limit"
         );
         assert!(writer.is_empty());
         assert_eq!(handler.requests.borrow().len(), 1);
+    }
+
+    #[test]
+    fn mbx2_frames_dispatch_to_the_history_handler() {
+        use crate::history_service::HistoryResponse;
+        use std::sync::Mutex;
+
+        struct RecordingHistory {
+            calls: Mutex<Vec<(u64, String, usize)>>,
+        }
+
+        impl HistoryHandler for RecordingHistory {
+            fn handle(&self, id: u64, kind: &str, fields: &[String]) -> HistoryResponse {
+                self.calls
+                    .lock()
+                    .unwrap()
+                    .push((id, kind.to_owned(), fields.len()));
+                if kind == "PING" {
+                    HistoryResponse::Pong
+                } else {
+                    HistoryResponse::Ack
+                }
+            }
+        }
+
+        let input = b"MBX2\t3\tRECORD\ta\t1\t2\tcmd\t/w\tnow\t0\t-\th\tu\nMBX2\t4\tPING\n";
+        let mut reader = Cursor::new(input.to_vec());
+        let mut writer = Vec::new();
+        let handler = RecordingHandler::returning(ResponseKind::Prompt("x".to_owned()));
+        let history = RecordingHistory {
+            calls: Mutex::new(Vec::new()),
+        };
+
+        serve_connection(&mut reader, &mut writer, &handler, Some(&history)).unwrap();
+
+        assert_eq!(
+            String::from_utf8(writer).unwrap(),
+            "MBX2\t3\tACK\nMBX2\t4\tPONG\n"
+        );
+        assert!(handler.requests.borrow().is_empty());
+        assert_eq!(
+            history.calls.lock().unwrap().as_slice(),
+            &[(3, "RECORD".to_owned(), 10), (4, "PING".to_owned(), 0)]
+        );
+    }
+
+    #[test]
+    fn mbx2_without_history_handler_fails_closed() {
+        let input = b"MBX2\t3\tRECORD\ta\n";
+        let mut reader = Cursor::new(input.to_vec());
+        let mut writer = Vec::new();
+        let handler = RecordingHandler::returning(ResponseKind::Prompt("x".to_owned()));
+
+        serve_connection(&mut reader, &mut writer, &handler, None).unwrap();
+
+        assert_eq!(
+            String::from_utf8(writer).unwrap(),
+            "MBX2\t0\tERROR\tunsupported\n"
+        );
+        assert!(handler.requests.borrow().is_empty());
+    }
+
+    #[test]
+    fn mbx2_invalid_frame_fails_closed() {
+        let input = b"MBX2\tbogus\tPING\n";
+        let mut reader = Cursor::new(input.to_vec());
+        let mut writer = Vec::new();
+        let handler = RecordingHandler::returning(ResponseKind::Prompt("x".to_owned()));
+        let history = RecordingHistoryStub;
+
+        serve_connection(&mut reader, &mut writer, &handler, Some(&history)).unwrap();
+
+        assert_eq!(
+            String::from_utf8(writer).unwrap(),
+            "MBX2\t0\tERROR\tinvalid\n"
+        );
+        assert!(handler.requests.borrow().is_empty());
+    }
+
+    struct RecordingHistoryStub;
+
+    impl HistoryHandler for RecordingHistoryStub {
+        fn handle(
+            &self,
+            _id: u64,
+            _kind: &str,
+            _fields: &[String],
+        ) -> crate::history_service::HistoryResponse {
+            panic!("invalid magic must not reach the history handler")
+        }
     }
 
     #[test]

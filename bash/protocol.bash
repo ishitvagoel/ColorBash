@@ -2,6 +2,7 @@
 # MBX1 constants, field encoding, and response validation.
 
 _MBX_PROTOCOL_MAGIC=MBX1
+_MBX_PROTOCOL_MAGIC_HISTORY=MBX2
 _MBX_PROTOCOL_MAX_MESSAGE_BYTES=$((64 * 1024))
 _MBX_PROTOCOL_FORBIDDEN_RAW_BYTES=$'\001\002\003\004\005\006\007\010\012\013\014\015\016\017\020\021\022\023\024\025\026\027\030\031\032\033\034\035\036\037\177'
 
@@ -232,4 +233,53 @@ _mbx_protocol_decode_prompt() {
     else
         _mbx_unescape_field "${fields[3]}"
     fi
+}
+
+_mbx_protocol_encode_history_record() {
+    (($# == 11)) || return 2
+
+    local request_id=$1
+    local -a raw=( "${@:2}" )
+    local payload= field
+    local index
+
+    # Every record field travels percent-escaped so hostile command text and
+    # paths cannot break framing; "-" sentinels for null numbers stay literal.
+    for ((index = 0; index < ${#raw[@]}; index++)); do
+        if ((index == 2 || index == 7)); then
+            field=${raw[index]}
+            if [[ $field == '-' ]]; then
+                payload+=$field
+            else
+                _mbx_escape_field "$field" || return 1
+                payload+=$REPLY
+            fi
+        else
+            _mbx_escape_field "${raw[index]}" || return 1
+            payload+=$REPLY
+        fi
+        ((index + 1 < ${#raw[@]})) && payload+=$'\t'
+    done
+    printf -v REPLY '%s\t%s\tRECORD\t%s' \
+        "$_MBX_PROTOCOL_MAGIC_HISTORY" "$request_id" "$payload"
+    ((${#REPLY} <= _MBX_PROTOCOL_MAX_MESSAGE_BYTES)) || {
+        REPLY=
+        return 1
+    }
+}
+
+_mbx_protocol_decode_history_ack() {
+    (($# == 2)) || return 2
+
+    local expected_id=$1
+    local line=$2
+    local -a fields=()
+
+    REPLY=
+    _mbx_protocol_validate_line "$line" || return 1
+    _mbx_protocol_split_fields "$line" fields
+    ((${#fields[@]} == 3)) || return 1
+    [[ ${fields[0]} == "$_MBX_PROTOCOL_MAGIC_HISTORY" && \
+        ${fields[1]} == "$expected_id" && \
+        ${fields[2]} == ACK ]] || return 1
 }

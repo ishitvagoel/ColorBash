@@ -559,4 +559,41 @@ for bash_module in "$ROOT"/bash/*.bash; do
 done
 assert_eq 1 "$ps1_writer_count" 'prompt.bash is not the sole PS1 writer'
 
+# History text is sensitive. Bash modules must not grow an ad hoc debug-file
+# channel that can bypass the standard command-text-free tracing boundary.
+for bash_module in "$ROOT"/bash/*.bash; do
+    [[ $(<"$bash_module") != *MBX_DBG* ]] || \
+        fail "${bash_module##*/} contains the forbidden MBX_DBG channel"
+done
+
+# History module contract: MBX2 record encoding, ACK decoding, exclusions,
+# and the fork-free epoch-to-ISO conversion.
+source "$ROOT/bash/history.bash"
+
+_mbx_protocol_encode_history_record \
+    5 'sess-1' 1 '-' 'echo hello' '/tmp' '2026-08-15T10:00:00Z' 0 '-' host user
+assert_eq 'MBX2	5	RECORD	sess-1	1	-	echo hello	/tmp	2026-08-15T10:00:00Z	0	-	host	user' \
+    "$REPLY" 'the MBX2 record encoder changed the wire format'
+_mbx_protocol_decode_history_ack 5 $'MBX2\t5\tACK' || \
+    fail 'a valid MBX2 ACK was rejected'
+if _mbx_protocol_decode_history_ack 5 $'MBX2\t6\tACK'; then
+    fail 'an MBX2 ACK with a mismatched request id was accepted'
+fi
+if _mbx_protocol_decode_history_ack 5 $'MBX1\t5\tACK'; then
+    fail 'an MBX1 ACK was accepted as MBX2'
+fi
+
+MBX_HISTORY_EXCLUDE='git *:ssh *'
+_mbx_history_excluded 'git status' || fail 'git exclusion did not match'
+_mbx_history_excluded 'ssh host' || fail 'ssh exclusion did not match'
+_mbx_history_excluded 'echo ok' && fail 'a non-excluded command was dropped'
+unset MBX_HISTORY_EXCLUDE
+
+_mbx_history_iso_utc 0
+assert_eq '1970-01-01T00:00:00Z' "$REPLY" 'epoch zero did not convert to ISO'
+_mbx_history_iso_utc 1735689600
+assert_eq '2025-01-01T00:00:00Z' "$REPLY" 'the civil-date conversion is wrong'
+_mbx_history_iso_utc 1786808647
+assert_eq '2026-08-15T15:44:07Z' "$REPLY" 'the civil-date conversion drifted'
+
 printf 'PASS: focused Bash module contracts\n'

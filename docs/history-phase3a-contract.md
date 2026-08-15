@@ -49,6 +49,40 @@ Out of scope (later phases or explicit gates):
   sections 5–7; budgets in `docs/benchmarks/history-budgets.md`).
 - Retention prunes in the writer with a configurable bounded default.
 
+## Durability contract (HIST-012)
+
+- **Queue model.** Each shell session has one bounded in-process queue between
+  the recorder and its writer. Enqueue is the only prompt-side step: it pushes
+  a record and returns; it never touches SQLite, never blocks on a lock, and
+  never retries inside the prompt path. Queue capacity is bounded (configurable
+  default), and the queue acknowledges by accepting the record, not by commit.
+- **Acceptable loss.** Loss is confined to enhancement data, never to Bash
+  behavior, `.bash_history`, or prompt correctness. Records are dropped, not
+  retried, when: the queue is full; the writer is stopped; storage raises an
+  unrecoverable error; or the observation deadline expires. Dropped records
+  increment command-text-free diagnostic counters.
+- **Writer drain.** The writer processes records in order, batches where
+  practical, applies exclusions/retention, and commits with the bounded
+  `busy_timeout`. It exits when the queue is closed and drained. A writer that
+  fails a commit retries a bounded number of times, then drops the batch and
+  continues; it must never terminate the helper.
+- **Shell exit.** On interactive-shell exit, the recorder flushes the queue
+  with the same bounded budget already used during the session. If the budget
+  expires, remaining records are dropped silently (no blocking exit); the
+  already-committed prefix is durable. No shell-exit path may wait on SQLite.
+- **Crash.** Helper or shell crash may lose records still in the queue; the
+  store remains consistent because each write is a single transactional insert
+  keyed by `(session_id, event_sequence)`. Startup opens the store, verifies
+  `user_version`, and recovers any WAL state without repairing data.
+- **Retry.** Retries are permitted only at the queue drain / writer layer for
+  transient SQLite errors (`SQLITE_BUSY`/`SQLITE_LOCKED` within `busy_timeout`
+  or a bounded number of attempts). Idempotency keys make any replayed insert
+  a no-op, so retries can never duplicate rows.
+- **Storage failure.** If the store is unavailable or corrupt, the writer
+  stops accepting new work, the queue drains by dropping, and the recorder
+  degrades to no capture for the session; the prompt and shell are unaffected.
+  A later session retries opening the store.
+
 ## Query contract (deterministic)
 
 - recent: newest first, bounded result count;

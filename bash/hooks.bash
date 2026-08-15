@@ -39,6 +39,9 @@ _mbx_capture_status() {
         fi
     fi
     unset _MBX_COMMAND_STARTED_US
+    if [[ ${_MBX_HISTORY_ENABLED:-0} == 1 ]]; then
+        _mbx_history_prompt
+    fi
     return "$status"
 }
 

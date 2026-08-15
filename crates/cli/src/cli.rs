@@ -19,6 +19,17 @@ pub enum ServeTarget {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum HistoryCommand {
+    Path,
+    Count,
+    Clear,
+    Delete,
+    SearchRecent { limit: usize },
+    SearchPrefix { prefix: String, limit: usize },
+    SearchCwd { cwd: String, limit: usize },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CliCommand {
     Handshake,
     Prompt(PromptContext),
@@ -28,6 +39,7 @@ pub enum CliCommand {
         socket: PathBuf,
         iterations: NonZeroU64,
     },
+    History(HistoryCommand),
     Version,
     Help,
 }
@@ -44,6 +56,7 @@ pub fn parse(
         Some("serve") => parse_serve(&args[1..]).map(CliCommand::Serve),
         Some("socket-ping") => parse_socket_path(&args[1..]).map(CliCommand::SocketPing),
         Some("benchmark-client") => parse_benchmark(&args[1..]),
+        Some("history") => parse_history(&args[1..]).map(CliCommand::History),
         Some("--version" | "-V") => Ok(CliCommand::Version),
         Some("--help" | "-h") | None => Ok(CliCommand::Help),
         Some(command) => Err(format!("unknown command: {command}")),
@@ -56,7 +69,11 @@ pub fn help_text(version: &str) -> String {
          Bash-compatible terminal UX foundation prototype\n\n\
          USAGE:\n  mbx handshake\n  mbx prompt [OPTIONS]\n  mbx serve --stdio\n  \
          mbx serve --socket PATH\n  mbx socket-ping --socket PATH\n  \
-         mbx benchmark-client --socket PATH [--iterations N]\n\n\
+         mbx benchmark-client --socket PATH [--iterations N]\n  \
+         mbx history (path|count|clear|delete)\n  \
+         mbx history search recent [--limit N]\n  \
+         mbx history search prefix TEXT [--limit N]\n  \
+         mbx history search cwd PATH [--limit N]\n\n\
          PROMPT OPTIONS:\n  --cwd PATH  --status N  --duration-ms N  --flags BITS\n  \
          --no-color  --ascii  --nerd-font  --ssh  --production  --disable-git"
     )
@@ -126,6 +143,84 @@ fn parse_socket_path(args: &[String]) -> Result<PathBuf, String> {
         [option, socket] if option == "--socket" => Ok(PathBuf::from(socket)),
         _ => Err("--socket PATH is required".to_owned()),
     }
+}
+
+fn parse_history(args: &[String]) -> Result<HistoryCommand, String> {
+    match args.first().map(String::as_str) {
+        Some("path") => expect_no_history_args(&args[1..], HistoryCommand::Path),
+        Some("count") => expect_no_history_args(&args[1..], HistoryCommand::Count),
+        Some("clear") => expect_no_history_args(&args[1..], HistoryCommand::Clear),
+        Some("delete") => expect_no_history_args(&args[1..], HistoryCommand::Delete),
+        Some("search") => parse_history_search(&args[1..]),
+        Some(command) => Err(format!("unknown history command: {command}")),
+        None => Err("history requires a subcommand (path|count|clear|delete|search)".to_owned()),
+    }
+}
+
+fn expect_no_history_args(
+    args: &[String],
+    command: HistoryCommand,
+) -> Result<HistoryCommand, String> {
+    if args.is_empty() {
+        Ok(command)
+    } else {
+        Err(format!("unexpected arguments: {}", args.join(" ")))
+    }
+}
+
+fn parse_history_search(args: &[String]) -> Result<HistoryCommand, String> {
+    let mut limit = crate::history::DEFAULT_QUERY_LIMIT;
+    let kind;
+    let mut index;
+    match args.first().map(String::as_str) {
+        Some("recent") => {
+            kind = HistorySearchKind::Recent;
+            index = 1;
+        }
+        Some("prefix") => {
+            index = 2;
+            kind = HistorySearchKind::Prefix(
+                args.get(1).cloned().ok_or("search prefix requires TEXT")?,
+            );
+        }
+        Some("cwd") => {
+            index = 2;
+            kind = HistorySearchKind::Cwd(args.get(1).cloned().ok_or("search cwd requires PATH")?);
+        }
+        Some(command) => return Err(format!("unknown search kind: {command}")),
+        None => return Err("history search requires (recent|prefix|cwd)".to_owned()),
+    }
+    while index < args.len() {
+        match args[index].as_str() {
+            "--limit" => {
+                index += 1;
+                limit = args
+                    .get(index)
+                    .ok_or("--limit requires a value")?
+                    .parse::<usize>()
+                    .map_err(|_| "--limit must be an unsigned integer")?;
+                if limit > crate::history::MAX_QUERY_LIMIT {
+                    return Err(format!(
+                        "--limit must be at most {}",
+                        crate::history::MAX_QUERY_LIMIT
+                    ));
+                }
+            }
+            unknown => return Err(format!("unknown search option: {unknown}")),
+        }
+        index += 1;
+    }
+    Ok(match kind {
+        HistorySearchKind::Recent => HistoryCommand::SearchRecent { limit },
+        HistorySearchKind::Prefix(prefix) => HistoryCommand::SearchPrefix { prefix, limit },
+        HistorySearchKind::Cwd(cwd) => HistoryCommand::SearchCwd { cwd, limit },
+    })
+}
+
+enum HistorySearchKind {
+    Recent,
+    Prefix(String),
+    Cwd(String),
 }
 
 fn parse_benchmark(args: &[String]) -> Result<CliCommand, String> {

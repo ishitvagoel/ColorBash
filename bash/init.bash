@@ -18,6 +18,7 @@ source "$_MBX_ROOT/bash/fallback.bash" || return 0
 source "$_MBX_ROOT/bash/engine.bash" || return 0
 source "$_MBX_ROOT/bash/prompt.bash" || return 0
 source "$_MBX_ROOT/bash/hooks.bash" || return 0
+source "$_MBX_ROOT/bash/history.bash" || return 0
 
 if [[ -z ${MBX_BIN:-} ]]; then
     if [[ -x $_MBX_ROOT/target/release/mbx ]]; then
@@ -29,6 +30,7 @@ fi
 
 _mbx_engine_start || true
 _mbx_install_hooks
+_mbx_history_install_hooks
 _MBX_INITIALIZED=1
 
 unset _MBX_INIT_FILE _MBX_BASH_DIR

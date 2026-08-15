@@ -11,4 +11,5 @@ path = "src/main.rs"
 
 [dependencies]
 mbx-protocol = { path = "../protocol" }
+rusqlite = { version = "0.32", features = ["bundled"] }
 
