@@ -7,7 +7,7 @@
 
 - Last reviewed: 2026-08-16 UTC
 - Current milestone: Phase 3A sidecar implemented; `G0` and `G2` complete; `G1` accepted
-- Active workstream: `COMP-001` non-popup completion adapter (`G3` / `EDT-001` in `validation`)
+- Active workstream: `COMP-002` exact-parity matrix (`COMP-001` in `validation`; `G3` / `EDT-001` in `validation`)
 - Next decision gate: `G3` editor integration
 - Editor-facing work is blocked by: `G3` editor integration, as identified per phase
 - Timing policy: unmet percentile targets are `deferred` and do not block
@@ -465,8 +465,8 @@ line. Do not move completion functions into a subprocess unless live-state and
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `COMP-001` | Build a non-popup stock-completion adapter harness | `ready` | produces `G4` evidence; start after `EDT-001` unless a slice says otherwise |
-| `COMP-002` | Prove file and one `-F` function's exact insertion parity | `blocked` | `COMP-001`; produces the `G4` decision |
+| `COMP-001` | Build a non-popup stock-completion adapter harness | `validation` | `docs/comp-001-harness-plan.md`; H-1–H-4 in `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`; `G4` stays `discovery` |
+| `COMP-002` | Prove file and one `-F` function's exact insertion parity | `ready` | `COMP-001` harness; produces the `G4` decision |
 | `COMP-003` | Add typed candidate metadata and bounded ranking | `blocked` | `G4` |
 | `COMP-004` | Add popup navigation and terminal-safe rendering | `blocked` | `G3`, `G4`, `COMP-003` |
 | `COMP-005` | Insert/fall through exactly and pass the parity/PTY matrix | `blocked` | `COMP-004`, Git candidates when enabled |
@@ -554,9 +554,9 @@ Exit condition: `G5` after every `HRD-*` item is complete.
 percentile leftovers are `deferred` and must not block product slices
 (`docs/latency-budget-deferral.md`).
 
-1. `COMP-001` non-popup stock-completion adapter harness — `G3` and `EDT-001`
-   are in `validation`; do not mark either complete (continuous decoration
-   unproven; `docs/edt-001-exact-bytes-plan.md` B-5).
+1. `COMP-002` file and one `-F` exact insertion parity — `COMP-001` is in
+   `validation`; `G4` stays `discovery`. Do not mark `G3`, `EDT-001`, or
+   `COMP-001` complete.
 2. `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
    slice on FND-001 SHA refresh or percentile benches unless a functional
    prompt-path defect is proven.
@@ -660,3 +660,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Completed `EDT-001` E-1–E-4 non-destructive `bind -x` insertion prototype (`bash/editor.bash`, `crates/pty/tests/editor_bind_x.rs`). `EDT-001` moves to `validation`; `G3` stays `discovery` until the remaining matrix bullets have evidence. Default chord `\C-x\C-y`; `MBX_EDITOR_OVERRIDE=1` opts into overwrite. |
 | 2026-08-16 | Completed `EDT-001` G3 matrix M-1–M-4 (`docs/edt-001-g3-matrix-plan.md`): vi-insert `bind -x`, bracketed paste, resize after insert, Ctrl+Z then insert (`bash/editor.bash`, `crates/pty/tests/editor_bind_x.rs`). `G3` stays `discovery`; exact-byte / quoting / multiline insert remains. |
 | 2026-08-16 | Completed `EDT-001` exact-byte / quoting / multiline insert B-1–B-4 (`docs/edt-001-exact-bytes-plan.md`, `crates/pty/tests/editor_bind_x.rs`). B-5 insert-time redraw note recorded; `G3` moves to `validation`; continuous decoration remains unproven. Do not mark `G3` or `EDT-001` complete. |
+| 2026-08-16 | Completed `COMP-001` non-popup stock-completion adapter harness H-1–H-4 (`docs/comp-001-harness-plan.md`; `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`). `COMP-001` moves to `validation`; `G4` stays `discovery`. Do not mark `G4` or `COMP-001` complete. |
