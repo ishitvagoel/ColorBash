@@ -81,9 +81,9 @@ provider expansion, or any other roadmap item as part of this checklist.
   formatting/lint/build checks, Bash module contracts, protocol integration, and
   compatibility smoke all passed on 2026-08-15.
 - GitHub Actions workflow `CI` on `origin/main` at commit
-  `2a829bacfa68d1ba479e3f21db5bc679512dcd96` (push, conclusion `success`,
-  2026-08-16T08:38:07Z):
-  https://github.com/ishitvagoel/ColorBash/actions/runs/31936945807. The workflow
+  `da019def64b3f0823c464c4dab96fe3e1b032946` (push, conclusion `success`,
+  2026-08-16T08:46:48Z):
+  https://github.com/ishitvagoel/ColorBash/actions/runs/31937322390. The workflow
   runs `bash tests/run.bash` per `.github/workflows/ci.yml`.
 - Release warm-Git prompt, 1,000 iterations: p50 718 us, p95 974 us, p99
   1,383 us.

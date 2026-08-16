@@ -2,8 +2,8 @@
 
 Status: `complete` for C-1–C-2 (2026-08-16). Do not mark `G0` complete.
 Remaining `G0` evidence is still the platform matrix, `HRD-001` macOS, and
-representative `PRM-004` percentiles. Remaining `G2` is still the write-ack
-budget (foreign-user open recorded).
+representative `PRM-004` percentiles (`PRM-002` is `validation`). Remaining `G2`
+is still the write-ack budget (foreign-user open and PRM-002 wrap recorded).
 
 ## Why this slice (do not pick a different leftover)
 
@@ -44,12 +44,12 @@ Remaining work, ranked. Implement **only row 1** in this change.
 
 - Repository: `ishitvagoel/ColorBash`
 - Branch: `main`
-- Commit: `2a829bacfa68d1ba479e3f21db5bc679512dcd96`
+- Commit: `da019def64b3f0823c464c4dab96fe3e1b032946`
 - Workflow: `CI` (`.github/workflows/ci.yml`)
 - Event: `push`
 - Conclusion: `success`
-- Updated: 2026-08-16T08:38:07Z
-- Run URL: https://github.com/ishitvagoel/ColorBash/actions/runs/31936945807
+- Updated: 2026-08-16T08:46:48Z
+- Run URL: https://github.com/ishitvagoel/ColorBash/actions/runs/31937322390
 
 Reproduce probe:
 
