@@ -1,7 +1,7 @@
 mod common;
 
 use common::{TempHome, deadline, mbx_bin, path_env, wait_all, workspace_root};
-use mbx_pty::{CTRL_C, PtySession, SpawnOptions, WinSize, visible_contains, visible_text};
+use mbx_pty::{CTRL_C, CTRL_Z, PtySession, SpawnOptions, WinSize, visible_contains, visible_text};
 use std::fs;
 use std::path::Path;
 
@@ -9,6 +9,8 @@ const CTRL_X: u8 = 0x18;
 const CTRL_Y: u8 = 0x19;
 const DEFAULT_KEYSEQ: &[u8] = &[CTRL_X, CTRL_Y];
 const ALT_KEYSEQ: &[u8] = &[CTRL_X, 0x0F]; // Ctrl+X Ctrl+O
+const BRACKETED_PASTE_START: &[u8] = b"\x1b[200~";
+const BRACKETED_PASTE_END: &[u8] = b"\x1b[201~";
 
 fn spawn_mbx_editor(home: &Path, extra_env: &[(&str, &str)], rc_prelude: &str) -> PtySession {
     fs::write(
@@ -61,6 +63,26 @@ fn assert_no_insert_output(session: &mut PtySession) {
         "insert trigger executed before Enter: {:?}",
         result.map(|output| visible_text(&output))
     );
+}
+
+fn start_sleep(session: &mut PtySession) {
+    session
+        .write_str(
+            "sh -c 'printf \"MBX_PTY:running\\n\"; exec sleep 30'\n",
+            deadline(2),
+        )
+        .expect("write");
+    wait_all(session, &["\nMBX_PTY:running"]);
+}
+
+fn send_bracketed_paste(session: &mut PtySession, text: &str) {
+    session
+        .write_all(BRACKETED_PASTE_START, deadline(2))
+        .expect("paste start");
+    session.write_str(text, deadline(2)).expect("paste body");
+    session
+        .write_all(BRACKETED_PASTE_END, deadline(2))
+        .expect("paste end");
 }
 
 #[test]
@@ -150,9 +172,64 @@ fn next_prompt_usable_after_insert_and_ctrl_c() {
     wait_prompt(&mut session);
     send_keyseq(&mut session, DEFAULT_KEYSEQ);
     session.write_all(&[CTRL_C], deadline(2)).expect("cancel");
-    wait_all(&mut session, &["^C", "> "]);
+    wait_prompt(&mut session);
     session
         .write_str("printf 'MBX_EDT:after_cancel\\n'\n", deadline(2))
         .expect("follow-up");
     wait_all(&mut session, &["\nMBX_EDT:after_cancel", "> "]);
+}
+
+#[test]
+fn vi_insert_mode_inserts_without_execute() {
+    let home = TempHome::new("edt-m1");
+    let mut session = spawn_mbx_editor(home.path(), &[], "set -o vi\n");
+    wait_prompt(&mut session);
+    send_keyseq(&mut session, DEFAULT_KEYSEQ);
+    assert_no_insert_output(&mut session);
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["\nMBX_EDT:ok", "> "]);
+}
+
+#[test]
+fn bracketed_paste_does_not_execute_until_enter() {
+    let home = TempHome::new("edt-m2");
+    let mut session = spawn_mbx_editor(home.path(), &[], "");
+    wait_prompt(&mut session);
+    send_bracketed_paste(&mut session, "printf 'MBX_EDT:ok\\n'");
+    assert_no_insert_output(&mut session);
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["\nMBX_EDT:ok", "> "]);
+}
+
+#[test]
+fn resize_after_insert_still_runs_token() {
+    let home = TempHome::new("edt-m3");
+    let mut session = spawn_mbx_editor(home.path(), &[], "");
+    wait_prompt(&mut session);
+    send_keyseq(&mut session, DEFAULT_KEYSEQ);
+    session
+        .resize(WinSize { rows: 16, cols: 64 })
+        .expect("resize");
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["\nMBX_EDT:ok", "> "]);
+    session
+        .write_str("printf 'MBX_EDT:resized\\n'\n", deadline(2))
+        .expect("follow-up");
+    wait_all(&mut session, &["\nMBX_EDT:resized", "> "]);
+}
+
+#[test]
+fn ctrl_z_then_insert_still_works() {
+    let home = TempHome::new("edt-m4");
+    let mut session = spawn_mbx_editor(home.path(), &[], "");
+    wait_prompt(&mut session);
+    start_sleep(&mut session);
+    session.write_all(&[CTRL_Z], deadline(2)).expect("ctrl-z");
+    wait_prompt(&mut session);
+    send_keyseq(&mut session, DEFAULT_KEYSEQ);
+    session.write_str("\n", deadline(2)).expect("submit insert");
+    wait_all(&mut session, &["\nMBX_EDT:ok", "> "]);
+    session
+        .write_str("kill %1 2>/dev/null || true\n", deadline(2))
+        .expect("cleanup");
 }

@@ -65,5 +65,7 @@ Reuse `crates/pty` helpers. Do not wait on CPR/DSR.
 
 ## Remaining after this slice
 
-Full G3: emacs and vi modes, bracketed paste, resize, Ctrl+C, Ctrl+Z, and
-whether Readline augmentation meets redraw needs without rebinding printables.
+Exact bytes, cursor position, suffixes, quoting, and multiline input.
+Redraw-without-rebinding-printables write-up. G3 matrix M-1–M-4 is complete
+(`docs/edt-001-g3-matrix-plan.md`); `G3` stays `discovery` until those bullets
+and the redraw assessment are evidenced.
