@@ -584,6 +584,28 @@ for bash_module in "$ROOT"/bash/*.bash; do
 done
 [[ $(<"$ROOT/bash/history.bash") != *chmod* ]] || \
     fail 'history.bash must not spawn chmod on the prompt path'
+[[ $(<"$ROOT/bash/completion.bash") != *set\ -euo\ pipefail* ]] || \
+    fail 'completion.bash must not enable errexit/nounset/pipefail in the sourced module'
+
+# Completion harness: idempotent install and COMP_* snapshot contract.
+source "$ROOT/bash/completion.bash"
+_mbx_completion_install
+_mbx_completion_install
+assert_eq 1 "${_MBX_COMPLETION_INSTALLED:-missing}" \
+    'completion install should be idempotent and leave the installed flag set'
+COMP_LINE='mbx_comp_probe mbx_co'
+COMP_POINT=${#COMP_LINE}
+COMP_WORDS=(mbx_comp_probe mbx_co)
+COMP_CWORD=1
+COMP_TYPE=9
+COMP_KEY=$'\t'
+_mbx_comp_probe_adapter
+assert_eq 1 "${_MBX_COMP_SNAPPED:-missing}" 'adapter did not snapshot COMP_* state'
+assert_eq "$COMP_LINE" "${_MBX_COMP_LINE:-}" 'snapshot COMP_LINE mismatch'
+assert_eq "$COMP_POINT" "${_MBX_COMP_POINT:-missing}" 'snapshot COMP_POINT mismatch'
+assert_eq 1 "${_MBX_COMP_CWORD:-missing}" 'snapshot COMP_CWORD mismatch'
+assert_eq mbx_comp_candidate "${_MBX_COMP_LAST_REPLY:-}" \
+    'adapter should preserve the backend COMPREPLY candidate'
 
 # History module contract: MBX2 record encoding, ACK decoding, exclusions,
 # and the fork-free epoch-to-ISO conversion.
