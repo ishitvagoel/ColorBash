@@ -183,7 +183,12 @@ fn writer_loop(
         match message {
             QueueMessage::Write(entry) => {
                 if pending == 0
-                    && execute_batch_with_lock_retry(&connection, "BEGIN IMMEDIATE;").is_err()
+                    && execute_batch_with_lock_retry_until(
+                        &connection,
+                        "BEGIN IMMEDIATE;",
+                        MIGRATE_BUSY_DEADLINE_MS,
+                    )
+                    .is_err()
                 {
                     trace_history_failure(&HistoryError::new(
                         HistoryErrorKind::Write,
@@ -384,6 +389,21 @@ fn create_store_dir(store_path: &Path) -> Result<(), HistoryError> {
 }
 
 fn open_connection(store_path: &Path) -> Result<rusqlite::Connection, HistoryError> {
+    let deadline = std::time::Instant::now() + Duration::from_millis(MIGRATE_BUSY_DEADLINE_MS);
+    loop {
+        match try_open_connection(store_path) {
+            Ok(connection) => return Ok(connection),
+            Err(error)
+                if is_history_lock_contention(&error) && std::time::Instant::now() < deadline =>
+            {
+                thread::yield_now();
+            }
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+fn try_open_connection(store_path: &Path) -> Result<rusqlite::Connection, HistoryError> {
     let created = !store_path.exists();
     let connection =
         rusqlite::Connection::open(store_path).map_err(history_error(HistoryErrorKind::Open))?;
@@ -499,11 +519,27 @@ fn is_sqlite_lock_contention(error: &rusqlite::Error) -> bool {
     )
 }
 
+fn is_history_lock_contention(error: &HistoryError) -> bool {
+    matches!(
+        error.kind(),
+        HistoryErrorKind::Open | HistoryErrorKind::Migrate
+    ) && (error.to_string().contains("database is locked")
+        || error.to_string().contains("database is busy"))
+}
+
 fn execute_batch_with_lock_retry(
     connection: &rusqlite::Connection,
     sql: &str,
 ) -> Result<(), rusqlite::Error> {
-    let deadline = std::time::Instant::now() + Duration::from_millis(BUSY_TIMEOUT_MS);
+    execute_batch_with_lock_retry_until(connection, sql, BUSY_TIMEOUT_MS)
+}
+
+fn execute_batch_with_lock_retry_until(
+    connection: &rusqlite::Connection,
+    sql: &str,
+    timeout_ms: u64,
+) -> Result<(), rusqlite::Error> {
+    let deadline = std::time::Instant::now() + Duration::from_millis(timeout_ms);
     loop {
         match connection.execute_batch(sql) {
             Ok(()) => return Ok(()),
