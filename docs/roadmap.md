@@ -74,8 +74,10 @@ silently overwrite an accepted decision.
 ## Current baseline
 
 The repository is a foundation prototype plus a UI-free history sidecar, not the
-MVP. The SOLID refactor still needs a reviewed, CI-linked baseline (`FND-001` /
-`G0`) while `G2` evidence is collected.
+MVP. A green GitHub Actions CI run is linked for `FND-001`
+(`docs/fnd-001-ci-plan.md`); `G0` validation remains open for the platform
+matrix, `HRD-001` macOS, and representative `PRM-004` percentiles while `G2`
+evidence is collected.
 
 Implemented foundation:
 
@@ -109,15 +111,18 @@ Implemented foundation:
 The canonical local check is `bash tests/run.bash`. It passed in the final
 hardening working tree on 2026-08-15, with focused evidence recorded in
 `docs/solid-hardening-checklist.md` and release measurements in
-`docs/benchmarks/2026-08-15-solid-hardening.md`. No clean commit or CI URL is
-linked, so this does not complete `FND-001` or `G0`.
+`docs/benchmarks/2026-08-15-solid-hardening.md`. GitHub Actions workflow `CI`
+recorded a green run on `origin/main` at commit
+`5c077ce1e9a51a89528bf97f4a4aa9b038148bd2`
+(https://github.com/ishitvagoel/ColorBash/actions/runs/31932933113), completing
+`FND-001` and `BST-005`. `G0` validation remains open.
 
 Not implemented:
 
 - fuzzy history ranking or repository-context history fields;
 - enhanced Ctrl+R, ghost suggestions, completion UI, or live highlighting;
 - arbitrary key-injection coverage (Tab, arrows, Ctrl+R), the release platform
-  matrix, or CI-linked baseline evidence;
+  matrix, or remaining `G0` platform-matrix evidence;
 - remaining `G2` evidence: prompt-boundary write-ack budget (correctness recorded;
   percentile miss on development WSL) and foreign-user open; or
 - asynchronous feature IPC or the broader completion/history provider model.
@@ -298,11 +303,11 @@ latency budgets.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `FND-001` | Review and land the SOLID refactor as a clean baseline | `validation` | canonical suite plus reviewed commit/CI evidence |
+| `FND-001` | Review and land the SOLID refactor as a clean baseline | `complete` | green GitHub Actions `CI` run on `origin/main` at `5c077ce` (https://github.com/ishitvagoel/ColorBash/actions/runs/31932933113); `docs/fnd-001-ci-plan.md` |
 | `FND-002` | Make transport own response correlation/framing postconditions and test `RequestHandler` substitutes directly | `complete` | `crates/cli/src/service.rs`, `transport.rs`, and direct substitute/oversize/correlation tests |
 | `FND-003` | Complete port-contract tests for full prompt mapping, ping isolation, provider error/disable behavior, and crate-internal seam construction | `complete` | service, prompt-provider, disabled-provider, and sibling seam tests in `crates/cli/src/` |
 | `PTY-001` | Genuine PTY driver for input, signal, resize, and terminal-state probes | `complete` | `crates/pty` driver tests plus foundation prompt/helper/Ctrl+C/Ctrl+Z/resize/`stty -g` coverage |
-| `EDT-001` | Non-destructive `bind -x` insertion/redisplay feasibility prototype | `blocked` | `FND-001`; produces the `G3` decision |
+| `EDT-001` | Non-destructive `bind -x` insertion/redisplay feasibility prototype | `blocked` | remaining `G0` / `G2`; produces the `G3` decision |
 
 ### Phase 0 — Research and architecture
 
@@ -330,7 +335,7 @@ degradation.
 | `BST-002` | Interactive guard, idempotence, status preservation, and fallback | `validation` | shell suites plus PTY lifecycle/failure tests; platform matrix remains `HRD-001` |
 | `BST-003` | MBX1 coprocess and per-call adapters | `validation` | bounded protocol/module tests pass; PTY helper-crash coverage exists; platform matrix remains |
 | `BST-004` | Debug/trace logging without command text | `validation` | minimal Rust trace exists; broader lifecycle diagnostics deferred |
-| `BST-005` | CI and canonical verification suite | `validation` | `.github/workflows/ci.yml`, `tests/run.bash`; clean baseline pending |
+| `BST-005` | CI and canonical verification suite | `complete` | `.github/workflows/ci.yml` runs `bash tests/run.bash`; green run https://github.com/ishitvagoel/ColorBash/actions/runs/31932933113 on `origin/main` at `5c077ce` |
 | `BST-006` | Enforce a terminator-independent 64-KiB boundary and cap Bash response acquisition before allocation | `complete` | Rust/Bash `MAX-1`/`MAX`/`MAX+1` EOF/LF/CRLF, NUL, and oversized-producer tests |
 | `BST-007` | Prove socket collision refusal, `0600` mode, cleanup, and correlation behavior | `complete` | focused Unix tests cover collisions, mode, cleanup ordering, and mismatched IDs |
 
@@ -431,7 +436,7 @@ line. Do not move completion functions into a subprocess unless live-state and
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `COMP-001` | Build a non-popup stock-completion adapter harness | `blocked` | `FND-001`; produces `G4` evidence |
+| `COMP-001` | Build a non-popup stock-completion adapter harness | `blocked` | remaining `G0` / `G2`; produces `G4` evidence |
 | `COMP-002` | Prove file and one `-F` function's exact insertion parity | `blocked` | `COMP-001`; produces the `G4` decision |
 | `COMP-003` | Add typed candidate metadata and bounded ranking | `blocked` | `G4` |
 | `COMP-004` | Add popup navigation and terminal-safe rendering | `blocked` | `G3`, `G4`, `COMP-003` |
@@ -536,9 +541,12 @@ default. Remaining before `G2`:
    100k-row v1→v2 migration (M-2 in `crates/cli/src/corpus.rs`; release wall
    time in `docs/benchmarks/2026-08-16-history-migrate.md`), and write-ack
    correctness evidence are recorded.
-2. `FND-001` / `G0`: CI evidence via the pushed baseline is pending the run.
+2. `G0`: CI URL recorded via `FND-001` / `BST-005`
+   (https://github.com/ishitvagoel/ColorBash/actions/runs/31932933113;
+   `docs/fnd-001-ci-plan.md`). Platform matrix, `HRD-001` macOS, and
+   representative `PRM-004` percentiles remain.
 3. `PRM-002` remains discovery until the width model is designed from the
-   `RSH-004` baseline; `EDT-001` stays blocked on `FND-001`.
+   `RSH-004` baseline; `EDT-001` stays blocked on remaining `G0` / `G2` gates.
 
 ## Provisional performance and safety budgets
 
@@ -617,3 +625,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Completed writer idle-flush for live reader visibility (V-1–V-3 in `crates/cli/src/storage.rs`; PTY invariance `wait_for_count`; `docs/history-g2-idle-commit-plan.md`; `M-034`). Foreign-user open and write-ack budget remain. |
 | 2026-08-16 | Identified the next `HIST-007` slice as 100k-row v1→v2 migration (`HIST-004` case 8); plan in `docs/history-g2-migrate-100k-plan.md`. Foreign-user open and write-ack budget remain. Do not fake `seteuid`. Do not chase write-ack product-code optimization unless a test proves SQLite is on the prompt path. |
 | 2026-08-16 | Completed 100k-row v1→v2 migration evidence (M-2 in `crates/cli/src/corpus.rs`; release wall time in `docs/benchmarks/2026-08-16-history-migrate.md`; `docs/history-g2-migrate-100k-plan.md`). Foreign-user open and write-ack budget remain. |
+| 2026-08-16 | Linked green GitHub Actions CI on `origin/main` at `5c077ce` (https://github.com/ishitvagoel/ColorBash/actions/runs/31932933113); completed `FND-001` and `BST-005` (`docs/fnd-001-ci-plan.md`). `G0` validation remains open for platform matrix, `HRD-001` macOS, and `PRM-004` representative percentiles. Foreign-user open and write-ack budget remain. |

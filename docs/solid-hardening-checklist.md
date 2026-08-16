@@ -78,6 +78,11 @@ provider expansion, or any other roadmap item as part of this checklist.
 - `bash tests/run.bash`: 50 CLI tests, 5 protocol tests, Rust doc tests,
   formatting/lint/build checks, Bash module contracts, protocol integration, and
   compatibility smoke all passed on 2026-08-15.
+- GitHub Actions workflow `CI` on `origin/main` at commit
+  `5c077ce1e9a51a89528bf97f4a4aa9b038148bd2` (push, conclusion `success`,
+  2026-08-16T07:04:09Z):
+  https://github.com/ishitvagoel/ColorBash/actions/runs/31932933113. The workflow
+  runs `bash tests/run.bash` per `.github/workflows/ci.yml`.
 - Release warm-Git prompt, 1,000 iterations: p50 718 us, p95 974 us, p99
   1,383 us.
 - Release IPC, 1,000 iterations: process-per-call mean 1.068 ms, guarded Bash
@@ -85,6 +90,7 @@ provider expansion, or any other roadmap item as part of this checklist.
 - Detailed reproducibility and scope are recorded in
   `docs/benchmarks/2026-08-15-solid-hardening.md`.
 
-Completing this bounded checklist does not complete `FND-001` or `G0`. A clean
-landed baseline, CI evidence, and the real PTY/platform matrix remain separate
+Completing this bounded checklist completes `FND-001` and `BST-005` CI linkage
+via the green GitHub Actions run above. It does not complete `G0`. The real
+PTY/platform matrix and representative `PRM-004` percentiles remain separate
 gate conditions.
