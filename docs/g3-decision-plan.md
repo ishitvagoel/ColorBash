@@ -73,4 +73,4 @@ Do not rewrite those case IDs or expected GOT lines.
 `G3` is `validation`, not `complete`. Ghost, highlighting, and enhanced
 Ctrl+R stay blocked. `COMP-003` stays blocked on `G4` complete. The 5 ms
 leftover stays `deferred`. `HRD-001` still needs a macOS host.
-`PRM-006` duration policy remains discovery.
+`PRM-006` duration policy is specified in `docs/prm-006-duration-plan.md`.
