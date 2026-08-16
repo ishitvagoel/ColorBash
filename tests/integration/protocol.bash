@@ -35,4 +35,11 @@ malformed=$(printf 'MBX1\tbogus\tPING\n' | "$MBX_TEST_BIN" serve --stdio)
 plain=$(TERM=dumb "$MBX_TEST_BIN" prompt --cwd /tmp/project --status 0 --ascii --disable-git)
 [[ $plain == '/tmp/project\n> ' ]] || fail 'plain prompt fallback changed'
 
+piped=$("$MBX_TEST_BIN" prompt --cwd /tmp/project --status 0 --ascii --disable-git | cat)
+[[ $piped == '/tmp/project\n> ' ]] || fail 'piped direct prompt must be plain text'
+[[ $piped != *'\[\e['* ]] || fail 'piped direct prompt must not emit CSI color'
+
+flagged=$("$MBX_TEST_BIN" prompt --cwd /tmp/project --flags 34 | cat)
+[[ $flagged == *'\[\e['* ]] || fail 'explicit --flags must preserve color under a pipe'
+
 printf 'PASS: helper protocol integration\n'

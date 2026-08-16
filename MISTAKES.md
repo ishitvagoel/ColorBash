@@ -160,21 +160,23 @@ to prevent recurrence, not to assign blame.
 - Evidence: `bash/engine.bash`, `docs/architecture.md`, and roadmap item
   `PRM-003`.
 
-## M-009 — Direct helper color policy does not account for redirection
+## M-009 — Direct helper color policy did not account for redirection
 
 - Discovered: 2026-08-15
-- Status: Open
+- Status: Fixed
 - Failed assumption: environment variables alone were enough to choose color for
   every `mbx prompt` caller.
-- Impact: direct redirected helper output can contain color despite the UX contract
+- Impact: direct redirected helper output could contain color despite the UX contract
   that redirected output is plain.
-- Current state: Bash supplies explicit capability flags correctly, but direct CLI
-  output capability remains unresolved.
+- Correction: prompt defaults now insert `FLAG_NO_COLOR` when stdout is not a
+  terminal; explicit `--flags` still replaces defaults so Bash per-call command
+  substitution can request color under a pipe (`M-011`).
 - Prevention: model caller-supplied capabilities separately from direct-process
   defaults and test terminal versus piped stdout without breaking Bash command
   substitution.
-- Evidence: `crates/cli/src/environment.rs`, `bash/config.bash`, and roadmap item
-  `PRM-002`.
+- Evidence: `crates/cli/src/environment.rs`, `tests/integration/protocol.bash`,
+  `crates/cli/src/cli.rs`, `tests/bash/modules.bash`, and
+  `docs/prm-002-redirected-output-plan.md`.
 
 ## M-010 — Shared startup captured prompt-only current-directory state eagerly
 
@@ -202,7 +204,8 @@ to prevent recurrence, not to assign blame.
 - Correction: Bash owns and passes its terminal capability flags; Rust no longer
   overrides them from command-substitution stdout. A focused test exercises the
   actual color-enabled per-call command-substitution topology.
-- Current follow-up: direct-CLI redirected-output policy remains open in `M-009`.
+- Current follow-up: redirected-output defaults are fixed (`M-009`); width model
+  work remains `PRM-002` discovery.
 - Prevention: distinguish transport characteristics from end-user display
   capabilities and test each adapter under its real process topology.
 - Evidence: `bash/config.bash`, `bash/engine.bash`,

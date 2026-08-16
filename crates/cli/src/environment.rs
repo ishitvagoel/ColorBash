@@ -5,6 +5,7 @@ use mbx_protocol::{
     PromptFlags,
 };
 use std::env;
+use std::io::{self, IsTerminal};
 
 /// Immutable process state captured once at the composition boundary.
 pub struct RuntimeEnvironment {
@@ -15,7 +16,7 @@ pub struct RuntimeEnvironment {
 impl RuntimeEnvironment {
     pub fn capture() -> Self {
         Self {
-            prompt_flags: prompt_flags(),
+            prompt_flags: prompt_flags(io::stdout().is_terminal()),
             render_environment: RenderEnvironment {
                 home: env::var("HOME").ok(),
                 host: env::var("HOSTNAME").ok(),
@@ -36,12 +37,16 @@ impl RuntimeEnvironment {
     }
 }
 
-fn prompt_flags() -> PromptFlags {
-    let mut flags = PromptFlags::empty();
-    if env::var_os("NO_COLOR").is_some()
+fn color_disabled(stdout_is_terminal: bool) -> bool {
+    env::var_os("NO_COLOR").is_some()
         || env::var("MBX_COLOR").is_ok_and(|value| value == "never")
         || env::var("TERM").is_ok_and(|value| value == "dumb")
-    {
+        || !stdout_is_terminal
+}
+
+fn prompt_flags(stdout_is_terminal: bool) -> PromptFlags {
+    let mut flags = PromptFlags::empty();
+    if color_disabled(stdout_is_terminal) {
         flags.insert(FLAG_NO_COLOR);
     }
     match env::var("MBX_ICONS").as_deref() {
@@ -59,4 +64,45 @@ fn prompt_flags() -> PromptFlags {
         flags.insert(FLAG_DISABLE_GIT);
     }
     flags
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn piped_stdout_disables_color_by_default() {
+        assert!(color_disabled(false));
+        assert!(prompt_flags(false).no_color());
+    }
+
+    #[test]
+    fn tty_without_env_disable_allows_color() {
+        if env::var_os("NO_COLOR").is_some()
+            || env::var("MBX_COLOR").is_ok_and(|value| value == "never")
+            || env::var("TERM").is_ok_and(|value| value == "dumb")
+        {
+            return;
+        }
+        assert!(!color_disabled(true));
+        assert!(!prompt_flags(true).no_color());
+    }
+
+    #[test]
+    fn color_disabled_matrix_matches_contract() {
+        assert!(!color_should_be_disabled(true, false, false, false));
+        assert!(color_should_be_disabled(false, false, false, false));
+        assert!(color_should_be_disabled(true, true, false, false));
+        assert!(color_should_be_disabled(true, false, true, false));
+        assert!(color_should_be_disabled(true, false, false, true));
+    }
+
+    fn color_should_be_disabled(
+        stdout_is_terminal: bool,
+        no_color_env: bool,
+        mbx_color_never: bool,
+        term_dumb: bool,
+    ) -> bool {
+        no_color_env || mbx_color_never || term_dumb || !stdout_is_terminal
+    }
 }

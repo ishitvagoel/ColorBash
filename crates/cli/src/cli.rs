@@ -276,6 +276,32 @@ mod tests {
     }
 
     #[test]
+    fn handshake_does_not_resolve_prompt_defaults() {
+        let command = parse(&args(&["handshake"]), || {
+            panic!("prompt defaults must not be resolved for handshake")
+        })
+        .unwrap();
+        assert_eq!(command, CliCommand::Handshake);
+    }
+
+    #[test]
+    fn raw_flags_replace_piped_default_no_color() {
+        let command = parse(&args(&["prompt", "--flags", "34"]), || {
+            Ok(PromptDefaults {
+                cwd: "/tmp".to_owned(),
+                flags: PromptFlags::from_bits(FLAG_NO_COLOR),
+            })
+        })
+        .unwrap();
+        let CliCommand::Prompt(prompt) = command else {
+            panic!("expected prompt command");
+        };
+        assert!(!prompt.flags.no_color());
+        assert!(prompt.flags.ascii_icons());
+        assert!(prompt.flags.git_disabled());
+    }
+
+    #[test]
     fn prompt_options_override_defaults() {
         let command = parse(
             &args(&[

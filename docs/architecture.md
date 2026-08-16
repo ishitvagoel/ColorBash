@@ -360,6 +360,8 @@ prompt-boundary write-ack budget pass and foreign-user open.
 - Existing `PROMPT_COMMAND` entries remain ordered.
 - Existing DEBUG traps remain untouched by default.
 - `NO_COLOR`, `TERM=dumb`, plain text, and no-Nerd-Font modes are supported.
+- Direct `mbx prompt` defaults disable color when stdout is not a terminal; Bash
+  and other callers still forward explicit `--flags` capability (`M-011`).
 - Coprocess failure falls back without disabling the shell.
 - Native and fallback rendering replace the complete C0/DEL range and Bash
   expansion characters using a shared hostile-state corpus.

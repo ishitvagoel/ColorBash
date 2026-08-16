@@ -155,8 +155,9 @@ Known foundation debt:
 - tracing is intentionally minimal;
 - the experimental socket server is sequential, and abrupt termination can leave
   a socket path; and
-- direct `mbx prompt` output does not yet have a complete redirected-output color
-  policy.
+- direct `mbx prompt` defaults disable color when stdout is not a terminal;
+  explicit `--flags` still forwards caller capability (`docs/prm-002-redirected-output-plan.md`);
+  the display-width model remains `PRM-002` discovery.
 
 ## Dependency and gate map
 
@@ -350,7 +351,7 @@ Outcome: an adaptive, semantic, safe prompt that remains fast under failure.
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
 | `PRM-001` | Path, Git, status, duration, SSH, production, icon, and theme segments | `validation` | Rust/Bash renderers and semantic tests |
-| `PRM-002` | Capability, redirected-output, visible-width, and resize model | `discovery` | `RSH-004` PTY baseline exists; width model and redirected-output policy design required |
+| `PRM-002` | Capability, redirected-output, visible-width, and resize model | `discovery` | redirected-output color policy recorded (`docs/prm-002-redirected-output-plan.md`; `crates/cli/src/environment.rs`); width model and `PRM-004` percentiles remain |
 | `PRM-003` | End-to-end deadline, capped Git acquisition, and warm cache | `complete` | one Bash deadline, capped 50-ms Git refresh, 128-entry/1-s cache, failure tests, and `docs/benchmarks/2026-08-15-solid-hardening.md` |
 | `PRM-004` | Full prompt p50/p95/p99 benchmark matrix | `blocked` | representative repositories plus platform and fallback workloads; controlled warm case recorded |
 | `PRM-005` | Real PTY prompt, wrap, signal, resize, and restoration tests | `complete` | lifecycle, helper failure, Ctrl+C/Z, resize, `stty -g`, multiline, narrow wrap, and wide-glyph coverage |
@@ -549,8 +550,9 @@ default. Remaining before `G2`:
    `crates/pty/src/sys.rs`; `docs/hrd-001-darwin-pty-constants-plan.md`) is
    recorded; platform matrix, `HRD-001` macOS PTY run, and representative
    `PRM-004` percentiles remain.
-3. `PRM-002` remains discovery until the width model is designed from the
-   `RSH-004` baseline; `EDT-001` stays blocked on remaining `G0` / `G2` gates.
+3. `PRM-002` redirected-output color is recorded (`docs/prm-002-redirected-output-plan.md`);
+   the width model remains discovery from the `RSH-004` baseline; `EDT-001` stays
+   blocked on remaining `G0` / `G2` gates.
 
 ## Provisional performance and safety budgets
 
@@ -632,3 +634,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Linked green GitHub Actions CI on `origin/main` at `5c077ce` (https://github.com/ishitvagoel/ColorBash/actions/runs/31932933113); completed `FND-001` and `BST-005` (`docs/fnd-001-ci-plan.md`). `G0` validation remains open for platform matrix, `HRD-001` macOS, and `PRM-004` representative percentiles. Foreign-user open and write-ack budget remain. |
 | 2026-08-16 | Completed Darwin PTY constant cfg-split pre-work for `HRD-001` (D-1–D-3 in `crates/pty/src/sys.rs`; `docs/hrd-001-darwin-pty-constants-plan.md`). Linux PTY tests stay green on WSL; full macOS matrix evidence still required. `HRD-001` and `G0` remain open. Foreign-user open and write-ack budget remain. |
 | 2026-08-16 | Refreshed linked green GitHub Actions CI on `origin/main` to `2b98026` (https://github.com/ishitvagoel/ColorBash/actions/runs/31934458862); `FND-001` and `BST-005` remain complete (`docs/fnd-001-ci-plan.md`). `G0` validation remains open for platform matrix, `HRD-001` macOS PTY run, and `PRM-004` representative percentiles. Foreign-user open and write-ack budget remain. |
+| 2026-08-16 | Completed redirected-output color policy for direct `mbx prompt` (R-1–R-4 in `crates/cli/src/environment.rs`; `docs/prm-002-redirected-output-plan.md`; `M-009`). `PRM-002` width model remains discovery. Foreign-user open and write-ack budget remain. |

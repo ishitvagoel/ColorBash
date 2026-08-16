@@ -70,7 +70,9 @@ provider expansion, or any other roadmap item as part of this checklist.
 
 - [x] Leave semantic prompt composition versus typed PS1 encoding at `PRM-009`
       discovery until `PRM-002` or a second renderer proves the change axis.
-- [x] Leave direct-CLI redirected-color policy at `PRM-002`/`M-009`.
+- [x] Leave direct-CLI redirected-color policy at `PRM-002`/`M-009` — redirected
+      defaults recorded in `docs/prm-002-redirected-output-plan.md`; width model
+      remains discovery.
 - [x] Leave PTY and all later product phases untouched.
 
 ## Completion evidence
