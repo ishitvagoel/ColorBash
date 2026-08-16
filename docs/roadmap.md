@@ -466,7 +466,7 @@ line. Do not move completion functions into a subprocess unless live-state and
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
 | `COMP-001` | Build a non-popup stock-completion adapter harness | `validation` | `docs/comp-001-harness-plan.md`; H-1–H-4 in `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`; `G4` stays `discovery` |
-| `COMP-002` | Prove file and one `-F` function's exact insertion parity | `validation` | `docs/comp-002-parity-plan.md`; P-1–P-4 and F-1–F-4 landed; L-1–L-4 in `docs/comp-002-leftover-matrix-plan.md`; `--`/nested/latency + `G4` decision remain |
+| `COMP-002` | Prove file and one `-F` function's exact insertion parity | `validation` | `docs/comp-002-parity-plan.md`; P-1–P-4, F-1–F-4, L-1–L-4 landed; N-1–N-2 specified in `docs/comp-002-dash-nested-plan.md`; slow fallthrough / latency + `G4` decision remain |
 | `COMP-003` | Add typed candidate metadata and bounded ranking | `blocked` | `G4` |
 | `COMP-004` | Add popup navigation and terminal-safe rendering | `blocked` | `G3`, `G4`, `COMP-003` |
 | `COMP-005` | Insert/fall through exactly and pass the parity/PTY matrix | `blocked` | `COMP-004`, Git candidates when enabled |
@@ -554,11 +554,10 @@ Exit condition: `G5` after every `HRD-*` item is complete.
 percentile leftovers are `deferred` and must not block product slices
 (`docs/latency-budget-deferral.md`).
 
-1. `COMP-002` second leftover (`--`, nested commands, slow/stateful fallthrough,
-   adapter latency) — follow a new plan when written. L-1–L-4 are in
-   `validation` (`docs/comp-002-leftover-matrix-plan.md`). `G4` stays
-   `discovery`. Do not mark `G3`, `EDT-001`, `COMP-001`, or `COMP-002`
-   complete.
+1. `COMP-002` `--` and nested insertion N-1–N-2 — follow
+   `docs/comp-002-dash-nested-plan.md`. Slow/stateful fallthrough and adapter
+   latency stay for a later leftover. `G4` stays `discovery`. Do not mark
+   `G3`, `EDT-001`, `COMP-001`, or `COMP-002` complete.
 2. `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
    slice on FND-001 SHA refresh or percentile benches unless a functional
    prompt-path defect is proven.
@@ -667,3 +666,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Gated completion test fixtures behind `MBX_COMP_FIXTURES=1` and added inspect-before-wrap (`_mbx_comp_wrap_existing_f`; F-1–F-4). `COMP-002` stays `validation`; `G4` stays `discovery`. Leftover matrix remains. |
 | 2026-08-16 | Specified `COMP-002` leftover insertion matrix L-1–L-4 in `docs/comp-002-leftover-matrix-plan.md`. `--` / nested / slow fallthrough / latency remain a later leftover. `G4` stays `discovery`. |
 | 2026-08-16 | Completed `COMP-002` leftover insertion matrix L-1–L-4 (`docs/comp-002-leftover-matrix-plan.md`; `crates/pty/tests/completion_harness.rs`). `COMP-002` stays `validation`; `G4` stays `discovery`. Second leftover (`--`, nested, slow fallthrough, latency) remains. |
+| 2026-08-16 | Specified `COMP-002` `--` and nested insertion N-1–N-2 in `docs/comp-002-dash-nested-plan.md`. Slow/stateful fallthrough and latency remain a later leftover. `G4` stays `discovery`. |
