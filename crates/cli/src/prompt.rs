@@ -534,7 +534,7 @@ mod tests {
         );
         assert_eq!(
             renderer.render_prompt(&prompt),
-            "󰀪 PROD · payments-api · root  /tmp/project\\n❯ "
+            "󰀪 PROD · payments-api · root   /tmp/project\\n❯ "
         );
     }
 
