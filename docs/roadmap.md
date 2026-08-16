@@ -7,7 +7,7 @@
 
 - Last reviewed: 2026-08-16 UTC
 - Current milestone: Phase 3A sidecar implemented; `G0` and `G2` complete; `G1` accepted
-- Active workstream: `G3` complete (`COMP-004` unblocked for planning; ghost/highlighting blocked on unproven continuous decoration)
+- Active workstream: `COMP-004` in `discovery` (no GUI overlay policy recorded; ghost/highlighting blocked on unproven continuous decoration)
 - Next decision gate: continuous-decoration leftover (blocks ghost / highlighting)
 - Editor-facing work is blocked by: unproven after-every-key decoration, as identified per phase
 - Timing policy: unmet percentile targets are `deferred` and do not block
@@ -318,7 +318,7 @@ latency budgets.
 | 2 | Prompt | `complete` | capability/width/wrap recorded; `PRM-004` percentiles `deferred` |
 | 3 | History | `complete` | Phase 3A slice implemented; `G2` complete; write-ack percentiles `deferred` |
 | 4 | Ghost suggestions | `blocked` | unproven continuous decoration |
-| 5 | Completion | `validation` | `G4` / `COMP-003` complete; `COMP-004` unblocked for planning |
+| 5 | Completion | `validation` | `G4` / `COMP-003` complete; `COMP-004` in `discovery` (no overlay) |
 | 6 | Syntax highlighting | `blocked` | unproven continuous decoration; intentionally after search/ghost/completion evidence |
 | 7 | Git/provider expansion | `discovery` | bounded prompt subset exists; richer capabilities await a consumer |
 | 8 | Enhanced Ctrl+R | `blocked` | unproven continuous decoration leftover |
@@ -460,7 +460,7 @@ Exit condition: `GHST-004` meets the accepted editing and safety budgets.
 
 ### Phase 5 — Completion
 
-Status: `validation`; popup is unblocked for planning (`COMP-004`).
+Status: `validation`; popup policy in `discovery` (`COMP-004`; no GUI overlay).
 
 First adapt stock Bash completion and prove exact insertion parity. Only then add
 typed candidate metadata, bounded ranking, popup navigation, and Git candidates.
@@ -473,7 +473,7 @@ line. Do not move completion functions into a subprocess unless live-state and
 | `COMP-001` | Build a non-popup stock-completion adapter harness | `validation` | `docs/comp-001-harness-plan.md`; H-1–H-4 in `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`; `G4` complete |
 | `COMP-002` | Prove file and one `-F` function's exact insertion parity | `validation` | `docs/comp-002-parity-plan.md`; P-1–P-4, F-1–F-4, L-1–L-4, N-1–N-2, S-1–S-4 landed; `docs/g4-gate-close-plan.md`; 5 ms leftover `deferred` |
 | `COMP-003` | Add typed candidate metadata and bounded ranking | `complete` | `docs/comp-003-metadata-plan.md` K-1–K-4; `docs/comp-003-ranking-plan.md` R-1–R-4 in `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs` |
-| `COMP-004` | Add popup navigation and terminal-safe rendering | `not-started` | `G3` / `COMP-003` complete; separate slice — do not bundle with gate close |
+| `COMP-004` | Add popup navigation and terminal-safe rendering | `discovery` | `docs/comp-004-popup-plan.md` P-1–P-4: no GUI overlay; Tab stays stock; ranked-accept chord is a later leftover |
 | `COMP-005` | Insert/fall through exactly and pass the parity/PTY matrix | `blocked` | `COMP-004`, Git candidates when enabled |
 
 Exit condition: `G4` for the adapter slice; `COMP-005` for the MVP completion
@@ -559,10 +559,11 @@ Exit condition: `G5` after every `HRD-*` item is complete.
 percentile leftovers are `deferred` and must not block product slices
 (`docs/latency-budget-deferral.md`).
 
-1. `G3` is `complete` (`docs/g3-gate-close-plan.md`). Continuous decoration
-   stays unproven and still blocks ghost and highlighting. Do not start
-   popup, ghost, or `COMP-004`. `EDT-001` is `complete`. Do not mark
-   `COMP-001` or `COMP-002` complete.
+1. `COMP-004` popup policy is in `discovery` (`docs/comp-004-popup-plan.md`):
+   no GUI overlay; Tab stays stock; `_MBX_COMP_ORDER` is additive only.
+   Ranked-accept `bind -x` chord is a later leftover. Do not start overlay,
+   ghost, or highlighting. `EDT-001` is `complete`. Do not mark `COMP-004`,
+   `COMP-001`, or `COMP-002` complete.
 2. `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
    slice on FND-001 SHA refresh or percentile benches unless a functional
    prompt-path defect is proven.
@@ -690,3 +691,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Specified `G3` gate-close decision in `docs/g3-gate-close-plan.md`. Explicit `bind -x` evidence recorded; continuous decoration stays unproven. Do not start popup or ghost. |
 | 2026-08-16 | Completed `G3` gate close (`docs/g3-gate-close-plan.md`; `docs/g3-decision-plan.md`). `G3` and `EDT-001` move to `complete`. Continuous decoration leftover still blocks ghost / highlighting. `COMP-004` unblocked for planning. Do not start popup or ghost. |
 | 2026-08-16 | Documented tryable features and remaining MVP leftovers in `README.md` (prompt, duration, history, `bind -x` insert, stock Tab, wrap metadata). |
+| 2026-08-16 | Completed `COMP-004` popup policy decision (`docs/comp-004-popup-plan.md` P-1–P-4). No GUI overlay; Tab stays stock; ranking additive. `COMP-004` moves to `discovery`. Do not start overlay or ghost. |
