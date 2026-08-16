@@ -36,8 +36,11 @@ subshell/function contexts, making generic trap composition unsafe. The prototyp
 therefore chooses no duration rather than overwriting unknown user behavior.
 
 `bind -x` exposes `READLINE_LINE`, `READLINE_POINT`, and related variables to a
-shell function. This supports future text insertion but not continuous highlighting
-on every keypress without rebinding or taking deeper ownership of the editor.
+shell function. This supports non-destructive insertion (editor token,
+ranked-accept, history search) but not continuous highlighting on every
+keypress without rebinding or taking deeper ownership of the editor.
+Default history-search chord is `\C-x\C-r` so stock reverse-i-search stays on
+`\C-r` (ADR 0009).
 
 ## Smoke corpus
 

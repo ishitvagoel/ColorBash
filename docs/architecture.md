@@ -10,8 +10,10 @@ The implemented prototype is the hybrid Bash/Rust prompt path plus the Phase 3A
 history sidecar. Interactive Bash calls a native helper, receives presentation
 data, and continues to execute commands with ordinary Bash semantics. When
 explicitly enabled, Bash also observes admitted history and enqueues records
-without modifying `.bash_history`. Ghost suggestions, completion UI, live
-highlighting, and enhanced Ctrl+R remain gated.
+without modifying `.bash_history`. An explicit history-search `bind -x` chord
+(default `\C-x\C-r`, ADR 0009) can insert one sidecar match into the line
+buffer. Ghost suggestions, completion UI, live highlighting, and a Ctrl+R
+overlay remain gated.
 
 ## System boundary
 
@@ -55,7 +57,10 @@ bash/
   prompt.bash        fallback orchestration; the only prompt-path PS1 writer
   fallback.bash      Bash-only prompt renderer
   hooks.bash         PROMPT_COMMAND and optional DEBUG integration
+  editor.bash        non-destructive bind -x insert prototype
+  completion.bash    stock completion adapter and ranked-accept chord
   history.bash       opt-in admitted-entry observation and MBX2 RECORD send
+  search.bash        explicit history-search bind -x (ADR 0009)
 
 crates/protocol/     dependency-free MBX1 wire model and PromptFlags value type
 crates/cli/src/
@@ -427,6 +432,8 @@ multiline-width-pty.md`), and the Bash history admission corpus
 (`docs/research/bash-history-admission.md`). The opt-in history sidecar is
 implemented; `G2` is complete and write-ack percentiles are `deferred`. Provider expansion and
 highlighting remain gated by unproven continuous decoration
-(`docs/g3-gate-close-plan.md`). `COMP-004` popup policy records no GUI overlay;
-ranked-accept `bind -x` evidence is complete (`docs/comp-004-ranked-accept-plan.md`).
+(`docs/g3-gate-close-plan.md`). Explicit history search via `bind -x` is
+Strategy A (ADR 0009; `bash/search.bash`; default `\C-x\C-r`). `COMP-004` popup
+policy records no GUI overlay; ranked-accept `bind -x` evidence is complete
+(`docs/comp-004-ranked-accept-plan.md`).
 `G3` explicit `bind -x` evidence is complete.
