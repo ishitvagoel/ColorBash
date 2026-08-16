@@ -1,6 +1,6 @@
 # HIST-008 leftover: failed-status history search
 
-Status: `ready` (2026-08-16). `HIST-008` recent/prefix/cwd and `HIST-009` fuzzy
+Status: `complete` (2026-08-16). `HIST-008` recent/prefix/cwd and `HIST-009` fuzzy
 are complete. Status is already stored on every sidecar row. This packet adds a
 bounded CLI filter for nonzero exit status. No editor UI. Do not log command
 text. Do not bump the schema (avoids colliding with `HIST-010` v3).
@@ -55,9 +55,9 @@ migration and not `SRCH-003`.
 
 | ID | Case | Assert | Status |
 | --- | --- | --- | --- |
-| F-1 | Nonzero status rows returned newest first | Three rows: fail@t1, success@t2, fail@t3. `failed(10)` is `[t3, t1]` command text. | planned |
-| F-2 | Status 0 excluded; limit honored | Four failed rows + successes; `failed(2)` length 2, newest two fails. | planned |
-| F-3 | CLI parse | `history search failed --limit 3` → `SearchFailed { limit: 3 }`. Extra TEXT is an error. | planned |
+| F-1 | Nonzero status rows returned newest first | Three rows: fail@t1, success@t2, fail@t3. `failed(10)` is `[t3, t1]` command text. | complete — `failed_returns_nonzero_status_newest_first` |
+| F-2 | Status 0 excluded; limit honored | Four failed rows + successes; `failed(2)` length 2, newest two fails. | complete — same test, `failed(2)` |
+| F-3 | CLI parse | `history search failed --limit 3` → `SearchFailed { limit: 3 }`. Extra TEXT is an error. | complete — `crates/cli/src/cli.rs` parse tests |
 
 ## Docs to update
 

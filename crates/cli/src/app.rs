@@ -1,11 +1,11 @@
+use crate::VERSION;
 use crate::cli::{self, CliCommand, HistoryCommand, ServeTarget};
 use crate::history::{HistoryControl, HistoryPolicy, HistorySearch};
 use crate::prompt::PromptRendering;
 use crate::service::ProtocolService;
-use crate::storage::{default_store_path, QueuedHistoryStore};
+use crate::storage::{QueuedHistoryStore, default_store_path};
 use crate::telemetry::trace_duration;
 use crate::transport::{self, SocketClient};
-use crate::VERSION;
 use mbx_protocol::{Request, RequestKind, ResponseKind};
 use std::io::{self, Write};
 use std::num::NonZeroU64;

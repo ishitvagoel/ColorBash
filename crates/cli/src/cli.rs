@@ -1,7 +1,7 @@
 use crate::prompt::PromptContext;
 use mbx_protocol::{
-    PromptFlags, FLAG_ASCII_ICONS, FLAG_DISABLE_GIT, FLAG_NERD_ICONS, FLAG_NO_COLOR,
-    FLAG_PRODUCTION, FLAG_SSH,
+    FLAG_ASCII_ICONS, FLAG_DISABLE_GIT, FLAG_NERD_ICONS, FLAG_NO_COLOR, FLAG_PRODUCTION, FLAG_SSH,
+    PromptFlags,
 };
 use std::num::NonZeroU64;
 use std::path::PathBuf;

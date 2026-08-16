@@ -733,7 +733,7 @@ mod tests {
     use std::os::unix::fs::PermissionsExt;
     use std::path::Path;
     use std::process::Command;
-    use std::sync::{mpsc, Arc, Mutex};
+    use std::sync::{Arc, Mutex, mpsc};
     use std::thread;
 
     fn history_env_lock() -> std::sync::MutexGuard<'static, ()> {
@@ -1128,11 +1128,13 @@ mod tests {
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].command_text, "git stash");
         assert_eq!(rows[1].command_text, "git status");
-        assert!(store
-            .fuzzy("ls", 10)
-            .unwrap()
-            .iter()
-            .any(|row| row.command_text == "ls"));
+        assert!(
+            store
+                .fuzzy("ls", 10)
+                .unwrap()
+                .iter()
+                .any(|row| row.command_text == "ls")
+        );
         drop(dir);
     }
 
