@@ -56,6 +56,17 @@ EOF
 )
 [[ $hook_state == *'preserved:0'* ]] || fail 'an existing DEBUG trap was replaced'
 
+default_debug_state=$(env MBX_TEST_ROOT="$ROOT" MBX_BIN="$MBX_TEST_BIN" TERM=dumb \
+    bash --noprofile --norc -i 2>/dev/null <<'EOF'
+original=$(trap -p DEBUG)
+source "$MBX_TEST_ROOT/bash/init.bash"
+after=$(trap -p DEBUG)
+[[ $after == "$original" ]] && printf 'unset-debug:%s\n' "${_MBX_DURATION_TIMING:-missing}"
+exit
+EOF
+)
+[[ $default_debug_state == *'unset-debug:0'* ]] || fail 'default install installed a DEBUG trap'
+
 prompt_command_state=$(env MBX_TEST_ROOT="$ROOT" MBX_BIN="$MBX_TEST_BIN" TERM=dumb \
     bash --noprofile --norc -i 2>/dev/null <<'EOF'
 PROMPT_COMMAND='printf "ORIGINAL_STATUS:%s\n" "$?"'
