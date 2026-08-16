@@ -1,8 +1,10 @@
 # shellcheck shell=bash
 # Explicit history-search bind -x (ADR 0009). Replaces READLINE_LINE with one
 # sidecar match without executing it. Not after-every-key decoration.
+# Default `\C-xh` is unbound in stock emacs. Do not use `\C-x\C-r`
+# (re-read-init-file) or `\C-x\C-s` (terminal XOFF / IXON).
 
-_MBX_SEARCH_DEFAULT_KEYSEQ='\C-x\C-r'
+_MBX_SEARCH_DEFAULT_KEYSEQ='\C-xh'
 
 _mbx_search_helper() {
     local deadline output_fd child_pid child_status match=

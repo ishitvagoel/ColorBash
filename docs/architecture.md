@@ -11,7 +11,7 @@ history sidecar. Interactive Bash calls a native helper, receives presentation
 data, and continues to execute commands with ordinary Bash semantics. When
 explicitly enabled, Bash also observes admitted history and enqueues records
 without modifying `.bash_history`. An explicit history-search `bind -x` chord
-(default `\C-x\C-r`, ADR 0009) can insert one sidecar match into the line
+(default `\C-xh`, ADR 0009) can insert one sidecar match into the line
 buffer. Ghost suggestions, completion UI, live highlighting, and a Ctrl+R
 overlay remain gated.
 
@@ -433,7 +433,7 @@ multiline-width-pty.md`), and the Bash history admission corpus
 implemented; `G2` is complete and write-ack percentiles are `deferred`. Provider expansion and
 highlighting remain gated by unproven continuous decoration
 (`docs/g3-gate-close-plan.md`). Explicit history search via `bind -x` is
-Strategy A (ADR 0009; `bash/search.bash`; default `\C-x\C-r`). `COMP-004` popup
+Strategy A (ADR 0009; `bash/search.bash`; default `\C-xh`). `COMP-004` popup
 policy records no GUI overlay; ranked-accept `bind -x` evidence is complete
 (`docs/comp-004-ranked-accept-plan.md`).
 `G3` explicit `bind -x` evidence is complete.

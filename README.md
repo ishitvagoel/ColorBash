@@ -19,7 +19,7 @@ These slices have working code you can exercise in an interactive shell:
 | Ranked-accept chord | Default `Ctrl-X Ctrl-A` after wrapped Tab | Replaces current word with ranked candidate; Tab stays stock |
 | Git completion kinds | Wrap `git` or `mbx_comp_git` fixture | Additive `ref`/`flag`/`file`; no Git subprocess |
 | Fuzzy history search | `MBX_HISTORY=1` then `mbx history search fuzzy TEXT` | Ranks a bounded recent pool |
-| History-search chord | `MBX_HISTORY=1` then `Ctrl-X Ctrl-R` | Replaces the line with the top sidecar match; does not run it |
+| History-search chord | `MBX_HISTORY=1` then `Ctrl-X` `h` | Replaces the line with the top sidecar match; does not run it |
 
 ## What remains
 
@@ -30,7 +30,7 @@ These MVP features are **not** implemented for interactive use:
 | Ghost suggestions | No after-every-key Readline decoration hook |
 | Completion popup | Overlay unproven; ranked-accept chord exists |
 | Syntax highlighting | Same continuous-decoration leftover |
-| Enhanced Ctrl+R overlay | Type-to-filter list still needs a result-view leftover; `\C-x\C-r` insert exists |
+| Enhanced Ctrl+R overlay | Type-to-filter list still needs a result-view leftover; `\C-xh` insert exists |
 | Repository-context history | `HIST-010` |
 | macOS PTY matrix | `HRD-001` needs a macOS host |
 
@@ -198,7 +198,7 @@ alone unless `MBX_COMP_ACCEPT_OVERRIDE=1`.
 
 ### 8. History-search chord (`bind -x`)
 
-Requires `MBX_HISTORY=1`. Default chord is `Ctrl-X` then `Ctrl-R` so stock
+Requires `MBX_HISTORY=1`. Default chord is `Ctrl-X` then `h` so stock
 `Ctrl-R` reverse-i-search is unchanged. The chord replaces the whole line with
 the top sidecar match (exact prefix, then fuzzy; empty line uses the newest
 row) and does **not** run it until Enter.
@@ -210,7 +210,7 @@ printf 'MBX_SRCH:alpha\n'
 printf 'MBX_SRCH:beta\n'
 ```
 
-At the next prompt type `printf 'MBX_SRCH:a` and press `Ctrl-X Ctrl-R`, then
+At the next prompt type `printf 'MBX_SRCH:a` and press `Ctrl-X` then `h`, then
 Enter. Expect `MBX_SRCH:alpha`. An empty line plus the same chord inserts the
 newest row. If that chord is already bound, MBX leaves it alone unless
 `MBX_SEARCH_OVERRIDE=1`.
@@ -234,7 +234,7 @@ MBX_EDITOR_INSERT_KEYSEQ='\C-x\C-y'
 MBX_EDITOR_OVERRIDE=1           # overwrite an occupied insert chord
 MBX_COMP_ACCEPT_KEYSEQ='\C-x\C-a'  # ranked-accept chord (default)
 MBX_COMP_ACCEPT_OVERRIDE=1      # overwrite an occupied ranked-accept chord
-MBX_SEARCH_KEYSEQ='\C-x\C-r'    # history-search chord (default; does not steal Ctrl-R)
+MBX_SEARCH_KEYSEQ='\C-xh'       # history-search chord (default; does not steal Ctrl-R)
 MBX_SEARCH_OVERRIDE=1           # overwrite an occupied search chord
 MBX_SEARCH_TIMEOUT=0.10         # helper budget for one search insert
 MBX_LOG=trace                   # helper timing/events; never logs command text

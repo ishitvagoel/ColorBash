@@ -23,9 +23,11 @@ user presses a dedicated chord does not.
 
 1. Explicit user-invoked history search via `bind -x` is Strategy A (ADR 0003).
    It is not continuous decoration and does not require taking editor ownership.
-2. The default chord is `\C-x\C-r`. Do not steal stock `\C-r` reverse-i-search.
-   `MBX_SEARCH_KEYSEQ` may select another sequence. Occupied keyseqs are skipped
-   unless `MBX_SEARCH_OVERRIDE=1`.
+2. The default chord is `\C-xh` (Ctrl-X then `h`; unbound in stock emacs;
+   M-040). Do not steal stock `\C-r` reverse-i-search. `\C-x\C-r` is Readline
+   `re-read-init-file`. `\C-x\C-s` is terminal XOFF under IXON. Occupied
+   keyseqs are skipped unless `MBX_SEARCH_OVERRIDE=1`. `MBX_SEARCH_KEYSEQ` may
+   select another sequence.
 3. The action requires `MBX_HISTORY=1`. Otherwise it is a no-op. Helper
    startup, timeout, empty output, or failure must leave the line unchanged and
    keep the prompt usable.

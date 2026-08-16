@@ -751,3 +751,22 @@ to prevent recurrence, not to assign blame.
   `ranked_accept_refuses_stale_unrelated_word` in
   `crates/pty/tests/completion_harness.rs`.
 
+## M-040 — Default search chord collided with stock Readline
+
+- Discovered: 2026-08-16
+- Status: Fixed
+- Failed assumption: `\C-x\C-r` was a free emacs chord analogous to ranked-accept
+  `\C-x\C-a`, so occupied-skip would only fire for user bindings.
+- Impact: stock emacs binds `\C-x\C-r` to `re-read-init-file`. The search
+  installer skipped the chord, `_MBX_SEARCH_BOUND` stayed `0`, and PTY insert
+  cases submitted the typed prefix instead of a sidecar match.
+- Correction: default chord is `\C-xh` (Ctrl-X then `h`). `\C-x\C-r` is
+  occupied; `\C-x\C-s` is terminal XOFF under IXON and freezes PTY output.
+  S-7 asserts `_MBX_SEARCH_BOUND=1` on a default install.
+- Prevention: before choosing a default `bind -x` chord, inspect `bind -p` on
+  stock emacs and vi-insert, and avoid `C-s`/`C-q` flow-control bytes. Occupied-
+  skip tests that pre-bind a fake occupant do not prove the default chord is
+  free or PTY-safe. Add a default-install bound assertion and an insert PTY case.
+- Evidence: `bash/search.bash`, `default_chord_installs_on_stock_emacs` in
+  `crates/pty/tests/history_search.rs`, and ADR 0009.
+

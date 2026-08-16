@@ -1,4 +1,4 @@
-# SRCH-001 leftover: explicit history-search `bind -x` (S-1–S-6)
+# SRCH-001 leftover: explicit history-search `bind -x` (S-1–S-7)
 
 Status: `validation` for the explicit insert action (2026-08-16). ADR 0009
 unblocks Phase 8 from the continuous-decoration leftover. This packet adds a
@@ -26,10 +26,11 @@ text per search line (`crates/cli/src/app.rs`).
 
 ## Goal
 
-1. Install an optional `bind -x` chord (default `\C-x\C-r`, overridable via
+1. Install an optional `bind -x` chord (default `\C-xh`, overridable via
    `MBX_SEARCH_KEYSEQ`) in emacs and vi-insert keymaps. Reuse the occupied-keyseq
    skip pattern from `bash/editor.bash` (`MBX_SEARCH_OVERRIDE=1` to overwrite).
-   Do not rebind Tab, printables, or stock `\C-r`.
+   Do not rebind Tab, printables, or stock `\C-r`. Do not default to
+   `\C-x\C-r` (Readline `re-read-init-file`) or `\C-x\C-s` (XOFF; M-040).
 2. On the chord, if `MBX_HISTORY` is not exactly `1`, leave `READLINE_LINE`
    unchanged. If the helper is missing, times out, or fails, leave the line
    unchanged. Never execute inserted text.
@@ -73,12 +74,13 @@ Add `bash/search.bash` and source it from `bash/init.bash`. Install after
 
 | ID | Evidence |
 | --- | --- |
-| S-1 | History-enabled PTY: record `printf 'MBX_SRCH:alpha\n'` then `printf 'MBX_SRCH:beta\n'`; type `printf 'MBX_SRCH:a`; `\C-x\C-r` does not execute; Enter prints `MBX_SRCH:alpha` |
+| S-1 | History-enabled PTY: record `printf 'MBX_SRCH:alpha\n'` then `printf 'MBX_SRCH:beta\n'`; type `printf 'MBX_SRCH:a`; `\C-xh` does not execute; Enter prints `MBX_SRCH:alpha` |
 | S-2 | Same session empty line + chord inserts the newest row (`printf 'MBX_SRCH:beta\n'`) and Enter prints `MBX_SRCH:beta` |
-| S-3 | Occupied `\C-x\C-r` is not overwritten; `_MBX_SEARCH_BOUND=0` |
+| S-3 | Occupied `\C-xh` is not overwritten; `_MBX_SEARCH_BOUND=0` |
 | S-4 | `MBX_HISTORY` unset: chord leaves the typed line unchanged (module stub would insert if called) |
 | S-5 | Substring that is not a prefix uses fuzzy fallback (`needle` → `echo MBX_SRCH:zzz-needle`) |
 | S-6 | Missing helper / non-executable `MBX_BIN`: no-op |
+| S-7 | Default install on stock emacs sets `_MBX_SEARCH_BOUND=1` |
 
 ## Docs
 

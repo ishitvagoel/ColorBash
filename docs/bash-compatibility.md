@@ -39,8 +39,8 @@ therefore chooses no duration rather than overwriting unknown user behavior.
 shell function. This supports non-destructive insertion (editor token,
 ranked-accept, history search) but not continuous highlighting on every
 keypress without rebinding or taking deeper ownership of the editor.
-Default history-search chord is `\C-x\C-r` so stock reverse-i-search stays on
-`\C-r` (ADR 0009).
+Default history-search chord is `\C-xh` so stock reverse-i-search stays on
+`\C-r` and Readline `re-read-init-file` stays on `\C-x\C-r` (ADR 0009).
 
 ## Smoke corpus
 
