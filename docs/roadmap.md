@@ -542,18 +542,19 @@ The Phase 3A vertical slice and `G2` are complete. Capture stays disabled by
 default. Write-ack percentiles are `deferred` (not a budget pass;
 `docs/history-g2-write-ack-deferral.md`).
 
-1. `G0`: CI URL recorded via `FND-001` / `BST-005`
+1. `PRM-004` fallback + Git-disabled prompt percentiles — plan ready in
+   `docs/prm-004-fallback-plan.md` (F-1–F-4). Warm-Git is already recorded.
+   Do not invent a representative dirty/large repo. Do not mark `PRM-004` or
+   `G0` complete.
+2. `G0` remainder after that slice: platform matrix, `HRD-001` macOS PTY run,
+   and representative dirty/large/cold/PTY `PRM-004` percentiles. CI URL is
+   recorded via `FND-001` / `BST-005`
    (https://github.com/ishitvagoel/ColorBash/actions/runs/31937499009;
-   `docs/fnd-001-ci-plan.md`). Darwin PTY constant cfg-split (D-1–D-3 in
-   `crates/pty/src/sys.rs`; `docs/hrd-001-darwin-pty-constants-plan.md`) is
-   recorded; platform matrix, `HRD-001` macOS PTY run, and representative
-   `PRM-004` percentiles remain.
-2. `PRM-002` is `validation` (redirected-output, display-width, color
-   capability, and non-DSR wrap-column usability recorded). Representative
-   `PRM-004` percentiles remain.
+   `docs/fnd-001-ci-plan.md`). Darwin PTY constants (D-1–D-3) are recorded.
 3. `EDT-001` / `G3` stay blocked on remaining `G0`. Write-ack percentile
    revisit is `deferred` — do not chase product-code latency unless a test
-   proves the prompt waits on SQLite.
+   proves the prompt waits on SQLite. Do not spend a slice on FND-001 SHA
+   refresh.
 
 ## Provisional performance and safety budgets
 
@@ -647,3 +648,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Refreshed linked green GitHub Actions CI on `origin/main` to `da019de` (https://github.com/ishitvagoel/ColorBash/actions/runs/31937322390); `FND-001` and `BST-005` remain complete (`docs/fnd-001-ci-plan.md`). `G0` validation remains open for platform matrix, `HRD-001` macOS PTY run, and `PRM-004` representative percentiles. Write-ack budget remains. |
 | 2026-08-16 | Refreshed linked green GitHub Actions CI on `origin/main` to `8c8dad2` (https://github.com/ishitvagoel/ColorBash/actions/runs/31937499009); `FND-001` and `BST-005` remain complete (`docs/fnd-001-ci-plan.md`). `G0` validation remains open for platform matrix, `HRD-001` macOS PTY run, and `PRM-004` representative percentiles. Write-ack budget remains. |
 | 2026-08-16 | Deferred the prompt-boundary write-ack percentile leftover and marked `G2` / `HIST-007` complete (`docs/history-g2-write-ack-deferral.md`). W-1–W-4 correctness remains; WSL and cloud p95 misses are preserved; the 2 ms / 5 ms budget is not weakened and is not recorded as met. Capture stays default-off. |
+| 2026-08-16 | Identified the next `G0` / `PRM-004` slice as fallback and Git-disabled prompt percentiles; plan in `docs/prm-004-fallback-plan.md`. Do not invent a representative dirty/large repo. Do not mark `PRM-004` or `G0` complete. |
