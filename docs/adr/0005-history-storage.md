@@ -214,7 +214,8 @@ whose status cannot be attributed drops per the ambiguity rule.
   done); hostile SQL/control inertness (done); 100k-row search p95 for recent,
   selective prefix, and cwd (`docs/benchmarks/2026-08-16-history-queries.md`);
   prompt-boundary write acknowledgement (`docs/benchmarks/2026-08-16-history-write-ack.md`;
-  correctness recorded; percentile budget still open on development WSL);
+  correctness recorded; percentile budget still open on development WSL and cloud
+  remeasure — `docs/benchmarks/2026-08-16-history-write-ack-cloud.md`);
   concurrent-writer contention; WAL crash/corrupt recovery (K-1–K-4 in
   `crates/cli/src/storage.rs`); WAL/SHM `0600` never-more-permissive (P-1–P-4
   in `crates/cli/src/storage.rs`); many-match prefix latency
@@ -224,6 +225,7 @@ whose status cannot be attributed drops per the ambiguity rule.
   (`docs/benchmarks/2026-08-16-history-migrate.md`; M-2 in
   `crates/cli/src/corpus.rs`); foreign-user open recorded (`docs/history-g2-foreign-user-plan.md`;
   F-1–F-4 in `crates/cli/src/storage.rs`); write-ack percentile budget still
-  open on development WSL; and command-text-free diagnostics.
+  open (development WSL and cloud remeasure miss); and command-text-free
+  diagnostics.
 - Every claim in this ADR maps to a test in `HIST-005`–`HIST-008`,
   `HIST-011`–`HIST-013` before `G2` passes.
