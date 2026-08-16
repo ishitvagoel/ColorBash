@@ -1,7 +1,6 @@
 # COMP-001 slice: non-popup stock-completion adapter harness (H-1–H-4)
 
-Status: `validation` (2026-08-16). `G3` / `EDT-001` are in `validation`. H-1–H-4
-evidence is in `bash/completion.bash`, `tests/bash/modules.bash`, and
+Status: `complete` (2026-08-16). `G4` is `complete`. H-1–H-4 evidence is in `bash/completion.bash`, `tests/bash/modules.bash`, and
 `crates/pty/tests/completion_harness.rs`. Do not mark `G4` or `COMP-001`
 complete. `COMP-002` owns file and `-F` exact-parity evidence.
 

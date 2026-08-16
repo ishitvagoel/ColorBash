@@ -111,6 +111,14 @@ fn execute_history(command: HistoryCommand) -> Result<(), String> {
                     .map_err(|error| error.to_string())?,
             )
         }
+        HistoryCommand::SearchFuzzy { needle, limit } => {
+            let store = open_history_store()?;
+            print_entries(
+                store
+                    .fuzzy(&needle, limit)
+                    .map_err(|error| error.to_string())?,
+            )
+        }
     }
 }
 

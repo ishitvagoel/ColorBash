@@ -7,7 +7,7 @@
 
 - Last reviewed: 2026-08-16 UTC
 - Current milestone: Phase 3A sidecar implemented; `G0` and `G2` complete; `G1` accepted
-- Active workstream: `COMP-004` in `discovery` (ranked-accept A-1–A-5 complete; overlay unproven; ghost/highlighting blocked)
+- Active workstream: unblocked leftovers (`GIT-004` / `HIST-009`); overlay/ghost/highlighting blocked on unproven continuous decoration
 - Next decision gate: continuous-decoration leftover (blocks ghost / highlighting)
 - Editor-facing work is blocked by: unproven after-every-key decoration, as identified per phase
 - Timing policy: unmet percentile targets are `deferred` and do not block
@@ -316,9 +316,9 @@ latency budgets.
 | 0 | Research / architecture | `complete` | `G0` complete; `HRD-001` macOS remains release-matrix work |
 | 1 | Bootstrap | `complete` | CI linked; broader lifecycle tracing deferred |
 | 2 | Prompt | `complete` | capability/width/wrap recorded; `PRM-004` percentiles `deferred` |
-| 3 | History | `complete` | Phase 3A slice implemented; `G2` complete; write-ack percentiles `deferred` |
+| 3 | History | `complete` | Phase 3A / `G2` complete; `HIST-009` complete; `HIST-010` remains; write-ack percentiles `deferred` |
 | 4 | Ghost suggestions | `blocked` | unproven continuous decoration |
-| 5 | Completion | `validation` | `G4` / `COMP-003` complete; `COMP-004` in `discovery` (no overlay) |
+| 5 | Completion | `validation` | `G4` / `COMP-001` / `COMP-002` / `COMP-003` complete; `COMP-004` in `discovery` (no overlay); `GIT-004` complete |
 | 6 | Syntax highlighting | `blocked` | unproven continuous decoration; intentionally after search/ghost/completion evidence |
 | 7 | Git/provider expansion | `discovery` | bounded prompt subset exists; richer capabilities await a consumer |
 | 8 | Enhanced Ctrl+R | `blocked` | unproven continuous decoration leftover |
@@ -392,8 +392,8 @@ Exit condition: prompt requirements of `G0`.
 ### Phase 3 — History
 
 Status: `complete` for the UI-free Phase 3A / `G2` slice (2026-08-16).
-`HIST-009` and `HIST-010` remain full-phase exit work. Write-ack percentiles
-are `deferred` (`docs/history-g2-write-ack-deferral.md`).
+`HIST-009` fuzzy ranking is `complete`. `HIST-010` remains full-phase exit
+work. Write-ack percentiles are `deferred` (`docs/history-g2-write-ack-deferral.md`).
 
 Outcome: an opt-in, local sidecar that records Bash-approved history metadata and
 provides bounded search without modifying `.bash_history`, without synchronous
@@ -430,7 +430,7 @@ accept or revise these details before implementation:
 | `HIST-011` | Implement exclusions, no-log policy, disable/path/clear/delete controls | `complete` | `crates/cli/src/policy.rs` plus `mbx history path|count|clear|delete` and env controls |
 | `HIST-007` | Add opt-in Bash observation and bounded protocol ingestion | `complete` | `bash/history.bash`, MBX2 RECORD ingestion, PTY recording/invariance tests, seeded 100k corpus, hostile inertness, query p95, concurrent-writer contention, prompt-boundary write-ack correctness, WAL crash/corrupt recovery, WAL/SHM `0600` never-more-permissive, many-match prefix covering index, writer idle-flush for live readers, 100k-row v1→v2 migration (`crates/cli/src/corpus.rs`), and foreign-user open (`docs/history-g2-foreign-user-plan.md`; F-1–F-4 in `crates/cli/src/storage.rs`); write-ack percentile leftover `deferred` (`docs/history-g2-write-ack-deferral.md`) |
 | `HIST-008` | Add recent, exact-prefix, cwd queries and deterministic ranking | `complete` | `mbx history search recent|prefix|cwd` with bounded limits and NOCASE prefix index |
-| `HIST-009` | Add bounded fuzzy ranking | `blocked` | `HIST-008`, deterministic-query evidence, and 100k+ benchmark |
+| `HIST-009` | Add bounded fuzzy ranking | `complete` | `docs/hist-009-fuzzy-plan.md`; `mbx history search fuzzy`; scores over the most recent 256 rows; `crates/cli/src/history.rs`, `storage.rs` |
 | `HIST-010` | Add repository context | `blocked` | history-scoped `GIT-003` root/branch provider subset |
 
 Exit conditions: `G1` before capture can be enabled; `G2` before history-driven
@@ -461,6 +461,7 @@ Exit condition: `GHST-004` meets the accepted editing and safety budgets.
 ### Phase 5 — Completion
 
 Status: `validation`; popup policy in `discovery` (`COMP-004`; no GUI overlay).
+`COMP-001` / `COMP-002` / `COMP-003` / `GIT-004` are complete.
 
 First adapt stock Bash completion and prove exact insertion parity. Only then add
 typed candidate metadata, bounded ranking, popup navigation, and Git candidates.
@@ -470,8 +471,8 @@ line. Do not move completion functions into a subprocess unless live-state and
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `COMP-001` | Build a non-popup stock-completion adapter harness | `validation` | `docs/comp-001-harness-plan.md`; H-1–H-4 in `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`; `G4` complete |
-| `COMP-002` | Prove file and one `-F` function's exact insertion parity | `validation` | `docs/comp-002-parity-plan.md`; P-1–P-4, F-1–F-4, L-1–L-4, N-1–N-2, S-1–S-4 landed; `docs/g4-gate-close-plan.md`; 5 ms leftover `deferred` |
+| `COMP-001` | Build a non-popup stock-completion adapter harness | `complete` | `docs/comp-001-harness-plan.md`; H-1–H-4; `G4` complete; 5 ms leftover `deferred` |
+| `COMP-002` | Prove file and one `-F` function's exact insertion parity | `complete` | `docs/comp-002-parity-plan.md`; P-1–P-4, F-1–F-4, L-1–L-4, N-1–N-2, S-1–S-4; `docs/g4-gate-close-plan.md`; 5 ms leftover `deferred` |
 | `COMP-003` | Add typed candidate metadata and bounded ranking | `complete` | `docs/comp-003-metadata-plan.md` K-1–K-4; `docs/comp-003-ranking-plan.md` R-1–R-4 in `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs` |
 | `COMP-004` | Add popup navigation and terminal-safe rendering | `discovery` | `docs/comp-004-popup-plan.md` P-1–P-4; `docs/comp-004-ranked-accept-plan.md` A-1–A-5; overlay unproven |
 | `COMP-005` | Insert/fall through exactly and pass the parity/PTY matrix | `blocked` | `COMP-004`, Git candidates when enabled |
@@ -505,7 +506,7 @@ Status: `discovery`; a synchronous prompt-status subset was pulled forward.
 | `GIT-001` | Typed prompt repository-status provider | `complete` | `crates/cli/src/provider.rs`, ADR 0007, and provider substitution/degradation tests |
 | `GIT-002` | Deadline, capped acquisition, TTL cache, refresh, invalidation | `complete` | ADR 0007, provider outcome/process/cache tests, and `docs/benchmarks/2026-08-15-solid-hardening.md` |
 | `GIT-003` | Repository root/branch context, then upstream/branches/remotes/tags | `blocked` | `HIST-010` is the first scoped consumer; no expansion is authorized yet |
-| `GIT-004` | Structured completion metadata/ranking | `not-started` | `COMP-003` complete; ranked-accept seam in `docs/comp-004-ranked-accept-plan.md` |
+| `GIT-004` | Structured completion metadata/ranking | `complete` | `docs/git-004-kinds-plan.md`; git/ref/flag/file kinds beside `COMPREPLY`; `mbx_comp_git` fixture; no Git subprocess |
 | `GIT-005` | General provider capabilities/SDK | `deferred` | post-MVP evidence; ADR 0007 update required |
 
 Do not add Python, Node, Docker, arbitrary executable plugins, or a generic SDK
@@ -559,10 +560,9 @@ Exit condition: `G5` after every `HRD-*` item is complete.
 percentile leftovers are `deferred` and must not block product slices
 (`docs/latency-budget-deferral.md`).
 
-1. `COMP-004` ranked-accept chord is complete (`docs/comp-004-ranked-accept-plan.md`
-   A-1–A-5). GUI overlay stays unproven. Next completion leftover: `GIT-004` Git
-   kinds. Do not start overlay, ghost, or highlighting. Do not mark `COMP-004`,
-   `COMP-001`, or `COMP-002` complete.
+1. Next unblocked leftover is the `HIST-010` / `GIT-003` pair (repo context on
+   history rows). Do not start overlay, ghost, or highlighting. `COMP-004`
+   stays `discovery`. Do not mark `COMP-004` or `COMP-005` complete.
 2. `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
    slice on FND-001 SHA refresh or percentile benches unless a functional
    prompt-path defect is proven.
@@ -693,3 +693,5 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Completed `COMP-004` popup policy decision (`docs/comp-004-popup-plan.md` P-1–P-4). No GUI overlay; Tab stays stock; ranking additive. `COMP-004` moves to `discovery`. Do not start overlay or ghost. |
 | 2026-08-16 | Completed `COMP-004` ranked-accept chord A-1–A-5 (`docs/comp-004-ranked-accept-plan.md`; `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`). Default `\C-x\C-a`. `COMP-004` stays `discovery`; overlay unproven. |
 | 2026-08-16 | Ranked-accept replaces the current word when it is a prefix of `_MBX_COMP_RANKED_REPLY` (M-039). Stale unrelated words are refused. Snapshot clears at the next prompt. |
+| 2026-08-16 | Completed `GIT-004` Git completion kinds (`docs/git-004-kinds-plan.md`). `COMP-001` / `COMP-002` move to `complete` (G4 evidence; 5 ms `deferred`). |
+| 2026-08-16 | Completed `HIST-009` bounded fuzzy search (`docs/hist-009-fuzzy-plan.md`; `mbx history search fuzzy`). `HIST-010` remains. |

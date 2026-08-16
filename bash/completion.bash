@@ -33,6 +33,7 @@ _mbx_comp_sanitize_desc() {
 
 _mbx_comp_kind_for_reply() {
     local reply=$1
+    local command=${COMP_WORDS[0]:-}
     case $reply in
         --mbx-comp-flag)
             REPLY=flag
@@ -40,8 +41,22 @@ _mbx_comp_kind_for_reply() {
         mbx_comp_candidate)
             REPLY=word
             ;;
+        -*)
+            REPLY=flag
+            ;;
         *)
-            REPLY=
+            if [[ $command == git || $command == mbx_comp_git ]]; then
+                case $reply in
+                    */*)
+                        REPLY=file
+                        ;;
+                    *)
+                        REPLY=ref
+                        ;;
+                esac
+            else
+                REPLY=
+            fi
             ;;
     esac
 }
@@ -325,6 +340,17 @@ _mbx_comp_rank_adapter() {
     _mbx_comp_wrap_backend _mbx_comp_rank_backend "$@"
 }
 
+_mbx_comp_git_backend() {
+    local cur=${COMP_WORDS[COMP_CWORD]}
+    if [[ $cur == aa* ]]; then
+        COMPREPLY=(zzref aaref --git-flag src/lib.rs)
+    fi
+}
+
+_mbx_comp_git_adapter() {
+    _mbx_comp_wrap_backend _mbx_comp_git_backend "$@"
+}
+
 _mbx_comp_install_probe() {
     [[ ${_MBX_COMP_PROBE_INSTALLED:-0} == 1 ]] || {
         if ! declare -F mbx_comp_probe >/dev/null 2>&1; then
@@ -360,6 +386,16 @@ _mbx_comp_install_rank() {
     }
 }
 
+_mbx_comp_install_git() {
+    [[ ${_MBX_COMP_GIT_INSTALLED:-0} == 1 ]] || {
+        if ! declare -F mbx_comp_git >/dev/null 2>&1; then
+            mbx_comp_git() { printf 'GOT:%s|\n' "$*"; }
+        fi
+        complete -o bashdefault -o default -F _mbx_comp_git_adapter mbx_comp_git
+        _MBX_COMP_GIT_INSTALLED=1
+    }
+}
+
 _mbx_comp_command_uses_adapter() {
     local command=$1
     complete -p "$command" 2>/dev/null | grep -Fq '_mbx_comp_probe_adapter'
@@ -377,6 +413,7 @@ _mbx_completion_install() {
         _mbx_comp_install_probe
         _mbx_comp_install_flag
         _mbx_comp_install_rank
+        _mbx_comp_install_git
     fi
     _MBX_COMPLETION_INSTALLED=1
 }

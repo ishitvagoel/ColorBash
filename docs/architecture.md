@@ -415,7 +415,9 @@ overlay or popup menu in this milestone: Tab insertion stays stock Bash
 behavior (`docs/comp-004-popup-plan.md`). An optional ranked-accept `bind -x`
 chord (default `\C-x\C-a`) replaces the current word with `_MBX_COMP_RANKED_REPLY`
 when that word is a prefix of the ranked candidate, without changing Tab
-(`docs/comp-004-ranked-accept-plan.md`).
+(`docs/comp-004-ranked-accept-plan.md`). Wrapped Git candidates (opt-in wrap or
+the `mbx_comp_git` fixture) receive additive `ref` / `flag` / `file` kinds
+(`docs/git-004-kinds-plan.md`).
 
 The roadmap, not this architecture description, selects the next slice. A genuine
 PTY driver now covers foundation prompt lifecycle, helper failure, Ctrl+C,
