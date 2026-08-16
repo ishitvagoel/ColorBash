@@ -466,7 +466,7 @@ line. Do not move completion functions into a subprocess unless live-state and
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
 | `COMP-001` | Build a non-popup stock-completion adapter harness | `validation` | `docs/comp-001-harness-plan.md`; H-1–H-4 in `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`; `G4` stays `discovery` |
-| `COMP-002` | Prove file and one `-F` function's exact insertion parity | `validation` | `docs/comp-002-parity-plan.md`; P-1–P-4 and F-1–F-4 in `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`; leftover matrix + `G4` decision remain |
+| `COMP-002` | Prove file and one `-F` function's exact insertion parity | `validation` | `docs/comp-002-parity-plan.md`; P-1–P-4 and F-1–F-4 landed; leftover L-1–L-4 specified in `docs/comp-002-leftover-matrix-plan.md`; `G4` decision remains |
 | `COMP-003` | Add typed candidate metadata and bounded ranking | `blocked` | `G4` |
 | `COMP-004` | Add popup navigation and terminal-safe rendering | `blocked` | `G3`, `G4`, `COMP-003` |
 | `COMP-005` | Insert/fall through exactly and pass the parity/PTY matrix | `blocked` | `COMP-004`, Git candidates when enabled |
