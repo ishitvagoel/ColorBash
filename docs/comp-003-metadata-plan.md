@@ -104,7 +104,7 @@ cell. Do not “fix” stock insertion to match the plan.
 
 ## Remaining after this slice
 
-`COMP-003` is `validation`, not `complete`. Bounded fuzzy ranking remains.
-Popup stays blocked on `G3`. `GIT-004` stays blocked until this metadata
-model exists. Continuous decoration stays unproven. The 5 ms leftover is
-reviewed before `G5`. `HRD-001` still needs a macOS host.
+`COMP-003` ranking is specified in `docs/comp-003-ranking-plan.md`. Popup stays
+blocked on `G3`. `GIT-004` may use the metadata model after ranking lands.
+Continuous decoration stays unproven. The 5 ms leftover is reviewed before
+`G5`. `HRD-001` still needs a macOS host.

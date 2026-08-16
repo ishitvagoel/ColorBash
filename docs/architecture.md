@@ -408,7 +408,9 @@ highlighting:
 The stock-completion adapter (`bash/completion.bash`, ADR 0006) keeps `COMPREPLY`
 insertion authoritative and records additive `_MBX_COMP_KINDS` / `_MBX_COMP_DESCS`
 metadata beside candidates for later UI. Descriptions are bounded and sanitized
-before any renderer consumes them (`docs/comp-003-metadata-plan.md`).
+before any renderer consumes them (`docs/comp-003-metadata-plan.md`). Additive
+`_MBX_COMP_SCORES` / `_MBX_COMP_ORDER` rank candidates for display without
+reordering `COMPREPLY` (`docs/comp-003-ranking-plan.md`).
 
 The roadmap, not this architecture description, selects the next slice. A genuine
 PTY driver now covers foundation prompt lifecycle, helper failure, Ctrl+C,

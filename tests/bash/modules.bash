@@ -706,6 +706,52 @@ assert_eq 1 ${#_MBX_COMP_DESCS[@]} 'metadata should match COMPREPLY length'
 [[ ${_MBX_COMP_DESCS[0]} != *'\'* ]] || fail 'description still contains backslash'
 [[ ${_MBX_COMP_DESCS[0]} != *$'\001'* ]] || fail 'description still contains a C0 byte'
 
+# COMP-003 ranking: prefix scores and bound (R-2, R-3).
+_mbx_comp_r2_backend() {
+    COMPREPLY=(zzflag aaflag)
+}
+COMPREPLY=()
+_MBX_COMP_SCORES=()
+_MBX_COMP_ORDER=()
+COMP_LINE='mbx_comp_rank aa'
+COMP_POINT=${#COMP_LINE}
+COMP_WORDS=(mbx_comp_rank aa)
+COMP_CWORD=1
+COMP_TYPE=9
+COMP_KEY=$'\t'
+_mbx_comp_wrap_backend _mbx_comp_r2_backend
+assert_eq 2 ${#COMPREPLY[@]} 'R-2 backend should return two candidates'
+assert_eq zzflag "${COMPREPLY[0]}" 'COMPREPLY order must stay stock'
+assert_eq 2 ${#_MBX_COMP_SCORES[@]} 'scores length should match COMPREPLY'
+assert_eq 2 ${#_MBX_COMP_ORDER[@]} 'order length should match COMPREPLY'
+(( _MBX_COMP_SCORES[1] > _MBX_COMP_SCORES[0] )) || \
+    fail 'aaflag should score higher than zzflag for prefix aa'
+assert_eq 1 "${_MBX_COMP_ORDER[0]}" 'best-scoring aaflag index should sort first'
+
+_mbx_comp_r3_backend() {
+    local i
+    COMPREPLY=()
+    for ((i = 0; i < 80; i++)); do
+        COMPREPLY+=("mbx_comp_reply_$i")
+    done
+}
+COMPREPLY=()
+_MBX_COMP_SCORES=()
+_MBX_COMP_ORDER=()
+COMP_LINE='mbx_comp_rank mbx_comp_reply_0'
+COMP_POINT=${#COMP_LINE}
+COMP_WORDS=(mbx_comp_rank mbx_comp_reply_0)
+COMP_CWORD=1
+COMP_TYPE=9
+COMP_KEY=$'\t'
+_mbx_comp_wrap_backend _mbx_comp_r3_backend
+assert_eq 80 ${#COMPREPLY[@]} 'R-3 backend should return 80 candidates'
+assert_eq 80 ${#_MBX_COMP_SCORES[@]} 'scores length should match COMPREPLY'
+assert_eq 80 ${#_MBX_COMP_ORDER[@]} 'order length should match COMPREPLY'
+for ((i = 64; i < 80; i++)); do
+    assert_eq 0 "${_MBX_COMP_SCORES[i]}" "reply index $i should keep score 0 beyond the 64-candidate bound"
+done
+
 # History module contract: MBX2 record encoding, ACK decoding, exclusions,
 # and the fork-free epoch-to-ISO conversion.
 source "$ROOT/bash/history.bash"
