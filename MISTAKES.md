@@ -648,3 +648,24 @@ to prevent recurrence, not to assign blame.
 - Evidence: `writer_loop`, V-1–V-2 in `crates/cli/src/storage.rs`, V-3 in
   `crates/pty/tests/history_invariance.rs`, and `docs/history-g2-idle-commit-plan.md`.
 
+## M-035 — Concurrent store open and writer begin still dropped rows under WAL load
+
+- Discovered: 2026-08-16
+- Status: Fixed
+- Failed assumption: migrate's 2 s retry loop and the writer's 100 ms
+  `BEGIN IMMEDIATE` retry were enough for eight simultaneous first opens and
+  cross-session WAL writers.
+- Impact: GitHub Actions and local stress runs intermittently failed
+  `concurrent_distinct_sessions_both_land` with `database is locked` on open and
+  `concurrent_sessions_write_distinct_rows_without_duplicates` with `255` rows
+  instead of `256` when a writer dropped a queued entry after a short lock wait.
+- Correction: retry the full `open_connection` path on lock contention for up to
+  `MIGRATE_BUSY_DEADLINE_MS`, and use that same deadline for writer
+  `BEGIN IMMEDIATE` instead of the 100 ms statement budget.
+- Prevention: concurrent-writer storage tests must be stress-run under parallel
+  `cargo test --test-threads=8`; any writer path that drops after lock contention
+  needs a bounded retry before acceptable loss.
+- Evidence: `open_connection`, `execute_batch_with_lock_retry_until`, and
+  `writer_loop` in `crates/cli/src/storage.rs`; CI run failure on
+  https://github.com/ishitvagoel/ColorBash/actions/runs/31933197095.
+
