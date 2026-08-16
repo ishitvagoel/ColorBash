@@ -399,10 +399,16 @@ highlighting:
    M-1–M-4, B-1–B-4; B-5 redraw note in `docs/edt-001-exact-bytes-plan.md`);
 5. prototype reuse of one standard completion function (`bash/completion.bash`;
    COMP-001 H-1–H-4, COMP-002 P-1–P-4 and inspect-before-wrap F-1–F-4;
-   leftover matrix, N-1–N-2, wrap fallthrough S-1–S-4, and `G4` decision
-   in `docs/g4-decision-plan.md`);
+   leftover matrix, N-1–N-2, wrap fallthrough S-1–S-4, `G4` gate close in
+   `docs/g4-gate-close-plan.md`, and COMP-003 K-1–K-4 typed metadata in
+   `docs/comp-003-metadata-plan.md`);
 6. duration timing remains opt-in; do not compose unknown `DEBUG` traps
    (`docs/prm-006-duration-plan.md`).
+
+The stock-completion adapter (`bash/completion.bash`, ADR 0006) keeps `COMPREPLY`
+insertion authoritative and records additive `_MBX_COMP_KINDS` / `_MBX_COMP_DESCS`
+metadata beside candidates for later UI. Descriptions are bounded and sanitized
+before any renderer consumes them (`docs/comp-003-metadata-plan.md`).
 
 The roadmap, not this architecture description, selects the next slice. A genuine
 PTY driver now covers foundation prompt lifecycle, helper failure, Ctrl+C,
@@ -411,5 +417,5 @@ resize-mid-line, and wide/combining glyph round trips (`docs/research/
 multiline-width-pty.md`), and the Bash history admission corpus
 (`docs/research/bash-history-admission.md`). The opt-in history sidecar is
 implemented; `G2` is complete and write-ack percentiles are `deferred`. Provider expansion,
-highlighting, and completion remain gated. Editor-facing work still requires
-`G3`/`G4`.
+highlighting, and completion popup remain gated. Editor-facing work still
+requires `G3`.

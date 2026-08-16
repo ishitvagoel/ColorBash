@@ -13,13 +13,88 @@ _mbx_comp_snapshot() {
     _MBX_COMP_SNAPPED=1
 }
 
+_mbx_comp_sanitize_desc() {
+    local value=${1-}
+    local sanitized= byte
+    local code index
+    local LC_ALL=C
+
+    for ((index = 0; index < ${#value} && index < 64; index++)); do
+        byte=${value:index:1}
+        printf -v code '%d' "'$byte"
+        if ((code < 32 || code == 127)) || [[ $byte == '$' || $byte == \` || $byte == \\ ]]; then
+            sanitized+='?'
+        else
+            sanitized+=$byte
+        fi
+    done
+    REPLY=$sanitized
+}
+
+_mbx_comp_kind_for_reply() {
+    local reply=$1
+    case $reply in
+        --mbx-comp-flag)
+            REPLY=flag
+            ;;
+        mbx_comp_candidate)
+            REPLY=word
+            ;;
+        *)
+            REPLY=
+            ;;
+    esac
+}
+
+_mbx_comp_desc_for_reply() {
+    local reply=$1
+    case $reply in
+        --mbx-comp-flag)
+            REPLY='EXTRA fixture flag description'
+            ;;
+        *)
+            REPLY=
+            ;;
+    esac
+}
+
+_mbx_comp_fill_metadata() {
+    local i reply kind desc
+    local -a kinds=() descs=()
+
+    for ((i = 0; i < ${#COMPREPLY[@]}; i++)); do
+        reply=${COMPREPLY[i]}
+        kind=${_MBX_COMP_BACKEND_KINDS[i]:-}
+        desc=${_MBX_COMP_BACKEND_DESCS[i]:-}
+        if [[ -z $kind ]]; then
+            _mbx_comp_kind_for_reply "$reply"
+            kind=$REPLY
+        fi
+        if [[ -z $desc ]]; then
+            _mbx_comp_desc_for_reply "$reply"
+            desc=$REPLY
+        fi
+        if [[ -n $desc ]]; then
+            _mbx_comp_sanitize_desc "$desc"
+            desc=$REPLY
+        fi
+        kinds+=("$kind")
+        descs+=("$desc")
+    done
+    _MBX_COMP_KINDS=("${kinds[@]}")
+    _MBX_COMP_DESCS=("${descs[@]}")
+}
+
 _mbx_comp_wrap_backend() {
     local backend=$1
     shift
     _mbx_comp_snapshot
+    _MBX_COMP_BACKEND_KINDS=()
+    _MBX_COMP_BACKEND_DESCS=()
     "$backend" "$@"
     _MBX_COMP_REPLY_COUNT=${#COMPREPLY[@]}
     _MBX_COMP_LAST_REPLY=${COMPREPLY[0]:-}
+    _mbx_comp_fill_metadata
 }
 
 _mbx_comp_identifier_ok() {
