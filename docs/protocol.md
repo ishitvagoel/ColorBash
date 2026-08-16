@@ -53,6 +53,12 @@ prompt transport/fallback.
 | 3 | 8 | SSH context |
 | 4 | 16 | production context |
 | 5 | 32 | Git lookup disabled |
+| 6 | 64 | prefer 16-color ANSI SGR |
+| 7 | 128 | prefer truecolor (`38;2`) SGR |
+
+When bit 0 (`FLAG_NO_COLOR`) is set, bits 6 and 7 are ignored for rendering.
+Otherwise `FLAG_TRUECOLOR` wins over `FLAG_COLOR_16`; when neither is set and
+color is enabled, renderers use the default 256-color `38;5` palette.
 
 Unknown bits must be ignored within MBX1 so additive capability flags remain
 forward-compatible. Coprocess requests and Bash fallback carry the raw value;

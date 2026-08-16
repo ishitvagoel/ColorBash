@@ -7,6 +7,17 @@ _mbx_prompt_flags() {
     if [[ ! -t 1 || ${TERM:-dumb} == dumb || -n ${NO_COLOR+x} || ${MBX_COLOR:-auto} == never ]]; then
         ((flags |= _MBX_FLAG_NO_COLOR))
     fi
+    if (( (flags & _MBX_FLAG_NO_COLOR) == 0 )); then
+        case ${COLORTERM,,} in
+            truecolor|24bit) ((flags |= _MBX_FLAG_TRUECOLOR)) ;;
+            *)
+                case ${TERM:-} in
+                    *256color*|xterm-direct) ;;
+                    *) ((flags |= _MBX_FLAG_COLOR_16)) ;;
+                esac
+                ;;
+        esac
+    fi
     case ${MBX_ICONS:-auto} in
         never|ascii) ((flags |= _MBX_FLAG_ASCII_ICONS)) ;;
         nerd) ((flags |= _MBX_FLAG_NERD_ICONS)) ;;

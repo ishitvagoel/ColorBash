@@ -112,6 +112,23 @@ _mbx_fallback_prompt 0 - /tmp "$_MBX_FLAG_NO_COLOR"
 assert_eq '/tmp\n> ' "$REPLY" 'the process-free fallback changed its base prompt'
 unset -f command git
 
+fallback_256_flags=$((_MBX_FLAG_ASCII_ICONS | _MBX_FLAG_DISABLE_GIT))
+_mbx_fallback_prompt 0 - /tmp/project "$fallback_256_flags"
+[[ $REPLY == *'38;5;'* ]] || fail '256-color fallback path must use 38;5 SGR'
+[[ $REPLY != *'38;2;'* && $REPLY != *'1;36m'* ]] || \
+    fail '256-color fallback path must not use truecolor or 16-color SGR'
+
+fallback_truecolor_flags=$((fallback_256_flags | _MBX_FLAG_TRUECOLOR))
+_mbx_fallback_prompt 0 - /tmp/project "$fallback_truecolor_flags"
+[[ $REPLY == *'38;2;'* ]] || fail 'truecolor fallback path must use 38;2 SGR'
+[[ $REPLY != *'38;5;'* ]] || fail 'truecolor fallback path must not use 256-color SGR'
+
+fallback_16_flags=$((_MBX_FLAG_ASCII_ICONS | _MBX_FLAG_DISABLE_GIT | _MBX_FLAG_COLOR_16))
+_mbx_fallback_prompt 0 - /tmp/project "$fallback_16_flags"
+[[ $REPLY == *'1;36'* ]] || fail '16-color fallback path must use 1;36 SGR'
+[[ $REPLY != *'38;5;'* && $REPLY != *'38;2;'* ]] || \
+    fail '16-color fallback path must not use 256 or truecolor SGR'
+
 HOSTNAME='prod$host'
 USER='root\user'
 _mbx_fallback_prompt 0 - /srv/app \

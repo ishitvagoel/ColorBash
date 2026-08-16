@@ -16,6 +16,8 @@ pub const FLAG_NERD_ICONS: u32 = 1 << 2;
 pub const FLAG_SSH: u32 = 1 << 3;
 pub const FLAG_PRODUCTION: u32 = 1 << 4;
 pub const FLAG_DISABLE_GIT: u32 = 1 << 5;
+pub const FLAG_COLOR_16: u32 = 1 << 6;
+pub const FLAG_TRUECOLOR: u32 = 1 << 7;
 
 /// Typed view over the additive prompt capability bit field.
 ///
@@ -83,6 +85,14 @@ impl PromptFlags {
 
     pub const fn git_disabled(self) -> bool {
         self.contains(FLAG_DISABLE_GIT)
+    }
+
+    pub const fn color_16(self) -> bool {
+        self.contains(FLAG_COLOR_16)
+    }
+
+    pub const fn truecolor(self) -> bool {
+        self.contains(FLAG_TRUECOLOR)
     }
 }
 

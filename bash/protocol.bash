@@ -12,6 +12,8 @@ _MBX_FLAG_NERD_ICONS=$((1 << 2))
 _MBX_FLAG_SSH=$((1 << 3))
 _MBX_FLAG_PRODUCTION=$((1 << 4))
 _MBX_FLAG_DISABLE_GIT=$((1 << 5))
+_MBX_FLAG_COLOR_16=$((1 << 6))
+_MBX_FLAG_TRUECOLOR=$((1 << 7))
 
 _mbx_escape_field() {
     (($# == 1 || $# == 2 || $# == 4)) || return 2

@@ -363,6 +363,10 @@ prompt-boundary write-ack budget pass and foreign-user open.
 - `NO_COLOR`, `TERM=dumb`, plain text, and no-Nerd-Font modes are supported.
 - Direct `mbx prompt` defaults disable color when stdout is not a terminal; Bash
   and other callers still forward explicit `--flags` capability (`M-011`).
+- Prompt color depth follows additive capability flags (`FLAG_COLOR_16`,
+  `FLAG_TRUECOLOR`); when neither is set and color is enabled, renderers keep
+  the default 256-color palette. Redirected stdout still defaults to
+  `FLAG_NO_COLOR`.
 - Coprocess failure falls back without disabling the shell.
 - Native and fallback rendering replace the complete C0/DEL range and Bash
   expansion characters using a shared hostile-state corpus.

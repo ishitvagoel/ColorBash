@@ -1,8 +1,8 @@
 use crate::cli::PromptDefaults;
 use crate::prompt::RenderEnvironment;
 use mbx_protocol::{
-    FLAG_ASCII_ICONS, FLAG_DISABLE_GIT, FLAG_NERD_ICONS, FLAG_NO_COLOR, FLAG_PRODUCTION, FLAG_SSH,
-    PromptFlags,
+    FLAG_ASCII_ICONS, FLAG_COLOR_16, FLAG_DISABLE_GIT, FLAG_NERD_ICONS, FLAG_NO_COLOR,
+    FLAG_PRODUCTION, FLAG_SSH, FLAG_TRUECOLOR, PromptFlags,
 };
 use std::env;
 use std::io::{self, IsTerminal};
@@ -44,6 +44,29 @@ fn color_disabled(stdout_is_terminal: bool) -> bool {
         || !stdout_is_terminal
 }
 
+fn colorterm_is_truecolor(colorterm: &str) -> bool {
+    matches!(
+        colorterm.to_ascii_lowercase().as_str(),
+        "truecolor" | "24bit"
+    )
+}
+
+fn term_supports_256(term: &str) -> bool {
+    term.contains("256color") || term == "xterm-direct"
+}
+
+fn apply_color_capability(flags: &mut PromptFlags, term: &str, colorterm: Option<&str>) {
+    flags.remove(FLAG_COLOR_16 | FLAG_TRUECOLOR);
+    if flags.no_color() {
+        return;
+    }
+    if colorterm.is_some_and(colorterm_is_truecolor) {
+        flags.insert(FLAG_TRUECOLOR);
+    } else if !term_supports_256(term) {
+        flags.insert(FLAG_COLOR_16);
+    }
+}
+
 fn prompt_flags(stdout_is_terminal: bool) -> PromptFlags {
     let mut flags = PromptFlags::empty();
     if color_disabled(stdout_is_terminal) {
@@ -63,6 +86,9 @@ fn prompt_flags(stdout_is_terminal: bool) -> PromptFlags {
     if env::var("MBX_DISABLE_GIT").is_ok_and(|value| value == "1") {
         flags.insert(FLAG_DISABLE_GIT);
     }
+    let term = env::var("TERM").unwrap_or_default();
+    let colorterm = env::var("COLORTERM").ok();
+    apply_color_capability(&mut flags, &term, colorterm.as_deref());
     flags
 }
 
@@ -95,6 +121,33 @@ mod tests {
         assert!(color_should_be_disabled(true, true, false, false));
         assert!(color_should_be_disabled(true, false, true, false));
         assert!(color_should_be_disabled(true, false, false, true));
+    }
+
+    #[test]
+    fn color_capability_matrix_matches_contract() {
+        let mut flags = PromptFlags::empty();
+        apply_color_capability(&mut flags, "xterm-256color", None);
+        assert!(!flags.color_16());
+        assert!(!flags.truecolor());
+
+        flags = PromptFlags::empty();
+        apply_color_capability(&mut flags, "xterm", Some("truecolor"));
+        assert!(flags.truecolor());
+        assert!(!flags.color_16());
+
+        flags = PromptFlags::empty();
+        apply_color_capability(&mut flags, "xterm", Some("24bit"));
+        assert!(flags.truecolor());
+
+        flags = PromptFlags::empty();
+        apply_color_capability(&mut flags, "xterm", None);
+        assert!(flags.color_16());
+        assert!(!flags.truecolor());
+
+        flags = PromptFlags::from_bits(FLAG_NO_COLOR);
+        apply_color_capability(&mut flags, "xterm", Some("truecolor"));
+        assert!(!flags.truecolor());
+        assert!(!flags.color_16());
     }
 
     fn color_should_be_disabled(

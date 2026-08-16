@@ -103,7 +103,7 @@ impl PromptRenderer {
 impl PromptRendering for PromptRenderer {
     fn render_prompt(&self, prompt: &PromptContext) -> String {
         let flags = prompt.flags;
-        let color = !flags.no_color();
+        let depth = color_depth(flags);
         let nerd_icons = flags.nerd_icons() && !flags.ascii_icons();
         let context = SegmentContext {
             prompt,
@@ -116,13 +116,14 @@ impl PromptRendering for PromptRenderer {
             .filter_map(|provider| provider.segment(&context))
             .map(|segment| {
                 let safe_text = sanitize_for_ps1(&segment.text);
-                styled(&safe_text, self.theme.ansi(segment.role), color)
+                styled(&safe_text, segment.role, depth, self.theme)
             })
             .collect::<Vec<_>>();
         let arrow = styled(
             if nerd_icons { "❯" } else { ">" },
-            self.theme.ansi(SemanticRole::Primary),
-            color,
+            SemanticRole::Primary,
+            depth,
+            self.theme,
         );
         format!("{}\\n{} ", segments.join("  "), arrow)
     }
@@ -297,12 +298,57 @@ impl PromptSegmentProvider for DurationSegment {
     }
 }
 
-fn styled(text: &str, ansi_role: &str, enabled: bool) -> String {
-    if enabled {
-        format!("\\[\\e[{ansi_role}m\\]{text}\\[\\e[0m\\]")
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ColorDepth {
+    None,
+    Ansi16,
+    Ansi256,
+    TrueColor,
+}
+
+fn color_depth(flags: PromptFlags) -> ColorDepth {
+    if flags.no_color() {
+        ColorDepth::None
+    } else if flags.truecolor() {
+        ColorDepth::TrueColor
+    } else if flags.color_16() {
+        ColorDepth::Ansi16
     } else {
-        text.to_owned()
+        ColorDepth::Ansi256
     }
+}
+
+fn role_sgr(role: SemanticRole, depth: ColorDepth, theme: Theme) -> String {
+    match depth {
+        ColorDepth::None => String::new(),
+        ColorDepth::Ansi256 => theme.ansi(role).to_owned(),
+        ColorDepth::Ansi16 => match role {
+            SemanticRole::Primary | SemanticRole::Path => "1;36".to_owned(),
+            SemanticRole::RepositoryClean => "1;32".to_owned(),
+            SemanticRole::RepositoryDirty | SemanticRole::Warning => "1;33".to_owned(),
+            SemanticRole::Danger | SemanticRole::Error => "1;31".to_owned(),
+            SemanticRole::Muted => "1;30".to_owned(),
+        },
+        ColorDepth::TrueColor => match role {
+            SemanticRole::Primary => "1;38;2;135;175;215".to_owned(),
+            SemanticRole::Path => "1;38;2;135;215;255".to_owned(),
+            SemanticRole::RepositoryClean => "38;2;135;215;135".to_owned(),
+            SemanticRole::RepositoryDirty | SemanticRole::Warning => {
+                "1;38;2;255;215;135".to_owned()
+            }
+            SemanticRole::Danger => "1;38;2;255;0;0".to_owned(),
+            SemanticRole::Error => "1;38;2;255;135;135".to_owned(),
+            SemanticRole::Muted => "38;2;138;138;138".to_owned(),
+        },
+    }
+}
+
+fn styled(text: &str, role: SemanticRole, depth: ColorDepth, theme: Theme) -> String {
+    if depth == ColorDepth::None {
+        return text.to_owned();
+    }
+    let sgr = role_sgr(role, depth, theme);
+    format!("\\[\\e[{sgr}m\\]{text}\\[\\e[0m\\]")
 }
 
 fn display_width(value: &str) -> usize {
@@ -366,7 +412,8 @@ fn format_duration(duration_ms: u64) -> String {
 mod tests {
     use super::*;
     use mbx_protocol::{
-        FLAG_ASCII_ICONS, FLAG_DISABLE_GIT, FLAG_NO_COLOR, FLAG_PRODUCTION, FLAG_SSH,
+        FLAG_ASCII_ICONS, FLAG_COLOR_16, FLAG_DISABLE_GIT, FLAG_NO_COLOR, FLAG_PRODUCTION,
+        FLAG_SSH, FLAG_TRUECOLOR,
     };
     use std::cell::Cell;
     use std::rc::Rc;
@@ -534,6 +581,35 @@ mod tests {
         assert_eq!(format_duration(59_999), "59s");
         assert_eq!(format_duration(60_000), "1m 0s");
         assert_eq!(format_duration(125_000), "2m 5s");
+    }
+
+    #[test]
+    fn native_prompt_uses_256_color_when_no_depth_flags_are_set() {
+        let renderer = plain_renderer(None);
+        let prompt = request(FLAG_ASCII_ICONS | FLAG_DISABLE_GIT);
+        let rendered = renderer.render_prompt(&prompt);
+        assert!(rendered.contains("38;5;"));
+        assert!(!rendered.contains("38;2;"));
+        assert!(!rendered.contains("1;36"));
+    }
+
+    #[test]
+    fn native_prompt_uses_truecolor_when_requested() {
+        let renderer = plain_renderer(None);
+        let prompt = request(FLAG_ASCII_ICONS | FLAG_DISABLE_GIT | FLAG_TRUECOLOR);
+        let rendered = renderer.render_prompt(&prompt);
+        assert!(rendered.contains("38;2;"));
+        assert!(!rendered.contains("38;5;"));
+    }
+
+    #[test]
+    fn native_prompt_uses_16_color_when_requested() {
+        let renderer = plain_renderer(None);
+        let prompt = request(FLAG_ASCII_ICONS | FLAG_DISABLE_GIT | FLAG_COLOR_16);
+        let rendered = renderer.render_prompt(&prompt);
+        assert!(rendered.contains("1;36"));
+        assert!(!rendered.contains("38;5;"));
+        assert!(!rendered.contains("38;2;"));
     }
 
     #[test]
