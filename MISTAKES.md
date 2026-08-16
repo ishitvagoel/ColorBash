@@ -720,12 +720,34 @@ to prevent recurrence, not to assign blame.
 - Impact: unique Tab completion of `aaflag` would also contain that substring, so
   the test could pass if the chord were a no-op. Host bytes were
   `\nGOT:aaaaflag|` (`aa` + spliced `aaflag`).
-- Correction: A-1 and A-5 wait for the exact `GOT:aaaaflag|` line. A-3 types
-  `echo ok` before the chord so a no-snapshot insert cannot hide in a later
-  command.
-- Prevention: completion-plus-insert PTY tests must assert the exact concatenated
-  bytes that distinguish splice-at-point from stock Tab insertion.
-- Evidence: `ranked_accept_inserts_top_ranked_bytes` and
+- Correction: A-1 and A-5 wait for the exact accepted line. After M-039 that
+  line is `GOT:aaflag|` (current-word replace). A-3 types `echo ok` before the
+  chord so a no-snapshot insert cannot hide in a later command. Tab without the
+  chord keeps `GOT:aa|`.
+- Prevention: completion-plus-insert PTY tests must assert the exact line bytes
+  that distinguish ranked accept from stock Tab insertion.
+- Evidence: `ranked_accept_inserts_top_ranked_bytes`,
+  `ranked_accept_tab_without_chord_keeps_prefix`, and
   `ranked_accept_metadata_never_inserted` in
   `crates/pty/tests/completion_harness.rs`; `docs/comp-004-ranked-accept-plan.md`.
+
+## M-039 — Ranked-accept spliced at the cursor instead of replacing the word
+
+- Discovered: 2026-08-16
+- Status: Fixed
+- Failed assumption: editor-style splice at `READLINE_POINT` was the right
+  action for a ranked completion accept.
+- Impact: prefix `aa` plus ranked `aaflag` became `aaaaflag`. A stale ranked
+  snapshot could also splice into a later unrelated word on the same line.
+- Correction: `_mbx_comp_accept_ranked` replaces the current whitespace-delimited
+  word when it is a non-empty prefix of `_MBX_COMP_RANKED_REPLY`. Unrelated words
+  are left unchanged. The snapshot is cleared at the next prompt.
+- Prevention: a completion-accept action must replace the current word, not
+  splice after it. PTY tests must cover Tab-without-chord, accept-with-prefix,
+  and a stale unrelated word.
+- Evidence: `_mbx_comp_accept_ranked` in `bash/completion.bash`;
+  `ranked_accept_inserts_top_ranked_bytes`,
+  `ranked_accept_tab_without_chord_keeps_prefix`, and
+  `ranked_accept_refuses_stale_unrelated_word` in
+  `crates/pty/tests/completion_harness.rs`.
 

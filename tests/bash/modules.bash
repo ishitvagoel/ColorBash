@@ -732,6 +732,21 @@ assert_eq 1 "${_MBX_COMP_ORDER[0]}" 'best-scoring aaflag index should sort first
 assert_eq aaflag "${_MBX_COMP_RANKED_REPLY:-}" \
     'ranked reply should prefer aaflag over stock COMPREPLY[0]'
 
+# COMP-004 ranked accept: replace current word; refuse stale unrelated words.
+READLINE_LINE='mbx_comp_rank aa'
+READLINE_POINT=${#READLINE_LINE}
+_mbx_comp_accept_ranked
+assert_eq 'mbx_comp_rank aaflag' "$READLINE_LINE" \
+    'ranked accept should replace the current word, not splice after it'
+assert_eq ${#READLINE_LINE} "$READLINE_POINT" \
+    'cursor should land after the replaced ranked candidate'
+READLINE_LINE='echo ok'
+READLINE_POINT=${#READLINE_LINE}
+_MBX_COMP_RANKED_REPLY=aaflag
+_mbx_comp_accept_ranked
+assert_eq 'echo ok' "$READLINE_LINE" \
+    'ranked accept must not mutate an unrelated current word'
+
 _mbx_comp_r3_backend() {
     local i
     COMPREPLY=()

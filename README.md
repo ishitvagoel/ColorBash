@@ -16,7 +16,7 @@ These slices have working code you can exercise in an interactive shell:
 | Insert token (`bind -x`) | Default chord `Ctrl-X Ctrl-Y` | Inserts text; does not run it |
 | Stock Tab completion | Always | File/`-F` insertion stays Bash; no popup yet |
 | Wrapped `-F` metadata | `_mbx_comp_wrap_existing_f NAME` | Additive kinds/scores; Tab bytes unchanged |
-| Ranked-accept chord | Default `Ctrl-X Ctrl-A` after wrapped Tab | Inserts `_MBX_COMP_RANKED_REPLY`; Tab stays stock |
+| Ranked-accept chord | Default `Ctrl-X Ctrl-A` after wrapped Tab | Replaces current word with ranked candidate; Tab stays stock |
 
 ## What remains
 
@@ -179,8 +179,9 @@ tests only.
 ### 7. Ranked-accept chord (`bind -x`)
 
 After Tab on a wrapped `-F` completion, MBX records `_MBX_COMP_RANKED_REPLY`
-(top of `_MBX_COMP_ORDER`). Default chord is `Ctrl-X` then `Ctrl-A`. It splices
-that text at the cursor without executing it. Tab insertion bytes stay stock.
+(top of `_MBX_COMP_ORDER`). Default chord is `Ctrl-X` then `Ctrl-A`. It replaces
+the current word with that candidate when the word is a prefix of it, and does
+not execute the text. Tab insertion bytes stay stock.
 
 ```bash
 # After source bash/init.bash in an interactive shell:
@@ -188,9 +189,9 @@ _mbx_comp_wrap_existing_f git   # skip if git has no -F spec
 git sta
 ```
 
-Press Tab (stock insertion), then `Ctrl-X Ctrl-A` to splice the top-ranked
-candidate. If the chord is already bound, MBX leaves it alone unless
-`MBX_COMP_ACCEPT_OVERRIDE=1`.
+Press Tab (stock insertion), then `Ctrl-X Ctrl-A` to replace the current word
+with the top-ranked candidate. If the chord is already bound, MBX leaves it
+alone unless `MBX_COMP_ACCEPT_OVERRIDE=1`.
 
 ## Prototype controls
 

@@ -256,9 +256,25 @@ _mbx_comp_accept_ranked() {
     local token=${_MBX_COMP_RANKED_REPLY-}
     local point=${READLINE_POINT:-0}
     local line=${READLINE_LINE-}
+    local start=$point end=$point char current
     [[ -n $token ]] || return 0
-    READLINE_LINE=${line:0:point}${token}${line:point}
-    READLINE_POINT=$((point + ${#token}))
+    while ((start > 0)); do
+        char=${line:start-1:1}
+        [[ $char == [[:space:]] ]] && break
+        start=$((start - 1))
+    done
+    while ((end < ${#line})); do
+        char=${line:end:1}
+        [[ $char == [[:space:]] ]] && break
+        end=$((end + 1))
+    done
+    current=${line:start:end-start}
+    # Replace the current word only when it is a non-empty prefix of the ranked
+    # candidate. That accepts `aa` → `aaflag` and refuses a stale snapshot on
+    # an unrelated word such as `ok`.
+    [[ -n $current && $token == "$current"* ]] || return 0
+    READLINE_LINE=${line:0:start}${token}${line:end}
+    READLINE_POINT=$((start + ${#token}))
 }
 
 _mbx_comp_accept_keyseq_occupied() {

@@ -48,6 +48,8 @@ _mbx_capture_status() {
 _mbx_render_prompt() {
     local status=${_MBX_LAST_STATUS:-0}
     _mbx_update_prompt "$status" "${_MBX_LAST_DURATION_MS:--}"
+    # Ranked-accept is valid only until the next prompt (M-039).
+    _MBX_COMP_RANKED_REPLY=
     _MBX_AT_PROMPT=1
     if [[ $- == *T* ]]; then
         _MBX_SKIP_DEBUG_ONCE=1
