@@ -32,6 +32,26 @@ _mbx_comp_probe_adapter() {
     _mbx_comp_wrap_backend _mbx_comp_probe_backend "$@"
 }
 
+_mbx_comp_flag_backend() {
+    local cur=${COMP_WORDS[COMP_CWORD]}
+    if [[ $cur == --mbx-co* ]]; then
+        COMPREPLY=(--mbx-comp-flag)
+    fi
+}
+
+_mbx_comp_flag_nospace_backend() {
+    _mbx_comp_flag_backend "$@"
+    compopt -o nospace 2>/dev/null || true
+}
+
+_mbx_comp_flag_adapter() {
+    _mbx_comp_wrap_backend _mbx_comp_flag_backend "$@"
+}
+
+_mbx_comp_flag_nospace_adapter() {
+    _mbx_comp_wrap_backend _mbx_comp_flag_nospace_backend "$@"
+}
+
 _mbx_comp_install_probe() {
     [[ ${_MBX_COMP_PROBE_INSTALLED:-0} == 1 ]] || {
         if ! declare -F mbx_comp_probe >/dev/null 2>&1; then
@@ -42,13 +62,34 @@ _mbx_comp_install_probe() {
     }
 }
 
+_mbx_comp_install_flag() {
+    [[ ${_MBX_COMP_FLAG_INSTALLED:-0} == 1 ]] || {
+        if ! declare -F mbx_comp_flag >/dev/null 2>&1; then
+            mbx_comp_flag() { printf 'GOT:%s|\n' "$*"; }
+        fi
+        if ! declare -F mbx_comp_flag_nospace >/dev/null 2>&1; then
+            mbx_comp_flag_nospace() { printf 'GOT:%s|\n' "$*"; }
+        fi
+        complete -o bashdefault -o default -F _mbx_comp_flag_adapter mbx_comp_flag
+        complete -o bashdefault -o default -F _mbx_comp_flag_nospace_adapter \
+            mbx_comp_flag_nospace
+        _MBX_COMP_FLAG_INSTALLED=1
+    }
+}
+
 _mbx_comp_command_uses_adapter() {
     local command=$1
     complete -p "$command" 2>/dev/null | grep -Fq '_mbx_comp_probe_adapter'
 }
 
+_mbx_comp_command_uses_flag_adapter() {
+    local command=$1
+    complete -p "$command" 2>/dev/null | grep -Fq '_mbx_comp_flag'
+}
+
 _mbx_completion_install() {
     [[ ${_MBX_COMPLETION_INSTALLED:-0} != 1 ]] || return 0
     _mbx_comp_install_probe
+    _mbx_comp_install_flag
     _MBX_COMPLETION_INSTALLED=1
 }

@@ -112,3 +112,84 @@ fn unique_filename_tab_completes_like_stock() {
     session.write_str("\n", deadline(2)).expect("submit");
     wait_all(&mut session, &["MBX_COMP_UNIQUE", "> "]);
 }
+
+#[test]
+fn unique_file_completion_preserves_stock_bytes() {
+    let home = TempHome::new("comp-p1");
+    fs::write(home.path().join("MBX_COMP_UNIQUE"), "probe\n").expect("unique file");
+    let mut session = spawn_mbx_shell(home.path(), &[], "");
+    wait_prompt(&mut session);
+    session
+        .write_str("printf 'GOT:%s|\\n' MBX_COMP_U", deadline(2))
+        .expect("type prefix");
+    send_tab(&mut session);
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["\nGOT:MBX_COMP_UNIQUE|", "> "]);
+}
+
+#[test]
+fn spaced_filename_completion_preserves_stock_quoting() {
+    let home = TempHome::new("comp-p2");
+    fs::write(home.path().join("MBX_COMP_A B"), "probe\n").expect("spaced file");
+    let mut session = spawn_mbx_shell(home.path(), &[], "");
+    wait_prompt(&mut session);
+    session
+        .write_str("printf 'GOT:%s|\\n' MBX_COMP_A", deadline(2))
+        .expect("type prefix");
+    send_tab(&mut session);
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["\nGOT:MBX_COMP_A B|", "> "]);
+}
+
+#[test]
+fn wrapped_flag_nospace_concatenates_suffix() {
+    let home = TempHome::new("comp-p3");
+    let mut session = spawn_mbx_shell(home.path(), &[], "");
+    wait_prompt(&mut session);
+    session
+        .write_str("mbx_comp_flag_nospace --mbx-co", deadline(2))
+        .expect("type prefix");
+    send_tab(&mut session);
+    session
+        .write_str("X\n", deadline(2))
+        .expect("suffix and submit");
+    wait_all(&mut session, &["\nGOT:--mbx-comp-flagX|", "> "]);
+}
+
+#[test]
+fn wrapped_flag_default_suffix_separates_next_word() {
+    let home = TempHome::new("comp-p4");
+    let mut session = spawn_mbx_shell(home.path(), &[], "");
+    wait_prompt(&mut session);
+    session
+        .write_str("mbx_comp_flag --mbx-co", deadline(2))
+        .expect("type prefix");
+    send_tab(&mut session);
+    session
+        .write_str("X\n", deadline(2))
+        .expect("suffix and submit");
+    wait_all(&mut session, &["\nGOT:--mbx-comp-flag X|", "> "]);
+}
+
+#[test]
+fn stock_printf_completion_is_not_wrapped() {
+    let home = TempHome::new("comp-wrap-check");
+    let mut session = spawn_mbx_shell(home.path(), &[], "");
+    wait_prompt(&mut session);
+    session
+        .write_str(
+            "complete -p printf 2>/dev/null | grep -F '_mbx_comp' >/dev/null && \
+printf 'MBX_COMP:wrapped\\n' || printf 'MBX_COMP:unwrapped\\n'\n",
+            deadline(2),
+        )
+        .expect("query printf completion");
+    wait_all(&mut session, &["\nMBX_COMP:unwrapped", "> "]);
+    session
+        .write_str(
+            "_mbx_comp_command_uses_flag_adapter mbx_comp_flag && \
+printf 'MBX_COMP:flag_wrapped\\n' || printf 'MBX_COMP:flag_missing\\n'\n",
+            deadline(2),
+        )
+        .expect("query flag wrap");
+    wait_all(&mut session, &["\nMBX_COMP:flag_wrapped", "> "]);
+}
