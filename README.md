@@ -19,7 +19,7 @@ These slices have working code you can exercise in an interactive shell:
 | Ranked-accept chord | Default `Ctrl-X Ctrl-A` after wrapped Tab | Replaces current word with ranked candidate; Tab stays stock |
 | Git completion kinds | Wrap `git` or `mbx_comp_git` fixture | Additive `ref`/`flag`/`file`; no Git subprocess |
 | Fuzzy history search | `MBX_HISTORY=1` then `mbx history search fuzzy TEXT` | Ranks a bounded recent pool |
-| History-search chord | `MBX_HISTORY=1` then `Ctrl-X` `h` | Replaces the line with the top sidecar match; does not run it |
+| History-search chord | `MBX_HISTORY=1` then `Ctrl-X` `h` | Replaces the line with a sidecar match; repeat to cycle; does not run it |
 
 ## What remains
 
@@ -200,8 +200,10 @@ alone unless `MBX_COMP_ACCEPT_OVERRIDE=1`.
 
 Requires `MBX_HISTORY=1`. Default chord is `Ctrl-X` then `h` so stock
 `Ctrl-R` reverse-i-search is unchanged. The chord replaces the whole line with
-the top sidecar match (exact prefix, then fuzzy; empty line uses the newest
-row) and does **not** run it until Enter.
+the top sidecar match (exact prefix, then fuzzy; empty line uses newest
+rows) and does **not** run it until Enter. Press the chord again to cycle
+the bounded snapshot (default 8 matches). The snapshot clears at the next
+prompt.
 
 ```bash
 MBX_HISTORY=1 bash --noprofile --norc
@@ -212,8 +214,8 @@ printf 'MBX_SRCH:beta\n'
 
 At the next prompt type `printf 'MBX_SRCH:a` and press `Ctrl-X` then `h`, then
 Enter. Expect `MBX_SRCH:alpha`. An empty line plus the same chord inserts the
-newest row. If that chord is already bound, MBX leaves it alone unless
-`MBX_SEARCH_OVERRIDE=1`.
+newest row. Repeat the chord to cycle older matches. If that chord is already
+bound, MBX leaves it alone unless `MBX_SEARCH_OVERRIDE=1`.
 
 ## Prototype controls
 
@@ -237,6 +239,7 @@ MBX_COMP_ACCEPT_OVERRIDE=1      # overwrite an occupied ranked-accept chord
 MBX_SEARCH_KEYSEQ='\C-xh'       # history-search chord (default; does not steal Ctrl-R)
 MBX_SEARCH_OVERRIDE=1           # overwrite an occupied search chord
 MBX_SEARCH_TIMEOUT=0.10         # helper budget for one search insert
+MBX_SEARCH_LIMIT=8              # bounded snapshot size for cycling (max 16)
 MBX_LOG=trace                   # helper timing/events; never logs command text
 ```
 

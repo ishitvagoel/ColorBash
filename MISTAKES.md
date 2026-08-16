@@ -770,3 +770,20 @@ to prevent recurrence, not to assign blame.
 - Evidence: `bash/search.bash`, `default_chord_installs_on_stock_emacs` in
   `crates/pty/tests/history_search.rs`, and ADR 0009.
 
+## M-041 — Protocol frame reader rejected multi-line search output
+
+- Discovered: 2026-08-16
+- Status: Fixed
+- Failed assumption: `_mbx_read_bounded_response` could collect sidecar search
+  lines the same way it collects one MBX1/MBX2 frame.
+- Impact: a helper that printed two command lines delivered both LFs in one
+  `read`, so the protocol reader rejected the buffer (`before_lf` still
+  contained a newline). Bounded cycling never left the first snapshot.
+- Correction: search uses a one-line `read -r` helper that stops at the first
+  LF and leaves later lines in the pipe.
+- Prevention: protocol frame readers are single-payload. CLI output that is
+  one record per line needs a line reader plus a focused two-line contract
+  test. Do not reuse `_mbx_read_bounded_response` outside framing.
+- Evidence: `_mbx_search_read_line` in `bash/search.bash` and the two-line
+  cycle contract in `tests/bash/modules.bash`.
+

@@ -860,6 +860,22 @@ assert_eq "printf 'MBX_SRCH:hit'" "$READLINE_LINE" \
     'search should replace the line with the helper match'
 assert_eq 21 "$READLINE_POINT" 'search should move the cursor to the end of the match'
 
+cat >"$search_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+printf '%s\n' "match-one"
+printf '%s\n' "match-two"
+EOF
+READLINE_LINE='q'
+READLINE_POINT=1
+_mbx_search_insert
+assert_eq 'match-one' "$READLINE_LINE" 'first chord should insert the first helper line'
+_mbx_search_insert
+assert_eq 'match-two' "$READLINE_LINE" 'second chord should cycle to the next match'
+_mbx_search_insert
+assert_eq 'match-one' "$READLINE_LINE" 'third chord should wrap to the first match'
+_mbx_search_clear
+assert_eq 0 "${#_MBX_SEARCH_MATCHES[@]}" 'search_clear should drop the snapshot'
+
 MBX_HISTORY=0
 READLINE_LINE='keep-me'
 READLINE_POINT=7

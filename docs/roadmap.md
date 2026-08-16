@@ -7,7 +7,7 @@
 
 - Last reviewed: 2026-08-16 UTC
 - Current milestone: Phase 3A sidecar implemented; `G0` and `G2` complete; `G1` accepted
-- Active workstream: `SRCH-001` explicit history-search insert (ADR 0009); overlay/ghost/highlighting blocked on unproven continuous decoration
+- Active workstream: `SRCH-001` complete (insert + bounded cycling); overlay/ghost/highlighting blocked on unproven continuous decoration
 - Next decision gate: continuous-decoration leftover (blocks ghost / highlighting / overlay)
 - Editor-facing work: explicit `bind -x` search is unblocked (ADR 0009). Ghost, highlighting, and overlay stay blocked on after-every-key decoration.
 - Timing policy: unmet percentile targets are `deferred` and do not block
@@ -321,7 +321,7 @@ latency budgets.
 | 5 | Completion | `validation` | `G4` / `COMP-001` / `COMP-002` / `COMP-003` complete; `COMP-004` in `discovery` (no overlay); `GIT-004` complete |
 | 6 | Syntax highlighting | `blocked` | unproven continuous decoration; intentionally after search/ghost/completion evidence |
 | 7 | Git/provider expansion | `discovery` | bounded prompt subset exists; richer capabilities await a consumer |
-| 8 | Enhanced Ctrl+R | `validation` | explicit `\C-xh` insert recorded; result view / overlay leftover |
+| 8 | Enhanced Ctrl+R | `validation` | `\C-xh` insert and cycling complete; cancel/overlay leftovers |
 | 9 | Release hardening | `not-started` | feature gates and full compatibility matrix |
 
 ## Phase details
@@ -517,9 +517,10 @@ MVP Git/completion slice. `GIT-005` remains explicitly post-MVP.
 
 ### Phase 8 — Enhanced Ctrl+R
 
-Status: `validation` for the explicit insert action (ADR 0009). A metadata
-result view, cancel restoration, and overlay remain leftovers. Ghost and
-highlighting stay blocked on after-every-key decoration.
+Status: `validation`. Explicit insert and bounded cycling are complete
+(ADR 0009). Cancel restoration, metadata overlay, and 100k interactive
+latency remain. Ghost and highlighting stay blocked on after-every-key
+decoration.
 
 Build a configurable explicit search action with age, cwd, and useful status
 metadata; bounded filtering; safe cancellation; exact insertion without
@@ -530,8 +531,8 @@ on `\C-x\C-r`.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `SRCH-001` | Configurable bounded history-search action and result view | `validation` | explicit insert S-1–S-7 in `bash/search.bash`, `crates/pty/tests/history_search.rs`, `tests/bash/modules.bash`; ADR 0009; result view unbuilt (`docs/srch-001-history-search-plan.md`) |
-| `SRCH-002` | Cancel restoration and exact insertion without execution | `blocked` | `SRCH-001` result view, `PTY-001` |
+| `SRCH-001` | Configurable bounded history-search action and result view | `complete` | insert S-1–S-7 and cycling V-1–V-4 in `bash/search.bash`, `crates/pty/tests/history_search.rs`, `tests/bash/modules.bash`; ADR 0009; `docs/srch-001-history-search-plan.md`; `docs/srch-001-result-view-plan.md` |
+| `SRCH-002` | Cancel restoration and exact insertion without execution | `blocked` | exact insert recorded; cancel/restore leftover |
 | `SRCH-003` | Metadata filters, 100k-row latency, signal, and terminal-state evidence | `blocked` | `SRCH-002`; repository filters also need `HIST-010` |
 
 Exit condition: `SRCH-003`.
@@ -563,13 +564,12 @@ Exit condition: `G5` after every `HRD-*` item is complete.
 percentile leftovers are `deferred` and must not block product slices
 (`docs/latency-budget-deferral.md`).
 
-1. `SRCH-001` explicit `\C-xh` insert is in `validation` (ADR 0009). Do not
-   mark it complete until a result view exists. Do not start overlay, ghost,
-   or highlighting. `COMP-004` stays `discovery`. Do not mark `COMP-004`,
-   `COMP-005`, `SRCH-002`, or `SRCH-003` complete.
-2. Next named leftovers are the `SRCH-001` result view and the `HIST-010` /
-   `GIT-003` pair (repo context on history rows). Prefer the result view only
-   when it can stay Strategy A (no printable-key rebinds).
+1. `SRCH-001` is `complete` (insert + bounded cycling; ADR 0009). Do not
+   start overlay, ghost, or highlighting. `COMP-004` stays `discovery`. Do not
+   mark `COMP-004`, `COMP-005`, `SRCH-002`, or `SRCH-003` complete.
+2. Next named leftovers are `SRCH-002` cancel restoration and the `HIST-010` /
+   `GIT-003` pair. Prefer a Strategy A restore action (no printable-key
+   rebinds).
 3. `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
    slice on FND-001 SHA refresh or percentile benches unless a functional
    prompt-path defect is proven.
@@ -702,4 +702,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Ranked-accept replaces the current word when it is a prefix of `_MBX_COMP_RANKED_REPLY` (M-039). Stale unrelated words are refused. Snapshot clears at the next prompt. |
 | 2026-08-16 | Completed `GIT-004` Git completion kinds (`docs/git-004-kinds-plan.md`). `COMP-001` / `COMP-002` move to `complete` (G4 evidence; 5 ms `deferred`). |
 | 2026-08-16 | Completed `HIST-009` bounded fuzzy search (`docs/hist-009-fuzzy-plan.md`; `mbx history search fuzzy`). `HIST-010` remains. |
-| 2026-08-16 | Accepted ADR 0009: explicit history-search `bind -x` is Strategy A, not continuous decoration. Implemented `SRCH-001` insert (`bash/search.bash`, default `\C-xh`; S-1–S-7; M-040). `SRCH-001` moves to `validation`; result view leftover remains. Do not steal stock `\C-r` or `\C-x\C-r`. Do not start overlay, ghost, or highlighting. |
+| 2026-08-16 | Accepted ADR 0009: explicit history-search `bind -x` is Strategy A, not continuous decoration. Implemented `SRCH-001` insert (`bash/search.bash`, default `\C-xh`; S-1–S-7; M-040) and bounded cycling (V-1–V-4; M-041). `SRCH-001` is `complete`. Cancel restoration (`SRCH-002`) and overlay remain. Do not steal stock `\C-r` or `\C-x\C-r`. Do not start overlay, ghost, or highlighting. |

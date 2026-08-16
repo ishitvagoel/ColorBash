@@ -5,50 +5,135 @@
 # (re-read-init-file) or `\C-x\C-s` (terminal XOFF / IXON).
 
 _MBX_SEARCH_DEFAULT_KEYSEQ='\C-xh'
+_MBX_SEARCH_DEFAULT_LIMIT=8
+_MBX_SEARCH_MAX_LIMIT=16
+_MBX_SEARCH_MATCHES=()
+_MBX_SEARCH_INDEX=0
+
+_mbx_search_clear() {
+    _MBX_SEARCH_MATCHES=()
+    _MBX_SEARCH_INDEX=0
+}
+
+_mbx_search_limit() {
+    local limit=${MBX_SEARCH_LIMIT:-$_MBX_SEARCH_DEFAULT_LIMIT}
+    if [[ ! $limit =~ ^[1-9][0-9]*$ ]]; then
+        limit=$_MBX_SEARCH_DEFAULT_LIMIT
+    fi
+    if ((limit > _MBX_SEARCH_MAX_LIMIT)); then
+        limit=$_MBX_SEARCH_MAX_LIMIT
+    fi
+    REPLY=$limit
+}
+
+_mbx_search_read_line() {
+    local fd=$1
+    local deadline=$2
+    local timeout status=0
+    local LC_ALL=C
+
+    # Do not use `_mbx_read_bounded_response`: it rejects a pipe that already
+    # contains a second LF, which is normal for multi-line CLI search output.
+    _mbx_deadline_remaining "$deadline" || return 1
+    timeout=$REPLY
+    REPLY=
+    IFS= read -r -t "$timeout" -n 65536 -u "$fd" REPLY || status=$?
+    case $status in
+        0)
+            if [[ $REPLY == *$'\r' ]]; then
+                REPLY=${REPLY%$'\r'}
+            fi
+            return 0
+            ;;
+        1)
+            [[ -n $REPLY ]] || return 1
+            if [[ $REPLY == *$'\r' ]]; then
+                REPLY=${REPLY%$'\r'}
+            fi
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
 
 _mbx_search_helper() {
-    local deadline output_fd child_pid child_status match=
-    local read_ok=0
+    local limit=$1
+    shift
+    local deadline output_fd child_pid child_status=1
 
+    _MBX_SEARCH_MATCHES=()
+    _MBX_SEARCH_INDEX=0
     [[ -x ${MBX_BIN:-} ]] || return 1
+    [[ $limit =~ ^[1-9][0-9]*$ ]] || return 1
     _mbx_deadline_after "${MBX_SEARCH_TIMEOUT:-${MBX_HISTORY_TIMEOUT:-0.10}}" || \
         return 1
     deadline=$REPLY
     exec {output_fd}< <(exec "$MBX_BIN" "$@" 2>/dev/null)
     child_pid=$!
-    if _mbx_read_bounded_response "$output_fd" "$deadline"; then
-        match=$REPLY
-        read_ok=1
-    fi
+    while ((${#_MBX_SEARCH_MATCHES[@]} < limit)); do
+        if ! _mbx_search_read_line "$output_fd" "$deadline"; then
+            break
+        fi
+        [[ -n $REPLY ]] || break
+        _MBX_SEARCH_MATCHES+=("$REPLY")
+    done
     exec {output_fd}<&-
     if ! _mbx_wait_child_until "$child_pid" "$deadline"; then
         _mbx_terminate_child "$child_pid"
-        return 1
+    else
+        child_status=$REPLY
     fi
-    child_status=$REPLY
-    ((read_ok == 1 && child_status == 0)) || return 1
-    REPLY=$match
+    if ((${#_MBX_SEARCH_MATCHES[@]} > 0)); then
+        return 0
+    fi
+    ((child_status == 0))
+}
+
+_mbx_search_query() {
+    local query=$1
+    local limit
+
+    _mbx_search_limit
+    limit=$REPLY
+    if [[ -z $query ]]; then
+        _mbx_search_helper "$limit" history search recent --limit "$limit"
+        return
+    fi
+    _mbx_search_helper "$limit" history search prefix "$query" --limit "$limit" || \
+        return 1
+    if ((${#_MBX_SEARCH_MATCHES[@]} == 0)); then
+        _mbx_search_helper "$limit" history search fuzzy "$query" --limit "$limit" || \
+            return 1
+    fi
+    return 0
+}
+
+_mbx_search_apply() {
+    local match=${_MBX_SEARCH_MATCHES[_MBX_SEARCH_INDEX]-}
+    [[ -n $match ]] || return 0
+    READLINE_LINE=$match
+    READLINE_POINT=${#match}
 }
 
 _mbx_search_insert() {
     local query=${READLINE_LINE-}
-    local match=
+    local current=$query
+    local count
 
     [[ ${MBX_HISTORY:-} == 1 ]] || return 0
-    if [[ -z $query ]]; then
-        _mbx_search_helper history search recent --limit 1 || return 0
-        match=$REPLY
-    else
-        _mbx_search_helper history search prefix "$query" --limit 1 || return 0
-        match=$REPLY
-        if [[ -z $match ]]; then
-            _mbx_search_helper history search fuzzy "$query" --limit 1 || return 0
-            match=$REPLY
-        fi
+    count=${#_MBX_SEARCH_MATCHES[@]}
+    if ((count > 0)) && \
+        [[ $current == "${_MBX_SEARCH_MATCHES[_MBX_SEARCH_INDEX]}" ]]; then
+        _MBX_SEARCH_INDEX=$(( (_MBX_SEARCH_INDEX + 1) % count ))
+        _mbx_search_apply
+        return 0
     fi
-    [[ -n $match ]] || return 0
-    READLINE_LINE=$match
-    READLINE_POINT=${#match}
+    _mbx_search_query "$query" || return 0
+    ((${#_MBX_SEARCH_MATCHES[@]} > 0)) || return 0
+    _MBX_SEARCH_INDEX=0
+    _mbx_search_apply
 }
 
 _mbx_search_keyseq_occupied() {
