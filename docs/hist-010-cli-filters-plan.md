@@ -1,6 +1,6 @@
 # HIST-010 leftover: branch/failed CLI filters + PRM-006 gate close
 
-Status: `ready` (2026-08-16). Schema v3 already stores `repo_root` /
+Status: `complete` (2026-08-16). Schema v3 already stores `repo_root` /
 `repo_branch`. Status is already on every row. `G3` / `G4` are `complete`.
 This packet adds the remaining UI-free CLI filters and closes `PRM-006`.
 Do not log command text. Do not bump the schema. Do not mark overlay /
@@ -38,11 +38,11 @@ that can produce evidence without overlay:
 
 | ID | Case | Assert | Status |
 | --- | --- | --- | --- |
-| B-1 | Exact branch, newest first | Rows on `main` and `hist-branch`; `by_branch("hist-branch")` returns only that branch, newest first. | planned |
-| B-2 | CLI parse | `search branch hist-branch --limit 2`. Missing NAME errors. | planned |
-| F-1 | Failed newest first; status 0 excluded; limit | Same as `docs/hist-008-failed-search-plan.md` F-1/F-2. | planned |
-| F-2 | CLI parse failed | `search failed --limit 3`; extra TEXT errors. | planned |
-| D-G | PRM-006 gate | D-1–D-4 already in smoke; mark `complete`. | planned |
+| B-1 | Exact branch, newest first | Rows on `main` and `hist-branch`; `by_branch("hist-branch")` returns only that branch, newest first. | complete — `by_branch_matches_exact_name_newest_first` |
+| B-2 | CLI parse | `search branch hist-branch --limit 2`. Missing NAME errors. | complete — `crates/cli/src/cli.rs` |
+| F-1 | Failed newest first; status 0 excluded; limit | Same as `docs/hist-008-failed-search-plan.md` F-1/F-2. | complete — `failed_returns_nonzero_status_newest_first` |
+| F-2 | CLI parse failed | `search failed --limit 3`; extra TEXT errors. | complete — `crates/cli/src/cli.rs` |
+| D-G | PRM-006 gate | D-1–D-4 already in smoke; mark `complete`. | complete — `docs/prm-006-duration-plan.md` |
 
 ## Docs
 
