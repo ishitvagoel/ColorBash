@@ -17,6 +17,7 @@ These slices have working code you can exercise in an interactive shell:
 | Stock Tab completion | Always | File/`-F` insertion stays Bash; no popup yet |
 | Wrapped `-F` metadata | `_mbx_comp_wrap_existing_f NAME` | Additive kinds/scores; Tab bytes unchanged |
 | Ranked-accept chord | Default `Ctrl-X Ctrl-A` after wrapped Tab | Replaces current word with ranked candidate; Tab stays stock |
+| Ranked-cycle chords | Default `Ctrl-X` `n` / `Ctrl-X` `p` after wrapped Tab | Rotates ranked candidates; Tab stays stock |
 | Git completion kinds | Wrap `git` or `mbx_comp_git` fixture | Additive `ref`/`flag`/`file`; no Git subprocess |
 | Fuzzy history search | `MBX_HISTORY=1` then `mbx history search fuzzy TEXT` | Ranks a bounded recent pool |
 | Failed history search | `MBX_HISTORY=1` then `mbx history search failed` | Rows with nonzero exit status |
@@ -31,7 +32,7 @@ These MVP features are **not** implemented for interactive use:
 | Feature | Why it is waiting |
 | --- | --- |
 | Ghost dim / live paint | Opt-in suffix ghost exists (ADR 0010); dim after-every-key styling does not |
-| Completion popup | Overlay unproven; ranked-accept chord exists |
+| Completion popup | Overlay unproven; ranked-accept and cycle chords exist |
 | Syntax highlighting | Same continuous-decoration leftover |
 | Enhanced Ctrl+R overlay | Type-to-filter list still needs a leftover; `\C-xh` insert, cycling, `\C-xl` restore, cwd preference, and signal PTY exist |
 | macOS PTY matrix | `HRD-001` needs a macOS host |
@@ -185,7 +186,7 @@ printf 'kinds=%s scores=%s order=%s\n' \
 Do not set `MBX_COMP_FIXTURES=1` in a daily shell; that flag is for automated
 tests only.
 
-### 7. Ranked-accept chord (`bind -x`)
+### 7. Ranked-accept and cycle chords (`bind -x`)
 
 After Tab on a wrapped `-F` completion, MBX records `_MBX_COMP_RANKED_REPLY`
 (top of `_MBX_COMP_ORDER`). Default chord is `Ctrl-X` then `Ctrl-A`. It replaces
@@ -199,8 +200,10 @@ git sta
 ```
 
 Press Tab (stock insertion), then `Ctrl-X Ctrl-A` to replace the current word
-with the top-ranked candidate. If the chord is already bound, MBX leaves it
-alone unless `MBX_COMP_ACCEPT_OVERRIDE=1`.
+with the top-ranked candidate. `Ctrl-X` then `n` / `p` cycle next and previous
+ranked candidates once the current word equals that candidate.
+If a chord is already bound, MBX leaves it alone unless
+`MBX_COMP_ACCEPT_OVERRIDE=1` or `MBX_COMP_CYCLE_OVERRIDE=1`.
 
 ### 8. History ghost suffix (opt-in)
 
@@ -270,6 +273,9 @@ MBX_EDITOR_INSERT_KEYSEQ='\C-x\C-y'
 MBX_EDITOR_OVERRIDE=1           # overwrite an occupied insert chord
 MBX_COMP_ACCEPT_KEYSEQ='\C-x\C-a'  # ranked-accept chord (default)
 MBX_COMP_ACCEPT_OVERRIDE=1      # overwrite an occupied ranked-accept chord
+MBX_COMP_CYCLE_NEXT_KEYSEQ='\C-xn'  # ranked-cycle next (not ghost Ctrl-X Ctrl-N)
+MBX_COMP_CYCLE_PREV_KEYSEQ='\C-xp'  # ranked-cycle previous (not ghost Ctrl-X Ctrl-P)
+MBX_COMP_CYCLE_OVERRIDE=1       # overwrite occupied ranked-cycle chords
 MBX_SEARCH_KEYSEQ='\C-xh'       # history-search chord (default; does not steal Ctrl-R)
 MBX_SEARCH_OVERRIDE=1           # overwrite an occupied search chord
 MBX_SEARCH_RESTORE_KEYSEQ='\C-xl'  # restore typed line (default)

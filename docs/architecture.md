@@ -436,7 +436,11 @@ overlay or popup menu in this milestone: Tab insertion stays stock Bash
 behavior (`docs/comp-004-popup-plan.md`). An optional ranked-accept `bind -x`
 chord (default `\C-x\C-a`) replaces the current word with `_MBX_COMP_RANKED_REPLY`
 when that word is a prefix of the ranked candidate, without changing Tab
-(`docs/comp-004-ranked-accept-plan.md`). Wrapped Git candidates (opt-in wrap or
+(`docs/comp-004-ranked-accept-plan.md`). Optional ranked-cycle chords (default
+`\C-xn` / `\C-xp`, not ghost `\C-x\C-n` / `\C-x\C-p`) rotate `_MBX_COMP_RANKED_LIST`
+and replace when the current word equals the ranked head
+(`docs/comp-004-ranked-cycle-plan.md`).
+Wrapped Git candidates (opt-in wrap or
 the `mbx_comp_git` fixture) receive additive `ref` / `flag` / `file` kinds
 (`docs/git-004-kinds-plan.md`).
 
@@ -462,5 +466,6 @@ generation is not current (`GHST-001`). Explicit history search via `bind -x` is
 cycling; empty-line and prefix/fuzzy cwd preference; Ctrl+C / Ctrl+Z / resize /
 `stty -g` PTY around `\C-xh` / `\C-xl`). `COMP-004` popup
 policy records no GUI overlay; ranked-accept `bind -x` evidence is complete
-(`docs/comp-004-ranked-accept-plan.md`).
+(`docs/comp-004-ranked-accept-plan.md`). Ranked-cycle `bind -x` evidence is
+complete (`docs/comp-004-ranked-cycle-plan.md`; default `\C-xn` / `\C-xp`).
 `G3` explicit `bind -x` evidence is complete.

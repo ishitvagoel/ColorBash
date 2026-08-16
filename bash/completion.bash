@@ -152,6 +152,23 @@ _mbx_comp_fill_ranking() {
     _MBX_COMP_ORDER=("${order[@]}")
 }
 
+_mbx_comp_fill_ranked_list() {
+    local i n
+    _MBX_COMP_RANKED_LIST=()
+    n=${#_MBX_COMP_ORDER[@]}
+    if ((n > 64)); then
+        n=64
+    fi
+    for ((i = 0; i < n; i++)); do
+        _MBX_COMP_RANKED_LIST+=("${COMPREPLY[_MBX_COMP_ORDER[i]]}")
+    done
+    if ((${#_MBX_COMP_RANKED_LIST[@]})); then
+        _MBX_COMP_RANKED_REPLY=${_MBX_COMP_RANKED_LIST[0]}
+    else
+        _MBX_COMP_RANKED_REPLY=
+    fi
+}
+
 _mbx_comp_wrap_backend() {
     local backend=$1
     shift
@@ -163,11 +180,7 @@ _mbx_comp_wrap_backend() {
     _MBX_COMP_LAST_REPLY=${COMPREPLY[0]:-}
     _mbx_comp_fill_metadata
     _mbx_comp_fill_ranking
-    if ((${#_MBX_COMP_ORDER[@]})); then
-        _MBX_COMP_RANKED_REPLY=${COMPREPLY[_MBX_COMP_ORDER[0]]}
-    else
-        _MBX_COMP_RANKED_REPLY=
-    fi
+    _mbx_comp_fill_ranked_list
 }
 
 _mbx_comp_identifier_ok() {
@@ -266,13 +279,13 @@ _mbx_comp_flag_nospace_adapter() {
 }
 
 _MBX_COMP_ACCEPT_DEFAULT_KEYSEQ='\C-x\C-a'
+_MBX_COMP_CYCLE_NEXT_DEFAULT_KEYSEQ='\C-xn'
+_MBX_COMP_CYCLE_PREV_DEFAULT_KEYSEQ='\C-xp'
 
-_mbx_comp_accept_ranked() {
-    local token=${_MBX_COMP_RANKED_REPLY-}
+_mbx_comp_readline_word() {
     local point=${READLINE_POINT:-0}
     local line=${READLINE_LINE-}
-    local start=$point end=$point char current
-    [[ -n $token ]] || return 0
+    local start=$point end=$point char
     while ((start > 0)); do
         char=${line:start-1:1}
         [[ $char == [[:space:]] ]] && break
@@ -283,16 +296,69 @@ _mbx_comp_accept_ranked() {
         [[ $char == [[:space:]] ]] && break
         end=$((end + 1))
     done
-    current=${line:start:end-start}
-    # Replace the current word only when it is a non-empty prefix of the ranked
-    # candidate. That accepts `aa` → `aaflag` and refuses a stale snapshot on
-    # an unrelated word such as `ok`.
-    [[ -n $current && $token == "$current"* ]] || return 0
+    _MBX_COMP_WORD_START=$start
+    _MBX_COMP_WORD_END=$end
+    REPLY=${line:start:end-start}
+}
+
+_mbx_comp_apply_word_token() {
+    local token=$1
+    local line=${READLINE_LINE-}
+    local start=${_MBX_COMP_WORD_START:-0}
+    local end=${_MBX_COMP_WORD_END:-0}
     READLINE_LINE=${line:0:start}${token}${line:end}
     READLINE_POINT=$((start + ${#token}))
 }
 
-_mbx_comp_accept_keyseq_occupied() {
+_mbx_comp_accept_ranked() {
+    local token=${_MBX_COMP_RANKED_REPLY-}
+    local current
+    [[ -n $token ]] || return 0
+    _mbx_comp_readline_word
+    current=$REPLY
+    # Replace the current word only when it is a non-empty prefix of the ranked
+    # candidate. That accepts `aa` → `aaflag` and refuses a stale snapshot on
+    # an unrelated word such as `ok`.
+    [[ -n $current && $token == "$current"* ]] || return 0
+    _mbx_comp_apply_word_token "$token"
+}
+
+_mbx_comp_cycle_ranked() {
+    local direction=$1
+    local token=${_MBX_COMP_RANKED_REPLY-}
+    local n=${#_MBX_COMP_RANKED_LIST[@]}
+    local current first
+    [[ -n $token && $n -gt 0 ]] || return 0
+    _mbx_comp_readline_word
+    current=$REPLY
+    [[ -n $current ]] || return 0
+    if [[ $token == "$current"* && $current != "$token" ]]; then
+        _mbx_comp_apply_word_token "$token"
+        return 0
+    fi
+    [[ $current == "$token" ]] || return 0
+    ((n >= 2)) || return 0
+    if [[ $direction == prev ]]; then
+        first=${_MBX_COMP_RANKED_LIST[n - 1]}
+        _MBX_COMP_RANKED_LIST=("$first" "${_MBX_COMP_RANKED_LIST[@]:0:n-1}")
+    else
+        first=${_MBX_COMP_RANKED_LIST[0]}
+        _MBX_COMP_RANKED_LIST=("${_MBX_COMP_RANKED_LIST[@]:1}" "$first")
+    fi
+    token=${_MBX_COMP_RANKED_LIST[0]}
+    _MBX_COMP_RANKED_REPLY=$token
+    _mbx_comp_apply_word_token "$token"
+}
+
+_mbx_comp_cycle_next() {
+    _mbx_comp_cycle_ranked next
+}
+
+_mbx_comp_cycle_prev() {
+    _mbx_comp_cycle_ranked prev
+}
+
+_mbx_comp_keyseq_occupied() {
     local keyseq=$1
     local keymap=$2
     bind -m "$keymap" -X 2>/dev/null | grep -Fq "\"$keyseq\":" && return 0
@@ -300,14 +366,15 @@ _mbx_comp_accept_keyseq_occupied() {
     return 1
 }
 
-_mbx_comp_install_accept_keymap() {
+_mbx_comp_install_bind_keymap() {
     local keymap=$1
     local keyseq=$2
-    if _mbx_comp_accept_keyseq_occupied "$keyseq" "$keymap" && \
-        [[ ${MBX_COMP_ACCEPT_OVERRIDE:-0} != 1 ]]; then
+    local func=$3
+    local override=$4
+    if _mbx_comp_keyseq_occupied "$keyseq" "$keymap" && [[ $override != 1 ]]; then
         return 1
     fi
-    bind -m "$keymap" -x "\"$keyseq\": _mbx_comp_accept_ranked"
+    bind -m "$keymap" -x "\"$keyseq\": $func"
 }
 
 _mbx_comp_install_accept() {
@@ -317,16 +384,47 @@ _mbx_comp_install_accept() {
         return 0
     fi
     local keyseq=${MBX_COMP_ACCEPT_KEYSEQ:-$_MBX_COMP_ACCEPT_DEFAULT_KEYSEQ}
+    local override=${MBX_COMP_ACCEPT_OVERRIDE:-0}
     _MBX_COMP_ACCEPT_BOUND=0
     _MBX_COMP_ACCEPT_VI_INSERT_BOUND=0
     _MBX_COMP_ACCEPT_KEYSEQ_ACTIVE=$keyseq
-    if _mbx_comp_install_accept_keymap emacs "$keyseq"; then
+    if _mbx_comp_install_bind_keymap emacs "$keyseq" _mbx_comp_accept_ranked "$override"; then
         _MBX_COMP_ACCEPT_BOUND=1
     fi
-    if _mbx_comp_install_accept_keymap vi-insert "$keyseq"; then
+    if _mbx_comp_install_bind_keymap vi-insert "$keyseq" _mbx_comp_accept_ranked "$override"; then
         _MBX_COMP_ACCEPT_VI_INSERT_BOUND=1
     fi
     _MBX_COMP_ACCEPT_INSTALLED=1
+}
+
+_mbx_comp_install_cycle() {
+    [[ ${_MBX_COMP_CYCLE_INSTALLED:-0} != 1 ]] || return 0
+    if [[ $- != *i* ]]; then
+        _MBX_COMP_CYCLE_INSTALLED=1
+        return 0
+    fi
+    local next_keyseq=${MBX_COMP_CYCLE_NEXT_KEYSEQ:-$_MBX_COMP_CYCLE_NEXT_DEFAULT_KEYSEQ}
+    local prev_keyseq=${MBX_COMP_CYCLE_PREV_KEYSEQ:-$_MBX_COMP_CYCLE_PREV_DEFAULT_KEYSEQ}
+    local override=${MBX_COMP_CYCLE_OVERRIDE:-0}
+    _MBX_COMP_CYCLE_NEXT_BOUND=0
+    _MBX_COMP_CYCLE_NEXT_VI_INSERT_BOUND=0
+    _MBX_COMP_CYCLE_PREV_BOUND=0
+    _MBX_COMP_CYCLE_PREV_VI_INSERT_BOUND=0
+    _MBX_COMP_CYCLE_NEXT_KEYSEQ_ACTIVE=$next_keyseq
+    _MBX_COMP_CYCLE_PREV_KEYSEQ_ACTIVE=$prev_keyseq
+    if _mbx_comp_install_bind_keymap emacs "$next_keyseq" _mbx_comp_cycle_next "$override"; then
+        _MBX_COMP_CYCLE_NEXT_BOUND=1
+    fi
+    if _mbx_comp_install_bind_keymap vi-insert "$next_keyseq" _mbx_comp_cycle_next "$override"; then
+        _MBX_COMP_CYCLE_NEXT_VI_INSERT_BOUND=1
+    fi
+    if _mbx_comp_install_bind_keymap emacs "$prev_keyseq" _mbx_comp_cycle_prev "$override"; then
+        _MBX_COMP_CYCLE_PREV_BOUND=1
+    fi
+    if _mbx_comp_install_bind_keymap vi-insert "$prev_keyseq" _mbx_comp_cycle_prev "$override"; then
+        _MBX_COMP_CYCLE_PREV_VI_INSERT_BOUND=1
+    fi
+    _MBX_COMP_CYCLE_INSTALLED=1
 }
 
 _mbx_comp_rank_backend() {
@@ -409,6 +507,7 @@ _mbx_comp_command_uses_flag_adapter() {
 _mbx_completion_install() {
     [[ ${_MBX_COMPLETION_INSTALLED:-0} != 1 ]] || return 0
     _mbx_comp_install_accept
+    _mbx_comp_install_cycle
     if [[ ${MBX_COMP_FIXTURES:-0} == 1 ]]; then
         _mbx_comp_install_probe
         _mbx_comp_install_flag

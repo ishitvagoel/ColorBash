@@ -10,6 +10,8 @@ const CTRL_X: u8 = 0x18;
 const CTRL_A: u8 = 0x01;
 const CTRL_U: u8 = 0x15;
 const ACCEPT_KEYSEQ: &[u8] = &[CTRL_X, CTRL_A];
+const CYCLE_NEXT_KEYSEQ: &[u8] = &[CTRL_X, b'n'];
+const CYCLE_PREV_KEYSEQ: &[u8] = &[CTRL_X, b'p'];
 
 fn spawn_fixture_shell(home: &Path) -> PtySession {
     spawn_mbx_shell(home, &[("MBX_COMP_FIXTURES", "1")], "")
@@ -59,6 +61,18 @@ fn send_accept_ranked(session: &mut PtySession) {
     session
         .write_all(ACCEPT_KEYSEQ, deadline(2))
         .expect("accept ranked chord");
+}
+
+fn send_cycle_next(session: &mut PtySession) {
+    session
+        .write_all(CYCLE_NEXT_KEYSEQ, deadline(2))
+        .expect("cycle next chord");
+}
+
+fn send_cycle_prev(session: &mut PtySession) {
+    session
+        .write_all(CYCLE_PREV_KEYSEQ, deadline(2))
+        .expect("cycle prev chord");
 }
 
 #[test]
@@ -635,6 +649,156 @@ fn ranked_accept_metadata_never_inserted() {
         .expect("type rank prefix");
     send_tab(&mut session);
     send_accept_ranked(&mut session);
+    session.write_str("\n", deadline(2)).expect("submit");
+    let output = wait_all(&mut session, &["\nGOT:aaflag|", "> "]);
+    let text = String::from_utf8_lossy(&output);
+    assert!(
+        !text.contains("EXTRA"),
+        "completion description leaked into terminal output: {text}"
+    );
+}
+
+#[test]
+fn ranked_cycle_next_inserts_head_from_prefix() {
+    let home = TempHome::new("comp-c1");
+    let mut session = spawn_fixture_shell(home.path());
+    wait_prompt(&mut session);
+    session
+        .write_str("mbx_comp_rank aa", deadline(2))
+        .expect("type rank prefix");
+    send_tab(&mut session);
+    send_cycle_next(&mut session);
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["\nGOT:aaflag|", "> "]);
+}
+
+#[test]
+fn ranked_cycle_next_rotates_from_accepted_head() {
+    let home = TempHome::new("comp-c2");
+    let mut session = spawn_fixture_shell(home.path());
+    wait_prompt(&mut session);
+    session
+        .write_str("mbx_comp_rank aa", deadline(2))
+        .expect("type rank prefix");
+    send_tab(&mut session);
+    send_cycle_next(&mut session);
+    send_cycle_next(&mut session);
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["\nGOT:zzflag|", "> "]);
+}
+
+#[test]
+fn ranked_cycle_after_accept_rotates_to_next() {
+    let home = TempHome::new("comp-c2-accept");
+    let mut session = spawn_fixture_shell(home.path());
+    wait_prompt(&mut session);
+    session
+        .write_str("mbx_comp_rank aa", deadline(2))
+        .expect("type rank prefix");
+    send_tab(&mut session);
+    send_accept_ranked(&mut session);
+    send_cycle_next(&mut session);
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["\nGOT:zzflag|", "> "]);
+}
+
+#[test]
+fn ranked_cycle_prev_wraps_to_last() {
+    let home = TempHome::new("comp-c3");
+    let mut session = spawn_fixture_shell(home.path());
+    wait_prompt(&mut session);
+    session
+        .write_str("mbx_comp_rank aa", deadline(2))
+        .expect("type rank prefix");
+    send_tab(&mut session);
+    send_cycle_next(&mut session);
+    send_cycle_prev(&mut session);
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["\nGOT:zzflag|", "> "]);
+}
+
+#[test]
+fn occupied_cycle_next_chord_is_not_overwritten() {
+    let home = TempHome::new("comp-c4");
+    let prelude = concat!(
+        "_mbx_user_cycle_binding() { :; }\n",
+        "bind -x '\"\\C-xn\": _mbx_user_cycle_binding'\n",
+    );
+    let mut session = spawn_mbx_shell(home.path(), &[], prelude);
+    wait_prompt(&mut session);
+    session
+        .write_str(
+            "bind -X | grep -F '_mbx_user_cycle_binding'\n",
+            deadline(2),
+        )
+        .expect("query binding");
+    wait_all(&mut session, &["_mbx_user_cycle_binding", "> "]);
+    session
+        .write_str(
+            "[[ ${_MBX_COMP_CYCLE_NEXT_BOUND:-missing} == 0 ]] && printf 'MBX_COMP:refused\\n'\n",
+            deadline(2),
+        )
+        .expect("status");
+    wait_all(&mut session, &["\nMBX_COMP:refused", "> "]);
+}
+
+#[test]
+fn occupied_cycle_next_chord_override_installs() {
+    let home = TempHome::new("comp-c4-override");
+    let prelude = concat!(
+        "_mbx_user_cycle_binding() { :; }\n",
+        "bind -x '\"\\C-xn\": _mbx_user_cycle_binding'\n",
+    );
+    let mut session = spawn_mbx_shell(
+        home.path(),
+        &[("MBX_COMP_CYCLE_OVERRIDE", "1")],
+        prelude,
+    );
+    wait_prompt(&mut session);
+    session
+        .write_str(
+            "[[ ${_MBX_COMP_CYCLE_NEXT_BOUND:-missing} == 1 ]] && printf 'MBX_COMP:bound\\n'\n",
+            deadline(2),
+        )
+        .expect("status");
+    wait_all(&mut session, &["\nMBX_COMP:bound", "> "]);
+}
+
+#[test]
+fn ranked_cycle_refuses_stale_unrelated_word() {
+    let home = TempHome::new("comp-c5");
+    let mut session = spawn_fixture_shell(home.path());
+    wait_prompt(&mut session);
+    session
+        .write_str("mbx_comp_rank aa", deadline(2))
+        .expect("type rank prefix");
+    send_tab(&mut session);
+    session
+        .write_all(&[CTRL_U], deadline(2))
+        .expect("kill line");
+    session
+        .write_str("echo ok", deadline(2))
+        .expect("type unrelated command");
+    send_cycle_next(&mut session);
+    session.write_str("\n", deadline(2)).expect("submit");
+    let output = wait_all(&mut session, &["\nok", "> "]);
+    let text = String::from_utf8_lossy(&output);
+    assert!(
+        !text.contains("aaflag") && !text.contains("zzflag"),
+        "stale ranked snapshot mutated an unrelated word: {text}"
+    );
+}
+
+#[test]
+fn ranked_cycle_metadata_never_inserted() {
+    let home = TempHome::new("comp-c6");
+    let mut session = spawn_fixture_shell(home.path());
+    wait_prompt(&mut session);
+    session
+        .write_str("mbx_comp_rank aa", deadline(2))
+        .expect("type rank prefix");
+    send_tab(&mut session);
+    send_cycle_next(&mut session);
     session.write_str("\n", deadline(2)).expect("submit");
     let output = wait_all(&mut session, &["\nGOT:aaflag|", "> "]);
     let text = String::from_utf8_lossy(&output);
