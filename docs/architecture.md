@@ -221,7 +221,8 @@ installing interactive hooks. History observation never writes `PS1`.
 Command-duration timing needs a pre-execution signal. Bash's `DEBUG` trap is the
 viable prototype hook, but Bash cannot safely discover and compose an arbitrary
 existing DEBUG trap from a sourced file. It is therefore disabled by default and
-enabled only with `MBX_ENABLE_DURATION_TIMING=1`.
+enabled only with `MBX_ENABLE_DURATION_TIMING=1`. `PRM-006` is `complete`
+(`docs/prm-006-gate-close-plan.md`).
 
 ## Transport selection
 
@@ -403,7 +404,8 @@ highlighting:
    `docs/g4-gate-close-plan.md`, and COMP-003 K-1–K-4 typed metadata in
    `docs/comp-003-metadata-plan.md`);
 6. duration timing remains opt-in; do not compose unknown `DEBUG` traps
-   (`docs/prm-006-duration-plan.md`).
+   (`docs/prm-006-duration-plan.md`; `docs/prm-006-gate-close-plan.md`).
+   `PRM-006` is `complete`.
 
 The stock-completion adapter (`bash/completion.bash`, ADR 0006) keeps `COMPREPLY`
 insertion authoritative and records additive `_MBX_COMP_KINDS` / `_MBX_COMP_DESCS`
