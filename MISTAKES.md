@@ -672,3 +672,25 @@ to prevent recurrence, not to assign blame.
   `writer_loop` in `crates/cli/src/storage.rs`; CI run failure on
   https://github.com/ishitvagoel/ColorBash/actions/runs/31933197095.
 
+## M-036 — Socket transport test wrote before the client request landed
+
+- Discovered: 2026-08-16
+- Status: Fixed
+- Failed assumption: a stub server could `writeln!` a mismatched MBX1 line
+  immediately after `accept()` and still exercise response-id rejection on the
+  real socket client path.
+- Impact: on GitHub Actions the server thread sometimes closed the socket before
+  `SocketClient::exchange` wrote the request, so CI saw `Broken pipe (os error
+  32)` instead of `response id 10 does not match request id 9` and
+  `tests/run.bash` exited 101 on commit `a80172b`.
+- Correction: socket integration tests now read the client request with
+  `read_bounded_line` before writing the mismatched response; the handshake
+  regression asserts the server observed `MBX1\t9\tPING` before responding.
+- Prevention: socket transport tests must not send a response until the client
+  request line is read; keep the deterministic `ClientSession`/`Cursor` unit
+  test and add a request-handshake assertion when exercising real Unix sockets.
+- Evidence: `socket_client_rejects_a_mismatched_response_id` and
+  `socket_client_rejects_a_mismatched_response_id_after_request_handshake` in
+  `crates/cli/src/transport.rs`; CI run failure on
+  https://github.com/ishitvagoel/ColorBash/actions/runs/31934877398.
+

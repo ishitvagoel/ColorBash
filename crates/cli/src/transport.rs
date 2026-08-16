@@ -502,16 +502,29 @@ mod tests {
         );
     }
 
+    fn spawn_socket_server_that_reads_request_then_writes_response(
+        listener: UnixListener,
+        encoded_response: &str,
+    ) -> thread::JoinHandle<()> {
+        let encoded_response = encoded_response.to_owned();
+        thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut writer = BufWriter::new(stream);
+            let mut line = String::new();
+            read_bounded_line(&mut reader, &mut line).expect("client request");
+            write_message(&mut writer, &encoded_response).expect("server response");
+        })
+    }
+
     #[test]
     fn socket_client_rejects_a_mismatched_response_id() {
         let directory = TestDirectory::new();
         let socket_path = directory.path().join("socket");
         let (listener, cleanup) = bind_socket(&socket_path).unwrap();
+        let server =
+            spawn_socket_server_that_reads_request_then_writes_response(listener, "MBX1\t10\tPONG");
         let mut client = SocketClient::connect(&socket_path).unwrap();
-        let server = thread::spawn(move || {
-            let (mut stream, _) = listener.accept().unwrap();
-            writeln!(stream, "MBX1\t10\tPONG").unwrap();
-        });
         let request = Request {
             id: 9,
             kind: RequestKind::Ping,
@@ -521,6 +534,41 @@ mod tests {
             client.exchange(&request).unwrap_err(),
             "response id 10 does not match request id 9"
         );
+
+        drop(client);
+        server.join().unwrap();
+        drop(cleanup);
+    }
+
+    #[test]
+    fn socket_client_rejects_a_mismatched_response_id_after_request_handshake() {
+        let directory = TestDirectory::new();
+        let socket_path = directory.path().join("socket");
+        let (listener, cleanup) = bind_socket(&socket_path).unwrap();
+        let (request_observed, request_observed_rx) = std::sync::mpsc::channel();
+        let server = thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut writer = BufWriter::new(stream);
+            let mut line = String::new();
+            read_bounded_line(&mut reader, &mut line).expect("client request");
+            assert_eq!(line, "MBX1\t9\tPING");
+            request_observed.send(()).expect("request handshake");
+            write_message(&mut writer, "MBX1\t10\tPONG").expect("server response");
+        });
+        let mut client = SocketClient::connect(&socket_path).unwrap();
+        let request = Request {
+            id: 9,
+            kind: RequestKind::Ping,
+        };
+
+        assert_eq!(
+            client.exchange(&request).unwrap_err(),
+            "response id 10 does not match request id 9"
+        );
+        request_observed_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("server must observe the client request before responding");
 
         drop(client);
         server.join().unwrap();
