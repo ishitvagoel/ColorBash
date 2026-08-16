@@ -48,9 +48,12 @@ _mbx_capture_status() {
 _mbx_render_prompt() {
     local status=${_MBX_LAST_STATUS:-0}
     _mbx_update_prompt "$status" "${_MBX_LAST_DURATION_MS:--}"
-    # Ranked-accept and ghost snapshots are valid only until the next prompt
-    # (M-039 analog).
+    # Ranked-accept, history-search, and ghost snapshots are valid only until
+    # the next prompt (M-039 analog).
     _MBX_COMP_RANKED_REPLY=
+    if declare -F _mbx_search_clear >/dev/null 2>&1; then
+        _mbx_search_clear
+    fi
     if declare -F _mbx_ghost_clear >/dev/null 2>&1; then
         _mbx_ghost_clear
     fi

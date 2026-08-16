@@ -1,10 +1,8 @@
 # SRCH-001 leftover: explicit history-search `bind -x` (S-1–S-6)
 
-Status: `validation` for the explicit insert action (2026-08-16). ADR 0009
-unblocks Phase 8 from the continuous-decoration leftover. This packet adds a
-configurable chord that queries the opt-in sidecar and replaces `READLINE_LINE`
-with one match without executing it. It does **not** add a metadata result
-view, match cycling, cancel restoration, or steal stock `\C-r`.
+Status: `complete` for the explicit insert action (2026-08-16). ADR 0009
+unblocks Phase 8 from the continuous-decoration leftover. Bounded match
+cycling is the Strategy A result view (`docs/srch-001-result-view-plan.md`).
 
 ## Why this slice
 
@@ -26,10 +24,10 @@ text per search line (`crates/cli/src/app.rs`).
 
 ## Goal
 
-1. Install an optional `bind -x` chord (default `\C-x\C-r`, overridable via
+1. Install an optional `bind -x` chord (default `\C-xh`, overridable via
    `MBX_SEARCH_KEYSEQ`) in emacs and vi-insert keymaps. Reuse the occupied-keyseq
    skip pattern from `bash/editor.bash` (`MBX_SEARCH_OVERRIDE=1` to overwrite).
-   Do not rebind Tab, printables, or stock `\C-r`.
+   Do not rebind Tab, printables, stock `\C-r`, or stock `\C-x\C-r`.
 2. On the chord, if `MBX_HISTORY` is not exactly `1`, leave `READLINE_LINE`
    unchanged. If the helper is missing, times out, or fails, leave the line
    unchanged. Never execute inserted text.
@@ -40,15 +38,14 @@ text per search line (`crates/cli/src/app.rs`).
 4. Bound the helper with `MBX_SEARCH_TIMEOUT` (default `MBX_HISTORY_TIMEOUT` /
    0.10 s) using the existing engine child read/kill primitives. Redirect helper
    stderr. Do not log command text (`M-023`).
-5. `SRCH-001` stays `validation` (result view unbuilt). Do not mark `SRCH-001`,
-   `SRCH-002`, `SRCH-003`, `COMP-004`, or `COMP-005` complete. Do not start
-   ghost, overlay, or highlighting.
+5. `SRCH-001` insert evidence is S-1–S-7. Result-view cycling is
+   `docs/srch-001-result-view-plan.md`.
 
 ## Out of scope (hard)
 
 - Rebinding `\C-r`, Tab, arrows, or printable keys
 - Overlay, candidate list rendering, age/cwd/status columns
-- Match cycling or a persistent search mode
+- Match cycling or a persistent search mode (`docs/srch-001-result-view-plan.md`)
 - Cancel restoration of the pre-search buffer (`SRCH-002`)
 - Repository / failed-command filters (`HIST-010` / `SRCH-003`)
 - Ghost, highlighting, completion popup
@@ -89,5 +86,5 @@ Add `bash/search.bash` and source it from `bash/init.bash`. Install after
 
 ## Stop
 
-Do not start the result-view leftover, `SRCH-002`, ghost, or overlay. Do not
-mark `SRCH-001` complete.
+Do not start ghost or overlay from this insert packet. Result-view cycling is a
+separate leftover. Do not mark `SRCH-002` complete.

@@ -22,7 +22,7 @@ These slices have working code you can exercise in an interactive shell:
 | Failed history search | `MBX_HISTORY=1` then `mbx history search failed` | Rows with nonzero exit status |
 | Repository-context history | `MBX_HISTORY=1` in a Git worktree | Stores root/branch; `search repo ROOT` / `search branch NAME` |
 | History ghost suffix | `MBX_HISTORY=1` and `MBX_GHOST=1` | Suggestion after the cursor on ASCII printables in emacs and vi-insert; Enter runs the typed prefix; Right accepts all; Left / Home / Up / Down / Ctrl-Left dismiss; Alt-F / Ctrl-Right accept one word (emacs); Ctrl-Right in vi-insert; Ctrl-X Ctrl-N / Ctrl-P cycle matches |
-| History-search chord | `MBX_HISTORY=1` then `Ctrl-X Ctrl-R` | Replaces the line with the top sidecar match; does not run it |
+| History-search chord | `MBX_HISTORY=1` then `Ctrl-X` `h` | Replaces the line with a sidecar match; repeat to cycle; does not run it |
 
 ## What remains
 
@@ -33,7 +33,7 @@ These MVP features are **not** implemented for interactive use:
 | Ghost dim / live paint | Opt-in suffix ghost exists (ADR 0010); dim after-every-key styling does not |
 | Completion popup | Overlay unproven; ranked-accept chord exists |
 | Syntax highlighting | Same continuous-decoration leftover |
-| Enhanced Ctrl+R overlay | Type-to-filter list still needs a result-view leftover; `\C-x\C-r` insert exists |
+| Enhanced Ctrl+R overlay | Type-to-filter list still needs a leftover; `\C-xh` insert and cycling exist |
 | macOS PTY matrix | `HRD-001` needs a macOS host |
 
 Canonical status lives in [`docs/roadmap.md`](docs/roadmap.md). `G0`, `G2`,
@@ -221,10 +221,12 @@ text, not dim paint.
 
 ### 9. History-search chord (`bind -x`)
 
-Requires `MBX_HISTORY=1`. Default chord is `Ctrl-X` then `Ctrl-R` so stock
-`Ctrl-R` reverse-i-search is unchanged. The chord replaces the whole line with
-the top sidecar match (exact prefix, then fuzzy; empty line uses the newest
-row) and does **not** run it until Enter.
+Requires `MBX_HISTORY=1`. Default chord is `Ctrl-X` then `h` so stock
+`Ctrl-R` reverse-i-search and `Ctrl-X Ctrl-R` re-read-init-file stay
+unchanged. The chord replaces the whole line with a sidecar match (exact
+prefix, then fuzzy; empty line uses newest rows) and does **not** run it
+until Enter. Press the chord again to cycle the bounded snapshot (default
+8 matches). The snapshot clears at the next prompt.
 
 ```bash
 MBX_HISTORY=1 bash --noprofile --norc
@@ -233,10 +235,10 @@ printf 'MBX_SRCH:alpha\n'
 printf 'MBX_SRCH:beta\n'
 ```
 
-At the next prompt type `printf 'MBX_SRCH:a` and press `Ctrl-X Ctrl-R`, then
+At the next prompt type `printf 'MBX_SRCH:a` and press `Ctrl-X` then `h`, then
 Enter. Expect `MBX_SRCH:alpha`. An empty line plus the same chord inserts the
-newest row. If that chord is already bound, MBX leaves it alone unless
-`MBX_SEARCH_OVERRIDE=1`.
+newest row. Repeat the chord to cycle older matches. If that chord is already
+bound, MBX leaves it alone unless `MBX_SEARCH_OVERRIDE=1`.
 
 ## Prototype controls
 
@@ -264,9 +266,10 @@ MBX_EDITOR_INSERT_KEYSEQ='\C-x\C-y'
 MBX_EDITOR_OVERRIDE=1           # overwrite an occupied insert chord
 MBX_COMP_ACCEPT_KEYSEQ='\C-x\C-a'  # ranked-accept chord (default)
 MBX_COMP_ACCEPT_OVERRIDE=1      # overwrite an occupied ranked-accept chord
-MBX_SEARCH_KEYSEQ='\C-x\C-r'    # history-search chord (default; does not steal Ctrl-R)
+MBX_SEARCH_KEYSEQ='\C-xh'       # history-search chord (default; does not steal Ctrl-R)
 MBX_SEARCH_OVERRIDE=1           # overwrite an occupied search chord
 MBX_SEARCH_TIMEOUT=0.10         # helper budget for one search insert
+MBX_SEARCH_LIMIT=8              # bounded snapshot size for cycling (max 16)
 MBX_LOG=trace                   # helper timing/events; never logs command text
 ```
 

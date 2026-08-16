@@ -12,10 +12,10 @@ data, and continues to execute commands with ordinary Bash semantics. When
 explicitly enabled, Bash also observes admitted history and enqueues records
 without modifying `.bash_history`. Opt-in inline ghost (ADR 0010) is a suffix
 after the cursor, not dim after-every-key paint. An explicit history-search
-`bind -x` chord (default `\C-x\C-r`, ADR 0009) can insert one sidecar match
-into the line buffer. Strategy A history search and ghost are unblocked; live
-highlighting and GUI overlays (completion menu, type-to-filter Ctrl+R) remain
-`deferred` from this MVP.
+`bind -x` chord (default `\C-xh`, ADR 0009) can insert one sidecar match into
+the line buffer and cycle a bounded snapshot with the same chord. Strategy A
+history search and ghost are unblocked; live highlighting and GUI overlays
+(completion menu, type-to-filter Ctrl+R) remain `deferred` from this MVP.
 
 ## System boundary
 
@@ -62,7 +62,7 @@ bash/
   editor.bash        non-destructive bind -x insert prototype
   completion.bash    stock completion adapter and ranked-accept chord
   history.bash       opt-in admitted-entry observation and MBX2 RECORD send
-  search.bash        explicit history-search bind -x (ADR 0009)
+  search.bash        explicit history-search bind -x and bounded cycling (ADR 0009)
   ghost.bash         opt-in inline history ghost suffix (ADR 0010)
 
 crates/protocol/     dependency-free MBX1 wire model and PromptFlags value type
@@ -457,7 +457,7 @@ Down / `\C-n` restores the remembered typed prefix after Up;
 `\C-x\C-n` / `\C-x\C-p` cycle prefix matches). Async QUERY/RESULT/CANCEL with
 generation IDs is accepted in ADR 0011; overlapping delayed-RESULT PTY remains
 (`GHST-001`). Explicit history search via `bind -x` is Strategy A (ADR 0009;
-`bash/search.bash`; default `\C-x\C-r`). `COMP-004`
-popup policy records no GUI overlay; ranked-accept `bind -x` evidence is complete
+`bash/search.bash`; default `\C-xh`; bounded cycling). `COMP-004` popup
+policy records no GUI overlay; ranked-accept `bind -x` evidence is complete
 (`docs/comp-004-ranked-accept-plan.md`).
 `G3` explicit `bind -x` evidence is complete.
