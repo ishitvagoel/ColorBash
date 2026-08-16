@@ -559,10 +559,12 @@ fn history_failure_diagnostic(error: &HistoryError) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::history::{HistoryControl, HistoryErrorKind, HistoryRecorder, HistorySearch};
+    use crate::history::{
+        HistoryControl, HistoryError, HistoryErrorKind, HistoryRecorder, HistorySearch,
+    };
     use std::os::unix::fs::PermissionsExt;
     use std::path::Path;
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc, Mutex, mpsc};
     use std::thread;
 
     fn history_env_lock() -> std::sync::MutexGuard<'static, ()> {
@@ -735,7 +737,11 @@ mod tests {
         let (dir, path) = temp_store("c3");
         let path = Arc::new(path);
         let reader_path = Arc::clone(&path);
+        let (writer_ready_tx, writer_ready_rx) = mpsc::channel();
         let reader = thread::spawn(move || {
+            writer_ready_rx
+                .recv()
+                .expect("writer must open before reader");
             let store = QueuedHistoryStore::open(&reader_path, 32).unwrap();
             for _ in 0..200 {
                 let _ = store.count();
@@ -747,6 +753,7 @@ mod tests {
         });
         {
             let store = QueuedHistoryStore::open_with_limits(&path, 64, 40, 36_500).unwrap();
+            writer_ready_tx.send(()).expect("reader must be waiting");
             for sequence in 0..64 {
                 enqueue(
                     &store,
@@ -1066,6 +1073,213 @@ mod tests {
             "event=history_storage_error kind=storage_failure"
         );
         assert!(!diagnostic.contains("secret-command-text"));
+    }
+
+    const WAL_SENTINEL: &str = "secret-wal-token";
+
+    fn sidecar(store: &Path, suffix: &str) -> PathBuf {
+        store.with_file_name(format!(
+            "{}{suffix}",
+            store
+                .file_name()
+                .map(|name| name.to_string_lossy())
+                .unwrap_or_default()
+        ))
+    }
+
+    fn raw_history_insert(
+        connection: &rusqlite::Connection,
+        sequence: u64,
+        command: &str,
+        completed_at: &str,
+    ) {
+        connection
+            .execute(
+                "INSERT OR IGNORE INTO history \
+                 (session_id, event_sequence, history_number, command_text, start_cwd, \
+                  completed_at, status, duration_ms, host, user) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                rusqlite::params![
+                    "s1",
+                    sequence,
+                    sequence as i64,
+                    command,
+                    "/w",
+                    completed_at,
+                    0i32,
+                    None::<u64>,
+                    "host",
+                    "user",
+                ],
+            )
+            .unwrap();
+    }
+
+    fn assert_closed_history_error(error: &HistoryError) {
+        assert!(
+            matches!(
+                error.kind(),
+                HistoryErrorKind::Open
+                    | HistoryErrorKind::Migrate
+                    | HistoryErrorKind::StorageFailure
+            ),
+            "unexpected kind: {error}"
+        );
+        let shown = error.to_string();
+        assert!(!shown.contains(WAL_SENTINEL), "{shown}");
+        let diagnostic = history_failure_diagnostic(error);
+        assert_eq!(
+            diagnostic,
+            format!("event=history_storage_error kind={}", error.kind().as_str())
+        );
+        assert!(!diagnostic.contains(WAL_SENTINEL), "{diagnostic}");
+    }
+
+    fn assert_main_store_not_destroyed(path: &Path) {
+        assert!(path.exists(), "must not unlink the db");
+        assert_ne!(
+            std::fs::metadata(path).unwrap().len(),
+            0,
+            "must not replace the store with an empty file"
+        );
+    }
+
+    fn commit_sentinel_row(path: &Path) {
+        let store = QueuedHistoryStore::open(path, 8).unwrap();
+        enqueue(
+            &store,
+            entry("s1", 1, WAL_SENTINEL, "/w", "2026-08-16T10:00:00Z"),
+        );
+        drop(store);
+        assert_eq!(count_rows(path), 1);
+    }
+
+    fn ensure_wal_sidecar_exists(path: &Path) {
+        {
+            let connection = rusqlite::Connection::open(path).unwrap();
+            connection
+                .execute_batch("PRAGMA journal_mode=WAL; PRAGMA wal_checkpoint(TRUNCATE);")
+                .unwrap();
+        }
+        let wal = sidecar(path, "-wal");
+        if wal.exists() {
+            return;
+        }
+        let connection = rusqlite::Connection::open(path).unwrap();
+        connection
+            .execute_batch("PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0; BEGIN IMMEDIATE;")
+            .unwrap();
+        raw_history_insert(&connection, 1, WAL_SENTINEL, "2026-08-16T10:00:00Z");
+        connection.execute_batch("COMMIT;").unwrap();
+        drop(connection);
+        if !wal.exists() {
+            std::fs::write(&wal, b"").unwrap();
+        }
+    }
+
+    fn assert_corrupt_sidecar_is_safe(path: &Path, sidecar_path: &Path) {
+        std::fs::write(sidecar_path, vec![0xFF; 4096]).unwrap();
+        match QueuedHistoryStore::open(path, 8) {
+            Ok(store) => {
+                assert_eq!(store.count().unwrap(), 1);
+                assert_eq!(store.recent(1).unwrap()[0].command_text, WAL_SENTINEL);
+                drop(store);
+            }
+            Err(error) => {
+                assert_closed_history_error(&error);
+                assert_main_store_not_destroyed(path);
+                let _ = std::fs::remove_file(sidecar_path);
+                let store = QueuedHistoryStore::open(path, 8).unwrap();
+                assert_eq!(store.count().unwrap(), 1);
+                drop(store);
+            }
+        }
+        assert_main_store_not_destroyed(path);
+        assert_unique_keys(path);
+    }
+
+    #[test]
+    fn crash_mid_transaction_rolls_back_and_retry_is_idempotent() {
+        let (dir, path) = temp_store("k1");
+        commit_sentinel_row(&path);
+        {
+            let connection = rusqlite::Connection::open(&path).unwrap();
+            connection
+                .execute_batch("PRAGMA journal_mode=WAL; BEGIN IMMEDIATE;")
+                .unwrap();
+            raw_history_insert(&connection, 2, "echo uncommitted", "2026-08-16T10:00:01Z");
+            drop(connection);
+        }
+        {
+            let store = QueuedHistoryStore::open(&path, 8).unwrap();
+            assert_eq!(store.count().unwrap(), 1);
+            assert_eq!(store.recent(1).unwrap()[0].command_text, WAL_SENTINEL);
+            enqueue(
+                &store,
+                entry("s1", 1, WAL_SENTINEL, "/w", "2026-08-16T10:00:00Z"),
+            );
+            assert_eq!(store.count().unwrap(), 1);
+            enqueue(
+                &store,
+                entry(
+                    "s1",
+                    2,
+                    "echo committed-after-crash",
+                    "/w",
+                    "2026-08-16T10:00:02Z",
+                ),
+            );
+        }
+        assert_eq!(count_rows(&path), 2);
+        assert_unique_keys(&path);
+        drop(dir);
+    }
+
+    #[test]
+    fn corrupt_wal_does_not_destroy_committed_store() {
+        let (dir, path) = temp_store("k2");
+        commit_sentinel_row(&path);
+        ensure_wal_sidecar_exists(&path);
+        assert_corrupt_sidecar_is_safe(&path, &sidecar(&path, "-wal"));
+        drop(dir);
+    }
+
+    #[test]
+    fn corrupt_shm_does_not_destroy_committed_store() {
+        let (dir, path) = temp_store("k3");
+        commit_sentinel_row(&path);
+        ensure_wal_sidecar_exists(&path);
+        let shm = sidecar(&path, "-shm");
+        if !shm.exists() {
+            std::fs::write(&shm, b"").unwrap();
+        }
+        assert_corrupt_sidecar_is_safe(&path, &shm);
+        drop(dir);
+    }
+
+    #[test]
+    fn corrupt_main_db_fails_closed_without_replacing_the_file() {
+        let (dir, path) = temp_store("k4");
+        commit_sentinel_row(&path);
+        let original_len = std::fs::metadata(&path).unwrap().len();
+        assert!(original_len > 0);
+        std::fs::write(&path, vec![0xFF; 4096]).unwrap();
+        let corrupted_len = std::fs::metadata(&path).unwrap().len();
+        assert_eq!(corrupted_len, 4096);
+        let result = QueuedHistoryStore::open(&path, 8);
+        let error = match result {
+            Err(error) => error,
+            Ok(_) => panic!("corrupt main db must not open as a fresh store"),
+        };
+        assert_closed_history_error(&error);
+        assert_main_store_not_destroyed(&path);
+        let bytes = std::fs::read(&path).unwrap();
+        assert_eq!(bytes.len(), corrupted_len as usize);
+        assert!(
+            bytes.iter().all(|byte| *byte == 0xFF),
+            "corrupt main db must not be replaced with a new sqlite file"
+        );
+        drop(dir);
     }
 }
 

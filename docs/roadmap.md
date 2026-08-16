@@ -7,7 +7,7 @@
 
 - Last reviewed: 2026-08-16 UTC
 - Current milestone: Phase 3A sidecar implemented; `G2` evidence remaining (`HIST-007`); `G1` accepted; `G0` validation remains
-- Active workstream: remaining `HIST-007` `G2` evidence (prompt-boundary write-ack budget, permission, WAL crash/corrupt, many-match prefix)
+- Active workstream: remaining `HIST-007` `G2` evidence (write-ack budget, permission beyond mode bits, many-match prefix)
 - Next decision gate: `G2` history readiness (after remaining `HIST-007` evidence)
 - Editor-facing work is blocked by: `G2` history readiness and/or `G3` editor
   integration, as identified per phase
@@ -119,9 +119,9 @@ Not implemented:
 - arbitrary key-injection coverage (Tab, arrows, Ctrl+R), the release platform
   matrix, or CI-linked baseline evidence;
 - remaining `G2` evidence: prompt-boundary write-ack budget (correctness recorded;
-  percentile miss on development WSL), permission checks beyond mode bits, WAL
-  crash/corrupt, and many-match prefix latency (100k query p95, hostile
-  inertness, invariance, and contention evidence exist); or
+  percentile miss on development WSL), permission checks beyond mode bits, and
+  many-match prefix latency (100k query p95, hostile inertness, invariance,
+  contention, WAL crash/corrupt, and write-ack correctness evidence exist); or
 - asynchronous feature IPC or the broader completion/history provider model.
 
 Known foundation debt:
@@ -286,7 +286,7 @@ latency budgets.
 | 0 | Research / architecture | `validation` | platform matrix and remaining `G0` evidence |
 | 1 | Bootstrap | `validation` | clean baseline/CI evidence and broader lifecycle tracing |
 | 2 | Prompt | `validation` | width model and representative prompt percentiles |
-| 3 | History | `in-progress` | Phase 3A slice implemented; remaining `G2` write-ack budget, permission, WAL crash/corrupt, and many-match prefix evidence |
+| 3 | History | `in-progress` | Phase 3A slice implemented; remaining `G2` write-ack budget, permission beyond mode bits, and many-match prefix evidence |
 | 4 | Ghost suggestions | `blocked` | `G2` and `G3` |
 | 5 | Completion | `discovery` | adapter experiment produces `G4`; popup waits for `G3` and `G4` |
 | 6 | Syntax highlighting | `blocked` | `G3`; intentionally after search/ghost/completion evidence |
@@ -391,7 +391,7 @@ accept or revise these details before implementation:
 | `HIST-012` | Define queue drain, shell-exit, crash, retry, and acceptable-loss semantics | `complete` | durability contract in `docs/history-phase3a-contract.md`; writer commits eagerly and Shutdown drains |
 | `HIST-006` | Implement SQLite schema, migrations, permissions, retention, and writer | `complete` | `crates/cli/src/storage.rs` schema v1, WAL, `0700`/`0600`, retention prune, batched writer |
 | `HIST-011` | Implement exclusions, no-log policy, disable/path/clear/delete controls | `complete` | `crates/cli/src/policy.rs` plus `mbx history path|count|clear|delete` and env controls |
-| `HIST-007` | Add opt-in Bash observation and bounded protocol ingestion | `validation` | `bash/history.bash`, MBX2 RECORD ingestion, PTY recording/invariance tests, seeded 100k corpus, hostile inertness, query p95, concurrent-writer contention, and prompt-boundary write-ack correctness in `crates/pty/tests/history_write_ack.rs`; write-ack percentile budget, WAL crash/corrupt, many-match prefix, and extra permission checks remain |
+| `HIST-007` | Add opt-in Bash observation and bounded protocol ingestion | `validation` | `bash/history.bash`, MBX2 RECORD ingestion, PTY recording/invariance tests, seeded 100k corpus, hostile inertness, query p95, concurrent-writer contention, prompt-boundary write-ack correctness, and WAL crash/corrupt recovery in `crates/cli/src/storage.rs`; write-ack percentile budget, many-match prefix, and extra permission checks remain |
 | `HIST-008` | Add recent, exact-prefix, cwd queries and deterministic ranking | `complete` | `mbx history search recent|prefix|cwd` with bounded limits and NOCASE prefix index |
 | `HIST-009` | Add bounded fuzzy ranking | `blocked` | `HIST-008`, deterministic-query evidence, and 100k+ benchmark |
 | `HIST-010` | Add repository context | `blocked` | history-scoped `GIT-003` root/branch provider subset |
@@ -523,12 +523,14 @@ controls, deterministic queries, MBX2 ingestion, and opt-in Bash observation
 (`HIST-005`–`HIST-008`, `HIST-011`–`HIST-013`). Capture stays disabled by
 default. Remaining before `G2`:
 
-1. `HIST-007` remaining `G2` evidence: prompt-boundary write-ack budget (W-1–W-4
-   correctness recorded; release percentile still misses the provisional budget
-   on development WSL), permission checks beyond mode bits, WAL crash/corrupt,
-   and many-match prefix latency. Concurrent-writer contention (cases 1–3 and
-   6), 100k query p95, hostile inertness, and invariance/admission-parity PTY
-   evidence are recorded.
+1. `HIST-007` remaining `G2` evidence: permission checks beyond mode bits,
+   many-match prefix latency, and the prompt-boundary write-ack budget
+   (W-1–W-4 correctness recorded; release percentile still misses the provisional
+   budget on development WSL — do not chase with product-code changes unless a
+   test proves the prompt waits on SQLite). Concurrent-writer contention (cases
+   1–3 and 6), 100k query p95, hostile inertness, invariance/admission-parity
+   PTY, WAL crash/corrupt (K-1–K-4 in `crates/cli/src/storage.rs`), and
+   write-ack correctness evidence are recorded.
 2. `FND-001` / `G0`: CI evidence via the pushed baseline is pending the run.
 3. `PRM-002` remains discovery until the width model is designed from the
    `RSH-004` baseline; `EDT-001` stays blocked on `FND-001`.
@@ -600,3 +602,5 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Completed concurrent-writer contention storage tests (C-1–C-4, C-6) and hardened concurrent migrate, read-only query opens, and writer lock retries (`M-032`) in `crates/cli/src/storage.rs`. Prompt-boundary write-ack, WAL crash/corrupt, many-match prefix, and extra permission checks remain. |
 | 2026-08-16 | Identified the next `HIST-007` slice as prompt-boundary write acknowledgement PTY; plan in `docs/history-g2-write-ack-plan.md`. WAL crash/corrupt, many-match prefix, and extra permission checks remain. |
 | 2026-08-16 | Completed prompt-boundary write-ack PTY correctness (W-1–W-4) and recorded release percentile evidence (`docs/benchmarks/2026-08-16-history-write-ack.md`; budget miss on development WSL). Write-ack budget, WAL crash/corrupt, many-match prefix, and extra permission checks remain. |
+| 2026-08-16 | Identified the next `HIST-007` slice as WAL crash/corrupt (cases 4–5); plan in `docs/history-g2-wal-crash-plan.md`. Permission beyond mode bits, many-match prefix, and write-ack budget remain. Do not chase write-ack product-code optimization unless a test proves SQLite is on the prompt path. |
+| 2026-08-16 | Completed WAL crash/corrupt storage tests (K-1–K-4) in `crates/cli/src/storage.rs` (`docs/history-g2-wal-crash-plan.md`). Write-ack budget, permission beyond mode bits, and many-match prefix remain. |

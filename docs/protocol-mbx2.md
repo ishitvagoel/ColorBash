@@ -2,9 +2,9 @@
 
 Status: implemented for the Phase 3A RECORD slice (`HIST-007`). Remaining `G2`
 evidence is prompt-boundary write-ack budget pass, many-match prefix latency,
-permission checks beyond mode bits, and WAL crash/corrupt. Invariance,
-admission-parity, hostile inertness, 100k query p95, concurrent-writer
-contention, and write-ack correctness evidence are recorded.
+and permission checks beyond mode bits. Invariance, admission-parity, hostile
+inertness, 100k query p95, concurrent-writer contention, write-ack correctness,
+and WAL crash/corrupt recovery evidence are recorded.
 
 ## Purpose
 

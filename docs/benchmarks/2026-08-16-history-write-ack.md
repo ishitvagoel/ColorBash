@@ -38,5 +38,6 @@ Interpretation:
   sample-file mode, samples present at prompt return before SQLite drain, and
   empty Enter produces no sample.
 
-This does not complete `G2`. WAL crash/corrupt, permission checks beyond mode
-bits, and many-match prefix latency remain.
+This does not complete `G2`. The write-ack budget, permission checks beyond
+mode bits, and many-match prefix latency remain. WAL crash/corrupt recovery
+is recorded in `crates/cli/src/storage.rs`.
