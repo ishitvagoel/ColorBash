@@ -1,0 +1,18 @@
+---
+description: SOLID as the design framework without overengineering
+alwaysApply: false
+---
+
+# SOLID
+
+Use SOLID for every design, implementation, and refactor:
+
+- **S:** one coherent reason to change; composition roots only wire.
+- **O:** add capabilities through composition and existing extension seams.
+- **L:** every port implementation preserves the full behavioral, failure, safety, and fallback contract.
+- **I:** narrow interfaces around consumer needs. No trait-per-function.
+- **D:** application/domain policy depends on ports and values. Env, process, filesystem, terminal, transport, clock, and storage live in adapters.
+
+Prefer a simple concrete value or function when there is no substitution axis. Every new abstraction must improve an identified boundary and have a production implementation plus a focused substitute or contract test.
+
+Tradeoff order: `correctness > Bash compatibility > latency > UX polish > feature breadth`. Severe interactive latency is a correctness failure.

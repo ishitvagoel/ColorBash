@@ -1,0 +1,15 @@
+---
+description: History sidecar storage, privacy, and writer-queue contracts
+globs: "crates/cli/src/storage.rs,crates/cli/src/history.rs,crates/cli/src/history_service.rs,crates/cli/src/corpus.rs,crates/cli/src/policy.rs,bash/history.bash,crates/pty/tests/history_*.rs,crates/pty/tests/common/**,scripts/benchmark-history*.bash,docs/adr/0005-history-storage.md,docs/adr/0008-history-prefix-index.md"
+alwaysApply: false
+---
+
+# History sidecar
+
+- Opt-in, local-only, independent of `.bash_history`. Never log command text (`M-023`, `M-024`).
+- `ACK` / `record()` Ok means queue accept, not SQLite commit.
+- Keep `WRITER_BATCH_SIZE=32` for busy ingest (`M-030`). Idle-flush partial batches without prune (`M-034`). Pair failed `COMMIT` with `ROLLBACK` (`M-031`).
+- Concurrent open/migrate/write: read-only query handles, transactional migrate, lock retries (`M-032`, `M-035`).
+- Tighten existing modes only; never add permission bits (`M-033`). Directory `0700`; db/WAL/SHM `0600` on create.
+- Do not fake `seteuid` / foreign-user open. Do not chase write-ack product latency unless a test proves SQLite is on the prompt path.
+- Do not mark `G2` or `HIST-007` complete without durable remaining-evidence (foreign-user open and write-ack budget).

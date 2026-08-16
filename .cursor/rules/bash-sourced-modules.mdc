@@ -1,0 +1,15 @@
+---
+description: Rules for Bash modules sourced into the user's interactive shell
+globs: "bash/**/*.bash,tests/bash/**/*.bash,tests/integration/**/*.bash"
+alwaysApply: false
+---
+
+# Sourced Bash modules
+
+- Keep modules small and side-effect-conscious.
+- Do not add `set -euo pipefail` to a file sourced into a user's interactive shell.
+- `bash/prompt.bash` is the only prompt-path writer of `PS1`. Transport and fallback adapters return candidates through `REPLY`.
+- Preserve production and SSH semantic parity on every render path, including fallback.
+- History capture stays opt-in (`MBX_HISTORY=1` only). Never log command text. No `MBX_DBG` channels.
+- Preserve unknown MBX1 prompt-flag bits on coprocess and per-call paths.
+- Do not overwrite or compose an unknown DEBUG trap.

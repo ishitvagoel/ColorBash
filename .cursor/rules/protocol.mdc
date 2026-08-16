@@ -1,0 +1,13 @@
+---
+description: MBX1/MBX2 framing, flags, and untrusted-field handling
+globs: "docs/protocol.md,docs/protocol-mbx2.md,crates/protocol/**/*.rs,crates/cli/src/transport.rs,crates/cli/src/service.rs,bash/protocol.bash,bash/engine.bash,bash/config.bash"
+alwaysApply: false
+---
+
+# Protocol
+
+- Preserve MBX1 framing and unknown prompt-flag bits. Framing, compatibility, trust, cancellation, or multiplexing changes need an ADR and may need a new protocol version.
+- Bound and sanitize untrusted fields before they reach `PS1` or the terminal.
+- Do not collapse protocol, transport, and application responsibilities.
+- Cross-language codec changes need hostile-byte, lowercase-escape, control-byte, and exact field-count tests (`M-001`, `M-002`, `M-015`).
+- History RECORD is MBX2, not an MBX1 extension. ACK meaning stays queue accept.

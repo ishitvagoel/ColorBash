@@ -1,0 +1,17 @@
+---
+description: Mandatory bootstrap before planning or editing MBX
+alwaysApply: true
+---
+
+# Session start
+
+Before planning, editing, or running a mutating command:
+
+1. Read `MISTAKES.md` in full. Apply every relevant prevention rule and do not
+   repeat a recorded mistake.
+2. Read `docs/roadmap.md` for status, gates, and immediate next work.
+3. Read architecture, compatibility, protocol, research, and ADR docs for the area being changed.
+4. Run `git status --short`. Preserve unrelated user and agent work.
+
+Review or planning only: do not implement feature code.
+Do not commit, push, publish, install globally, or edit shell startup files unless the user asked.

@@ -1,0 +1,24 @@
+---
+description: MBX product and architecture invariants (Bash-not-a-replacement, privacy, ports, latency)
+alwaysApply: false
+---
+
+# Product invariants
+
+- MBX enhances interactive Bash; it is not a shell replacement. Bash is the only parser, expansion engine, executor, and job controller.
+- Preserve ordinary Bash behavior: exit status, hooks, jobs, history, completion, aliases, functions, traps, shell options, quoting, and command bytes.
+- Suggestions may insert Bash text but must never execute it automatically.
+- Helper startup, timeout, malformed output, or failure must degrade to a usable prompt without disabling the shell.
+- Do not add `set -euo pipefail` to a file sourced into a user's interactive shell.
+- `bash/prompt.bash` is the only prompt-path writer of `PS1`. Adapters return candidates through `REPLY`. Keep safety-critical semantic parity (production and SSH).
+- Keep protocol, configuration, lifecycle, transport, application, rendering, provider, and persistence separated. Depend on narrow ports; do not collapse them into composition roots.
+- Preserve MBX1 framing and unknown prompt-flag bits. Framing, compatibility, trust, cancellation, or multiplexing changes need an ADR and may need a new protocol version.
+- Treat paths, env display values, history text, repo metadata, protocol fields, and provider output as untrusted. Bound and sanitize before `PS1` or the terminal. ADR 0007 trusts only caller-supplied absolute `PATH` entries for locating Git.
+- Never source repository code or select an executable via repository data, an empty `PATH` entry, or a relative `PATH` entry. Fixed subprocess arguments, deadlines, and acquisition bounds.
+- Avoid synchronous or unbounded work in prompt and per-keystroke paths. Severe interactive latency is a correctness defect.
+- Readline owns editing and redisplay until an accepted ADR and PTY evidence say otherwise.
+- Do not overwrite or compose an unknown DEBUG trap. Duration timing stays opt-in until an accepted adapter changes that.
+- History sidecar is opt-in, local-only, privacy-preserving, independent of `.bash_history`. Never log command text.
+- No new dependency or heavyweight framework without measured need. Protocol, privacy, persistence, editor ownership, or provider execution changes go in an ADR.
+
+Tradeoff order: `correctness > Bash compatibility > latency > UX polish > feature breadth`.

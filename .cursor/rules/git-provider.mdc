@@ -1,0 +1,12 @@
+---
+description: Git provider trust boundary, fixed argv, and bounded acquisition (ADR 0007)
+globs: "crates/cli/src/provider.rs,docs/adr/0007*.md"
+alwaysApply: false
+---
+
+# Git provider
+
+- Resolve Git only from executable files in caller-supplied **absolute** `PATH` entries. Never fall back to bare `git`. Empty or relative `PATH` entries are untrusted.
+- Use fixed arguments that disable `core.fsmonitor`, color, and optional locks.
+- Acquire stdout with a `MAX+1` cap and a deadline. Direct-child kill/reap on timeout; do not claim portable process-tree termination.
+- Do not execute repository code to discover context. Absolute `PATH` entries are the ADR 0007 trust boundary.

@@ -1,0 +1,36 @@
+---
+description: Composer 2.5 TODO packets must be copyable XML with a required review pass
+alwaysApply: true
+---
+
+# Composer implementation handoff
+
+When the user asks for Composer / Composer 2.5 instructions or a TODO list:
+
+- Rank remaining roadmap work. Ship **one** executable slice.
+- The TODO list **is** a single copyable XML packet, not a markdown checklist.
+- Include bootstrap order, hard out-of-scope rules, implement items, docs, validate commands, and stop.
+- Require Composer to **review its diff after execution and fix issues** before handoff.
+- Do not commit unless the user asked.
+
+Minimum XML contract:
+
+```xml
+<composer_packet model="composer-2.5">
+  <ranking>...</ranking>
+  <composer_task>
+    <follow>...</follow>
+    <hard_rules>Do not mark a gate complete unless roadmap exit criteria say so. Do not commit unless asked.</hard_rules>
+    <bootstrap order="required">...</bootstrap>
+    <goal>...</goal>
+    <implement>...</implement>
+    <docs>...</docs>
+    <validate>...</validate>
+    <review required="true">Re-read the plan and diff. Fix defects, missed asserts, stale docs, and MISTAKES.md gaps. Do not start the next slice.</review>
+    <stop>...</stop>
+  </composer_task>
+</composer_packet>
+```
+
+When executing such a packet: implement only that slice, then do the review pass and fix findings.
+Full template: `AGENTS.md` section "Composer implementation handoff".

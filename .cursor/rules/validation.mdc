@@ -1,0 +1,21 @@
+---
+description: Canonical test suite and when PTY or release benchmarks are required
+globs: "tests/**,scripts/benchmark-*.bash,crates/pty/tests/**/*.rs"
+alwaysApply: false
+---
+
+# Validation
+
+Focused checks while developing. Before handing off code changes:
+
+```bash
+bash tests/run.bash
+```
+
+That suite is Rust fmt, workspace tests, Clippy with warnings denied, Bash syntax, module contracts, protocol integration, and the Bash compatibility corpus.
+
+A piped interactive Bash process is not PTY evidence. Terminal-interaction claims need the real PTY harness in `docs/roadmap.md`.
+
+Latency-sensitive changes: `cargo build --release --workspace`, then `scripts/benchmark-prompt.bash` and `scripts/benchmark-ipc.bash` with `MBX_BENCH_ITERATIONS=1000`. Record environment and p50/p95/p99 when the gate requires them.
+
+Add focused regression tests for every bug fix and cross-language contract change.

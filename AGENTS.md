@@ -4,6 +4,12 @@ These instructions apply to the entire repository. Keep this file concise and
 put detailed design, status, and historical information in the canonical files
 linked below.
 
+Cursor also loads `.cursor/rules/*.mdc`. Those files must not contradict this
+file. This file remains the complete always-on contract for every agent.
+Always-apply Cursor rules are only session start and Composer handoff; other
+`.mdc` files attach by glob or relevance so they do not duplicate this file on
+every turn.
+
 ## Mandatory session start
 
 Before planning, editing, or running a mutating command:
@@ -32,6 +38,68 @@ If a request is for review or planning only, do not implement feature code.
 Follow the reconciliation rules in `docs/roadmap.md` when sources disagree. When
 edits are authorized, correct stale documentation in the same change; in a
 read-only task, report the discrepancy without modifying files.
+
+## Composer implementation handoff
+
+When the user asks for instructions, a TODO list, or a packet for Composer
+(including Composer 2.5) to implement:
+
+1. Rank remaining work from `docs/roadmap.md`. Choose **one** Composer-sized
+   slice. Do not bundle blocked, host-impossible, or explicitly deprioritized
+   leftovers into the same packet.
+2. Deliver the TODO list as **one copyable XML document** as the primary
+   artifact. Markdown bullets may introduce the packet; they must not replace it.
+3. The XML must contain enough guidance that Composer can execute without
+   inventing cases: bootstrap order, hard out-of-scope rules, implement items,
+   docs to update, validate commands, and an explicit stop condition.
+4. The XML **must** tell Composer to review its own changes after execution and
+   fix every issue found before handing off. Do not mark the slice done on first
+   implementation pass.
+5. Do not commit, push, or edit shell startup files unless the user asked.
+
+Use this shape. Adapt element names only when the slice needs them; keep the
+contract (`hard_rules`, `bootstrap`, `implement`, `review`, `validate`, `stop`):
+
+```xml
+<composer_packet model="composer-2.5">
+  <ranking why="do not pick a leftover that cannot produce evidence on this host">
+    <item rank="1" status="implement_now" id="ROADMAP-ID">One slice. Why this, not the others.</item>
+    <item rank="2" status="blocked_or_later" id="OTHER">Why not now.</item>
+  </ranking>
+  <composer_task id="slice-id">
+    <follow>Plan or spec path. Do not invent extra cases.</follow>
+    <hard_rules>
+      Do not mark a gate or deliverable complete unless the user and the
+      roadmap exit criteria both say so. Do not commit unless asked.
+    </hard_rules>
+    <bootstrap order="required">
+      <step>Read MISTAKES.md in full.</step>
+      <step>Read docs/roadmap.md and the slice plan completely.</step>
+      <step>Read the code and ADRs named in the plan.</step>
+      <step>git status --short. Preserve unrelated work.</step>
+    </bootstrap>
+    <goal>Measurable exit criteria for this slice only.</goal>
+    <implement>
+      <item>Concrete change with files, names, and asserts.</item>
+    </implement>
+    <docs>
+      <file>docs/roadmap.md</file>
+    </docs>
+    <validate>
+      <cmd>Focused cargo/bash commands first, then bash tests/run.bash</cmd>
+    </validate>
+    <review required="true">
+      After implementation, re-read the plan and the diff. Fix every defect,
+      missed assert, stale doc, or MISTAKES.md gap before stopping. Do not
+      start the next ranked leftover.
+    </review>
+    <stop>Do not start the next slice. Do not commit unless asked.</stop>
+  </composer_task>
+</composer_packet>
+```
+
+When the user then asks Composer to follow that packet: execute only that
+slice, then perform the `<review>` pass and fix issues before claiming done.
 
 ## Product and architecture invariants
 

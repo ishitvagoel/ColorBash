@@ -1,0 +1,17 @@
+---
+description: Roadmap status rules and MISTAKES.md maintenance contract
+globs: "docs/roadmap.md,MISTAKES.md,docs/adr/**/*.md"
+alwaysApply: false
+---
+
+# Roadmap and mistakes
+
+Source of truth: `docs/roadmap.md`. Product intent: `CODEX_MODERN_BASH_ARCHITECTURE.md`. Architecture: `docs/architecture.md`, `docs/adr/`. Contracts: `docs/bash-compatibility.md`, `docs/protocol.md`, `docs/protocol-mbx2.md`, `docs/ux-spec.md`. Evidence: `docs/research/`, `docs/benchmarks/`, tests. Prevention: `MISTAKES.md`.
+
+- Smallest coherent vertical slice. No speculative rewrites or gated-phase work.
+- Use stable roadmap IDs. Update `docs/roadmap.md` in the same change that alters scope, status, or evidence.
+- `complete` requires durable exit-criteria evidence, not code existence.
+- Never weaken a gate because downstream work started. Move removed work to `deferred` or `superseded`.
+- Keep "Immediate next work" short and executable.
+- Before handoff, record or update confirmed mistakes in `MISTAKES.md` when edits are authorized; in read-only work, report the needed entry.
+- Never erase fixed history, duplicate a cause, record speculation, or include sensitive data. One writer for `MISTAKES.md` in parallel work.
