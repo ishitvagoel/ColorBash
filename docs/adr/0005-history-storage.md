@@ -220,7 +220,9 @@ whose status cannot be attributed drops per the ambiguity rule.
   in `crates/cli/src/storage.rs`); many-match prefix latency
   (`docs/benchmarks/2026-08-16-history-prefix.md`; ADR 0008); writer idle-flush
   for live readers (V-1–V-2 in `crates/cli/src/storage.rs`; V-3 in
-  `crates/pty/tests/history_invariance.rs`); foreign-user open; and
-  command-text-free diagnostics.
+  `crates/pty/tests/history_invariance.rs`); 100k-row v1→v2 migration
+  (`docs/benchmarks/2026-08-16-history-migrate.md`; M-2 in
+  `crates/cli/src/corpus.rs`); foreign-user open; and command-text-free
+  diagnostics.
 - Every claim in this ADR maps to a test in `HIST-005`–`HIST-008`,
   `HIST-011`–`HIST-013` before `G2` passes.

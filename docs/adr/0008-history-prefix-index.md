@@ -68,6 +68,9 @@ Rules:
 - Storage tests Q-A–Q-C in `crates/cli/src/storage.rs`: v1→v2 migration,
   empty-store v2 landing, covering-index `EXPLAIN QUERY PLAN`, and newest-first
   ordering.
+- 100k-row v1→v2 migration (M-2 in `crates/cli/src/corpus.rs`) via
+  `scripts/benchmark-history-migrate.bash` recorded in
+  `docs/benchmarks/2026-08-16-history-migrate.md`.
 - Release benchmark via `scripts/benchmark-history.bash` recorded in
   `docs/benchmarks/2026-08-16-history-prefix.md` (or the next dated file if
   that name already exists).

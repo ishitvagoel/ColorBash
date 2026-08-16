@@ -332,7 +332,7 @@ fn civil_from_days(days: i64) -> (i64, i64, i64) {
 mod tests {
     use super::*;
     use crate::history::{HistoryControl, HistoryErrorKind, HistoryRecorder, HistorySearch};
-    use crate::storage::QueuedHistoryStore;
+    use crate::storage::{QueuedHistoryStore, apply_schema_v1};
     use std::path::PathBuf;
     use std::thread;
     use std::time::Instant;
@@ -375,6 +375,16 @@ mod tests {
         let rank = (sorted.len() as u64 * percentile).div_ceil(100);
         let index = rank.saturating_sub(1) as usize;
         sorted[index.min(sorted.len() - 1)]
+    }
+
+    fn index_count(connection: &rusqlite::Connection, name: &str) -> i64 {
+        connection
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?1",
+                [name],
+                |row| row.get(0),
+            )
+            .unwrap()
     }
 
     fn measure_query(iterations: usize, mut query: impl FnMut()) -> [u64; 3] {
@@ -540,6 +550,83 @@ mod tests {
             )
             .unwrap();
         assert_eq!(tables, 1);
+        drop(dir);
+    }
+
+    #[test]
+    #[ignore = "HIST-004 case 8 100k v1→v2 migrate; run via scripts/benchmark-history-migrate.bash"]
+    fn schema_v1_100k_corpus_migrates_to_v2() {
+        let started = Instant::now();
+        let (dir, path) = temp_store("v1-100k");
+        let original_len = {
+            let connection = rusqlite::Connection::open(&path).unwrap();
+            connection
+                .execute_batch("PRAGMA journal_mode=WAL;")
+                .unwrap();
+            apply_schema_v1(&connection).unwrap();
+            connection.execute("PRAGMA user_version = 1", []).unwrap();
+            connection.execute_batch("BEGIN IMMEDIATE;").unwrap();
+            for index in 0..CORPUS_SIZE as u64 {
+                let entry = entry_at(CORPUS_SEED, index);
+                connection
+                    .execute(
+                        "INSERT OR IGNORE INTO history \
+                         (session_id, event_sequence, history_number, command_text, start_cwd, \
+                          completed_at, status, duration_ms, host, user) \
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                        rusqlite::params![
+                            entry.session_id,
+                            entry.event_sequence,
+                            entry.history_number,
+                            entry.command_text,
+                            entry.start_cwd,
+                            entry.completed_at,
+                            entry.status,
+                            entry.duration_ms,
+                            entry.host,
+                            entry.user,
+                        ],
+                    )
+                    .unwrap();
+            }
+            connection.execute_batch("COMMIT;").unwrap();
+            let version: i64 = connection
+                .query_row("PRAGMA user_version", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(version, 1);
+            let pre_count: i64 = connection
+                .query_row("SELECT COUNT(*) FROM history", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(pre_count, CORPUS_SIZE as i64);
+            std::fs::metadata(&path).unwrap().len()
+        };
+        let store = QueuedHistoryStore::open_with_limits(&path, 8_192, 1_000_000, 36_500).unwrap();
+        drop(store);
+        {
+            let connection = rusqlite::Connection::open(&path).unwrap();
+            let version: i64 = connection
+                .query_row("PRAGMA user_version", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(version, 2);
+            assert_eq!(index_count(&connection, "history_prefix"), 1);
+            assert_eq!(index_count(&connection, "history_prefix_completed"), 1);
+        }
+        let store = QueuedHistoryStore::open_with_limits(&path, 8_192, 1_000_000, 36_500).unwrap();
+        assert_eq!(store.count().unwrap(), CORPUS_SIZE as u64);
+        let git = store.exact_prefix("git", 50).unwrap();
+        assert!(!git.is_empty());
+        assert!(
+            git.windows(2)
+                .all(|pair| pair[0].completed_at >= pair[1].completed_at)
+        );
+        assert!(path.exists());
+        assert_ne!(std::fs::metadata(&path).unwrap().len(), 0);
+        assert!(std::fs::metadata(&path).unwrap().len() >= original_len);
+        println!(
+            "area=history_migrate_v1_v2 rows={CORPUS_SIZE} elapsed_ms={}",
+            started.elapsed().as_millis()
+        );
+        drop(store);
         drop(dir);
     }
 

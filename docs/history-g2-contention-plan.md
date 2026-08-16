@@ -1,8 +1,9 @@
 # HIST-007 slice: concurrent writer contention (cases 1–3, 6)
 
 Status: `complete` for concurrent-writer contention cases 1–3 and 6 (2026-08-16).
-Prompt-boundary write-ack PTY, WAL crash/corrupt, migration-on-100k, many-match
-prefix latency, and foreign-user permission checks remain later `G2` slices.
+Remaining `G2` slices are foreign-user open and the prompt-boundary write-ack
+budget. WAL crash/corrupt, case-8 100k v1→v2 migration, many-match prefix, and
+permission mode bits are recorded in later plans.
 
 ## Goal
 
@@ -23,8 +24,9 @@ the `G2` prompt-boundary write budget.
 ## Out of scope
 
 - Prompt-boundary write-ack PTY (p95 < 2 ms / p99 < 5 ms)
-- Case 4 writer `kill -9` mid-commit, case 5 corrupt WAL/SHM, case 8 100k
-  migration, case 7 foreign-user open
+- Case 4 writer `kill -9` mid-commit, case 5 corrupt WAL/SHM, case 7
+  foreign-user open (case 8 100k v1→v2 migration recorded in
+  `docs/benchmarks/2026-08-16-history-migrate.md`)
 - Many-match `git` prefix index / schema v2
 - Fuzzy ranking, repository context, editor UI, default-on capture
 - Marking `G2` or `HIST-007` complete
@@ -91,5 +93,6 @@ Never print command text. Never write `.bash_history`.
 
 ## Follow-on `G2` slices
 
-Prompt-boundary write-ack PTY; WAL crash/corrupt + restart uniqueness; v0→v1
-migration; many-match prefix latency; permission checks beyond mode bits.
+Prompt-boundary write-ack PTY; WAL crash/corrupt + restart uniqueness; many-match
+prefix latency; permission checks beyond mode bits. Case 8 100k v1→v2 migration
+is recorded in `docs/benchmarks/2026-08-16-history-migrate.md`.

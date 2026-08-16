@@ -61,8 +61,9 @@ Run against a populated store with the writer active:
    acknowledgement must stay inside budget.
 7. Permission tests: `0700` directory, `0600` database/WAL/SHM; a foreign user
    cannot open the store.
-8. Migration from v0 (empty) through v1 and a hypothetical v2 on a 100k-row
-   store.
+8. Migration from v0 (empty) through v1 and v2 on a 100k-row store. Release
+   evidence: `docs/benchmarks/2026-08-16-history-migrate.md` (M-2/M-3;
+   `schema_v1_100k_corpus_migrates_to_v2`).
 
 ## Budgets
 

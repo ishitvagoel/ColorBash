@@ -460,6 +460,11 @@ fn schema_version(connection: &rusqlite::Connection) -> Result<i64, rusqlite::Er
     connection.query_row("PRAGMA user_version", [], |row| row.get(0))
 }
 
+#[cfg(test)]
+pub(crate) fn apply_schema_v1(connection: &rusqlite::Connection) -> Result<(), rusqlite::Error> {
+    connection.execute_batch(SCHEMA_V1)
+}
+
 fn try_migrate(connection: &rusqlite::Connection) -> Result<(), rusqlite::Error> {
     if schema_version(connection)? >= SCHEMA_VERSION {
         return Ok(());
