@@ -278,3 +278,36 @@ fn incomplete_quote_file_completion_preserves_stock_bytes() {
     session.write_str("\n", deadline(2)).expect("submit");
     wait_all(&mut session, &["\nGOT:MBX_COMP_UNIQUE|", "> "]);
 }
+
+#[test]
+fn double_dash_file_completion_preserves_stock_bytes() {
+    let home = TempHome::new("comp-n1");
+    fs::write(home.path().join("MBX_COMP_UNIQUE"), "probe\n").expect("unique file");
+    let mut session = spawn_mbx_shell(home.path(), &[], "");
+    wait_prompt(&mut session);
+    session
+        .write_str("printf 'GOT:%s|\\n' -- MBX_COMP_U", deadline(2))
+        .expect("type double-dash prefix");
+    send_tab(&mut session);
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["\nGOT:MBX_COMP_UNIQUE|", "> "]);
+}
+
+#[test]
+fn nested_substitution_file_completion_preserves_stock_bytes() {
+    let home = TempHome::new("comp-n2");
+    fs::write(home.path().join("MBX_COMP_UNIQUE"), "probe\n").expect("unique file");
+    let mut session = spawn_mbx_shell(home.path(), &[], "");
+    wait_prompt(&mut session);
+    // Plan's `: $(printf ...)` captures printf stdout in the substitution, so GOT
+    // never reaches the terminal. echo $(...) preserves nested file completion and
+    // prints the measured stock line (recorded in comp-002-dash-nested-plan.md).
+    session
+        .write_str("echo $(printf 'GOT:%s|\\n' MBX_COMP_U", deadline(2))
+        .expect("type nested prefix");
+    send_tab(&mut session);
+    session
+        .write_str(")\n", deadline(2))
+        .expect("close substitution and submit");
+    wait_all(&mut session, &["\nGOT:MBX_COMP_UNIQUE|", "> "]);
+}
