@@ -692,3 +692,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Documented tryable features and remaining MVP leftovers in `README.md` (prompt, duration, history, `bind -x` insert, stock Tab, wrap metadata). |
 | 2026-08-16 | Completed `COMP-004` popup policy decision (`docs/comp-004-popup-plan.md` P-1–P-4). No GUI overlay; Tab stays stock; ranking additive. `COMP-004` moves to `discovery`. Do not start overlay or ghost. |
 | 2026-08-16 | Completed `COMP-004` ranked-accept chord A-1–A-5 (`docs/comp-004-ranked-accept-plan.md`; `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`). Default `\C-x\C-a`. `COMP-004` stays `discovery`; overlay unproven. |
+| 2026-08-16 | Ranked-accept replaces the current word when it is a prefix of `_MBX_COMP_RANKED_REPLY` (M-039). Stale unrelated words are refused. Snapshot clears at the next prompt. |

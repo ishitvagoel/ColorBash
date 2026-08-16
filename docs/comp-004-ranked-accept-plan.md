@@ -39,9 +39,11 @@ not a decoration experiment and not `HIST-009`.
    `MBX_COMP_ACCEPT_KEYSEQ`) in emacs and vi-insert keymaps. Reuse the occupied-
    keyseq skip pattern from `bash/editor.bash` (`MBX_COMP_ACCEPT_OVERRIDE=1` to
    overwrite). Do not rebind Tab or printable editing keys.
-3. The chord inserts `_MBX_COMP_RANKED_REPLY` at `READLINE_POINT` as ordinary
-   Bash text. Never insert `_MBX_COMP_KINDS`, `_MBX_COMP_DESCS`, or scores.
-   Never execute inserted text.
+3. The chord replaces the current whitespace-delimited word with
+   `_MBX_COMP_RANKED_REPLY` when that word is a non-empty prefix of the ranked
+   candidate. Never insert `_MBX_COMP_KINDS`, `_MBX_COMP_DESCS`, or scores.
+   Never execute inserted text. Never splice after the prefix (`aa` + `aaflag`
+   must not become `aaaaflag`).
 4. When no ranked reply exists (empty `COMPREPLY`, no prior wrapped completion),
    the chord is a no-op on the line buffer.
 5. Add fixture `mbx_comp_rank` behind `MBX_COMP_FIXTURES=1` only (M-037): backend
@@ -78,9 +80,10 @@ In `_mbx_comp_wrap_backend`, after `_mbx_comp_fill_ranking`:
 - Leave `_MBX_COMP_LAST_REPLY=${COMPREPLY[0]:-}` unchanged.
 
 Add `_mbx_comp_accept_ranked` (name flexible) that reads
-`_MBX_COMP_RANKED_REPLY`; when non-empty, splices it into `READLINE_LINE` at
-`READLINE_POINT` and advances `READLINE_POINT` by `${#token}` — same pattern
-as `_mbx_editor_insert_token`.
+`_MBX_COMP_RANKED_REPLY` and replaces the current whitespace-delimited word
+in `READLINE_LINE` when that word is a non-empty prefix of the ranked
+candidate. Advance `READLINE_POINT` to the end of the replacement. Clear
+`_MBX_COMP_RANKED_REPLY` at the next prompt (`_mbx_render_prompt`).
 
 Install from `_mbx_completion_install` (always, not fixture-gated). Default
 keyseq `\C-x\C-a` must not collide with the editor default `\C-x\C-y`.
@@ -98,11 +101,12 @@ Tests observe bytes through `printf 'GOT:%s|\n' …` (M-023). PTY waits use
 
 | ID | Case | Assert | Status |
 | --- | --- | --- | --- |
-| A-1 | Ranked accept inserts top-ranked bytes | Module: run R-2 wrap backend; `_MBX_COMP_RANKED_REPLY` is `aaflag` while `COMPREPLY[0]` stays `zzflag`. PTY: `mbx_comp_rank aa` + Tab + accept chord + Enter → `\nGOT:aaaaflag|` (`aa` + spliced `aaflag`; not stock `zzflag`). | complete — `tests/bash/modules.bash`, `ranked_accept_inserts_top_ranked_bytes` |
+| A-1 | Ranked accept inserts top-ranked bytes | Module: run R-2 wrap backend; `_MBX_COMP_RANKED_REPLY` is `aaflag` while `COMPREPLY[0]` stays `zzflag`. PTY: `mbx_comp_rank aa` + Tab + accept chord + Enter → `\nGOT:aaflag|`. Tab without chord keeps `\nGOT:aa|`. | complete — `tests/bash/modules.bash`, `ranked_accept_inserts_top_ranked_bytes`, `ranked_accept_tab_without_chord_keeps_prefix` |
 | A-2 | Tab insertion unchanged | PTY: `mbx_comp_flag --mbx-co` + Tab + Enter → `\nGOT:--mbx-comp-flag` (same as P-1 / R-1). `COMPREPLY[0]` order unchanged. | complete — `ranking_preserves_flag_insertion_bytes` |
 | A-3 | No ranked snapshot → no-op | PTY: type `echo ok`, accept chord, Enter → `\nok` without ranked fixture text. | complete — `ranked_accept_without_snapshot_is_noop` |
 | A-4 | Occupied keyseq skipped | PTY: pre-bind default keyseq; install without override → accept chord not bound; with `MBX_COMP_ACCEPT_OVERRIDE=1` → bound. | complete — `occupied_accept_chord_is_not_overwritten`, `occupied_accept_chord_override_installs` |
-| A-5 | Metadata never inserted | PTY: ranked fixture path; `\nGOT:aaaaflag|` and output must not contain `EXTRA`. | complete — `ranked_accept_metadata_never_inserted` |
+| A-5 | Metadata never inserted | PTY: ranked fixture path; `\nGOT:aaflag|` and output must not contain `EXTRA`. | complete — `ranked_accept_metadata_never_inserted` |
+| A-6 | Stale unrelated word refused | Module + PTY: after ranking `aaflag`, current word `ok` is unchanged. Ctrl-U then `echo ok` + chord → `\nok`. | complete — `tests/bash/modules.bash`, `ranked_accept_refuses_stale_unrelated_word` |
 
 If a measured result differs, record host bytes in the Status cell. Do not make
 Tab follow `_MBX_COMP_ORDER`.
