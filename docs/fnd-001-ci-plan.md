@@ -2,8 +2,8 @@
 
 Status: `complete` for C-1–C-2 (2026-08-16). Do not mark `G0` complete.
 Remaining `G0` evidence is still the platform matrix, `HRD-001` macOS, and
-representative `PRM-004` percentiles. Remaining `G2` is still foreign-user open
-and the write-ack budget.
+representative `PRM-004` percentiles. Remaining `G2` is still the write-ack
+budget (foreign-user open recorded).
 
 ## Why this slice (do not pick a different leftover)
 
@@ -44,12 +44,12 @@ Remaining work, ranked. Implement **only row 1** in this change.
 
 - Repository: `ishitvagoel/ColorBash`
 - Branch: `main`
-- Commit: `2ea3be4b54d76dfae80411d4954bb66e36824aa4`
+- Commit: `2a829bacfa68d1ba479e3f21db5bc679512dcd96`
 - Workflow: `CI` (`.github/workflows/ci.yml`)
 - Event: `push`
 - Conclusion: `success`
-- Updated: 2026-08-16T08:12:11Z
-- Run URL: https://github.com/ishitvagoel/ColorBash/actions/runs/31935853161
+- Updated: 2026-08-16T08:38:07Z
+- Run URL: https://github.com/ishitvagoel/ColorBash/actions/runs/31936945807
 
 Reproduce probe:
 
@@ -69,5 +69,6 @@ curl -sS "https://api.github.com/repos/ishitvagoel/ColorBash/actions/runs?branch
 1. `G0` platform matrix, `HRD-001` macOS PTY run, `PRM-004` representative
    percentiles (Darwin PTY constant cfg-split D-1–D-3 already recorded in
    `docs/hrd-001-darwin-pty-constants-plan.md`)
-2. `HIST-007` remaining `G2`: foreign-user open when a second host uid exists
+2. `HIST-007` remaining `G2`: write-ack percentile budget (foreign-user open
+   recorded)
 3. Write-ack budget only after a test proves SQLite is on the prompt path
