@@ -144,9 +144,9 @@ Known foundation debt:
   dirty/large repositories, cold refresh, fallback, PTY, and platform percentile
   evidence remain `PRM-004` work;
 - the display-width helper compacts paths at 52 display columns and color
-  capability (16/256/truecolor) is recorded; wrap-column PTY probes remain
-  `PRM-002` discovery; PTY round-trip evidence exists for wide/combining glyphs
-  and resize;
+  capability (16/256/truecolor) is recorded; non-DSR wrap-column PTY usability
+  is recorded (`docs/prm-002-wrap-column-plan.md`); PTY round-trip evidence
+  exists for wide/combining glyphs and resize;
 - the PTY driver in `crates/pty/src/sys.rs` is Linux/WSL-accurate; Darwin
   `O_CLOEXEC`, `poll`'s `nfds_t`, and `ptsname_r` are cfg-split with cited
   header values (`docs/hrd-001-darwin-pty-constants-plan.md`); the full
@@ -159,8 +159,8 @@ Known foundation debt:
 - direct `mbx prompt` defaults disable color when stdout is not a terminal;
   explicit `--flags` still forwards caller capability (`docs/prm-002-redirected-output-plan.md`);
   the display-width helper compacts long paths at 52 columns; color capability
-  (16/256/truecolor) is recorded; wrap-column PTY probes remain `PRM-002`
-  discovery.
+  (16/256/truecolor) is recorded; non-DSR wrap-column PTY usability is recorded
+  (`docs/prm-002-wrap-column-plan.md`).
 
 ## Dependency and gate map
 
@@ -354,7 +354,7 @@ Outcome: an adaptive, semantic, safe prompt that remains fast under failure.
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
 | `PRM-001` | Path, Git, status, duration, SSH, production, icon, and theme segments | `validation` | Rust/Bash renderers and semantic tests |
-| `PRM-002` | Capability, redirected-output, visible-width, and resize model | `discovery` | redirected-output color policy recorded (`docs/prm-002-redirected-output-plan.md`; `crates/cli/src/environment.rs`); display-width path compaction helper recorded (`docs/prm-002-width-plan.md`; `crates/cli/src/prompt.rs`); color capability (16/256/truecolor) recorded (`docs/prm-002-color-capability-plan.md`; `crates/cli/src/environment.rs`, `crates/cli/src/prompt.rs`, `bash/config.bash`, `bash/fallback.bash`); wrap-column PTY probes remain |
+| `PRM-002` | Capability, redirected-output, visible-width, and resize model | `validation` | redirected-output color policy recorded (`docs/prm-002-redirected-output-plan.md`; `crates/cli/src/environment.rs`); display-width path compaction helper recorded (`docs/prm-002-width-plan.md`; `crates/cli/src/prompt.rs`); color capability (16/256/truecolor) recorded (`docs/prm-002-color-capability-plan.md`; `crates/cli/src/environment.rs`, `crates/cli/src/prompt.rs`, `bash/config.bash`, `bash/fallback.bash`); non-DSR wrap-column PTY usability recorded (`docs/prm-002-wrap-column-plan.md`; `crates/pty/tests/multiline_width.rs`); representative `PRM-004` percentiles remain |
 | `PRM-003` | End-to-end deadline, capped Git acquisition, and warm cache | `complete` | one Bash deadline, capped 50-ms Git refresh, 128-entry/1-s cache, failure tests, and `docs/benchmarks/2026-08-15-solid-hardening.md` |
 | `PRM-004` | Full prompt p50/p95/p99 benchmark matrix | `blocked` | representative repositories plus platform and fallback workloads; controlled warm case recorded |
 | `PRM-005` | Real PTY prompt, wrap, signal, resize, and restoration tests | `complete` | lifecycle, helper failure, Ctrl+C/Z, resize, `stty -g`, multiline, narrow wrap, and wide-glyph coverage |
@@ -559,9 +559,10 @@ default. Remaining before `G2`:
 3. `PRM-002` redirected-output color is recorded (`docs/prm-002-redirected-output-plan.md`);
    display-width path compaction is recorded (`docs/prm-002-width-plan.md`);
    color capability (16/256/truecolor) is recorded
-   (`docs/prm-002-color-capability-plan.md`); wrap-column PTY probes remain
-   discovery from the `RSH-004` baseline; `EDT-001` stays blocked on remaining
-   `G0` / `G2` gates.
+   (`docs/prm-002-color-capability-plan.md`); non-DSR wrap-column PTY usability
+   is recorded (`docs/prm-002-wrap-column-plan.md`; CPR/DSR waits forbidden on
+   raw PTY). `PRM-002` is `validation` for representative `PRM-004` percentiles.
+   `EDT-001` stays blocked on remaining `G0` / `G2` gates.
 
 ## Provisional performance and safety budgets
 
@@ -651,3 +652,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Completed foreign-user open evidence for `HIST-007` (F-1–F-4 in `crates/cli/src/storage.rs`; `docs/history-g2-foreign-user-plan.md`; `sudo -n -u nobody` uid 65534). `G2` and `HIST-007` stay `validation` for write-ack budget. `PRM-002` stays `discovery` for wrap-column PTY probes. |
 | 2026-08-16 | Cloud remeasure of prompt-boundary write-ack percentiles (`docs/history-g2-write-ack-cloud-plan.md`; `docs/benchmarks/2026-08-16-history-write-ack-cloud.md`): p50=2412, p95=2546, p99=2752 µs — p95 misses the provisional budget. `G2` and `HIST-007` stay `validation`; write-ack budget remains. No product-code changes. |
 | 2026-08-16 | Refreshed linked green GitHub Actions CI on `origin/main` to `2a829ba` (https://github.com/ishitvagoel/ColorBash/actions/runs/31936945807); `FND-001` and `BST-005` remain complete (`docs/fnd-001-ci-plan.md`). `G0` validation remains open for platform matrix, `HRD-001` macOS PTY run, and `PRM-004` representative percentiles. Write-ack budget remains. |
+| 2026-08-16 | Completed non-DSR wrap-column PTY discovery for `PRM-002` (W-C-1–W-C-4 in `crates/pty/tests/multiline_width.rs`; `docs/prm-002-wrap-column-plan.md`; CPR/DSR waits forbidden on raw PTY). `PRM-002` moves to `validation` for representative `PRM-004` percentiles. `G0` stays `validation`. `G2` / `HIST-007` stay `validation` for write-ack budget. |

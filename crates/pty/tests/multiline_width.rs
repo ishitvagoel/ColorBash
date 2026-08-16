@@ -220,3 +220,35 @@ fn combining_mark_path_keeps_input_usable() {
     type_line(&mut session, "printf 'MBX_WIDTH:combining-ok\\n'");
     wait_all(&mut session, &["\nMBX_WIDTH:combining-ok", "> "]);
 }
+
+#[test]
+fn narrow_wrap_long_command_stays_usable() {
+    let home = TempHome::new();
+    let mut session = spawn_mbx(home.path(), WinSize { rows: 24, cols: 20 });
+    wait_for(&mut session, "> ");
+    type_line(
+        &mut session,
+        "printf 'MBX_WRAP:narrow-long-ok\\n'; echo abcdefghijklmnopqrstuvwxyz",
+    );
+    wait_all(
+        &mut session,
+        &[
+            "\nMBX_WRAP:narrow-long-ok",
+            "\nabcdefghijklmnopqrstuvwxyz",
+            "> ",
+        ],
+    );
+}
+
+#[test]
+fn narrow_wrap_wide_glyph_payload_stays_usable() {
+    let home = TempHome::new();
+    let wide = home.path().join("测 试");
+    fs::create_dir_all(&wide).expect("wide dir");
+    let mut session = spawn_mbx(home.path(), WinSize { rows: 24, cols: 12 });
+    wait_for(&mut session, "> ");
+    type_line(&mut session, "cd \"测 试\"");
+    wait_for(&mut session, "> ");
+    type_line(&mut session, "printf 'MBX_WRAP:wide-narrow-ok\\n'");
+    wait_all(&mut session, &["\nMBX_WRAP:wide-narrow-ok", "> "]);
+}

@@ -54,28 +54,44 @@ A ~80-character command at a 30-column window wraps; the shell executes it and
 echoes the complete output. Readline owns the redraw; MBX never interferes with
 the buffer.
 
+### Narrow wrap with a long typed command (non-DSR, 2026-08-16)
+
+At `cols=20`, a `printf` plus a 26-character `echo` payload longer than the
+window width still executes with exact output and a usable next `> ` prompt
+(`narrow_wrap_long_command_stays_usable` in `crates/pty/tests/multiline_width.rs`).
+No CPR/DSR probe is used.
+
+### Wide-glyph wrap at a narrow window (non-DSR, 2026-08-16)
+
+At `cols=12`, `cd` into a CJK directory whose display width exceeds the window
+still leaves the shell usable: a subsequent `printf` executes and the next `> `
+prompt appears (`narrow_wrap_wide_glyph_payload_stays_usable` in
+`crates/pty/tests/multiline_width.rs`). No CPR/DSR probe is used.
+
 ## Limits of this evidence
 
-- Byte-level cursor-position assertions (exact wrap columns) are not yet
-  asserted; the corpus proves usability and exact command output, not pixel or
-  column math.
-- Wide-character column counts (East Asian width) are validated only through
-  successful round trips, not through a display-width model. A true width model
-  is still `PRM-002` design work.
+- **CPR/DSR is forbidden on this harness.** A raw PTY has no cursor-position
+  responder; sending `\e[6n` and waiting for CPR would hang. Do not add such
+  waits to tests.
+- Byte-level cursor-position assertions (exact wrap columns) are not asserted;
+  the corpus proves usability and exact command output at known `COLUMNS`, not
+  pixel or CPR-reported column math.
+- Wide-character column counts are validated through successful round trips and
+  the unit display-width model in `crates/cli/src/prompt.rs`, not through CPR.
 - Resize is validated mid-line; resize during a fullscreen application or during
   an active foreground job remains release-matrix (`HRD-001`) work.
-- Terminal capability negotiation (16/256/true color) is out of scope here.
+- Terminal capability negotiation (16/256/true color) is recorded separately in
+  `docs/prm-002-color-capability-plan.md`.
 
 ## Implications
 
 1. The MBX prompt is compatible with multiline input, wrapping, resize, and
    wide/combining glyphs in the tested window sizes; no Readline augmentation is
    needed for these foundation cases.
-2. `PRM-002` now has a unit display-width model for path compaction in
-   `crates/cli/src/prompt.rs` (`docs/prm-002-width-plan.md`): East Asian wide
-   glyphs and combining marks count as display columns, the two-line anchor is
-   unchanged, and wrap math still needs PTY column probes rather than byte
-   counts.
+2. `PRM-002` has a unit display-width model for path compaction in
+   `crates/cli/src/prompt.rs` (`docs/prm-002-width-plan.md`) and non-DSR wrap
+   usability probes at known `COLUMNS` (`docs/prm-002-wrap-column-plan.md`);
+   exact CPR/DSR column math remains out of scope for a raw PTY harness.
 3. Any future ghost-text or popup feature (`G3` onward) must re-use this harness
    for exact-byte and resize evidence; the harness already proves the
    resize-mid-line and narrow-wrap topologies those features depend on.
