@@ -124,7 +124,7 @@ Not implemented:
 - arbitrary key-injection coverage (Tab, arrows, Ctrl+R), the release platform
   matrix, or remaining `G0` platform-matrix evidence;
 - remaining `G2` evidence: prompt-boundary write-ack budget (correctness recorded;
-  percentile miss on development WSL); or
+  percentile miss on development WSL and cloud remeasure); or
 - asynchronous feature IPC or the broader completion/history provider model.
 
 Known foundation debt:
@@ -400,7 +400,7 @@ accept or revise these details before implementation:
 | `HIST-012` | Define queue drain, shell-exit, crash, retry, and acceptable-loss semantics | `complete` | durability contract in `docs/history-phase3a-contract.md`; writer batches busy queues to 32 and idle-flushes partial batches; Shutdown drains |
 | `HIST-006` | Implement SQLite schema, migrations, permissions, retention, and writer | `complete` | `crates/cli/src/storage.rs` schema v1, WAL, `0700`/`0600`, retention prune, batched writer |
 | `HIST-011` | Implement exclusions, no-log policy, disable/path/clear/delete controls | `complete` | `crates/cli/src/policy.rs` plus `mbx history path|count|clear|delete` and env controls |
-| `HIST-007` | Add opt-in Bash observation and bounded protocol ingestion | `validation` | `bash/history.bash`, MBX2 RECORD ingestion, PTY recording/invariance tests, seeded 100k corpus, hostile inertness, query p95, concurrent-writer contention, prompt-boundary write-ack correctness, WAL crash/corrupt recovery, WAL/SHM `0600` never-more-permissive, many-match prefix covering index, writer idle-flush for live readers, 100k-row v1→v2 migration (`crates/cli/src/corpus.rs`), and foreign-user open (`docs/history-g2-foreign-user-plan.md`; F-1–F-4 in `crates/cli/src/storage.rs`); write-ack percentile budget remains |
+| `HIST-007` | Add opt-in Bash observation and bounded protocol ingestion | `validation` | `bash/history.bash`, MBX2 RECORD ingestion, PTY recording/invariance tests, seeded 100k corpus, hostile inertness, query p95, concurrent-writer contention, prompt-boundary write-ack correctness, WAL crash/corrupt recovery, WAL/SHM `0600` never-more-permissive, many-match prefix covering index, writer idle-flush for live readers, 100k-row v1→v2 migration (`crates/cli/src/corpus.rs`), and foreign-user open (`docs/history-g2-foreign-user-plan.md`; F-1–F-4 in `crates/cli/src/storage.rs`); write-ack percentile budget remains (WSL and cloud remeasure miss — `docs/benchmarks/2026-08-16-history-write-ack-cloud.md`) |
 | `HIST-008` | Add recent, exact-prefix, cwd queries and deterministic ranking | `complete` | `mbx history search recent|prefix|cwd` with bounded limits and NOCASE prefix index |
 | `HIST-009` | Add bounded fuzzy ranking | `blocked` | `HIST-008`, deterministic-query evidence, and 100k+ benchmark |
 | `HIST-010` | Add repository context | `blocked` | history-scoped `GIT-003` root/branch provider subset |
@@ -533,9 +533,11 @@ controls, deterministic queries, MBX2 ingestion, and opt-in Bash observation
 default. Remaining before `G2`:
 
 1. `HIST-007` remaining `G2` evidence: the prompt-boundary write-ack budget
-   (W-1–W-4 correctness recorded; release percentile still misses the provisional
-   budget on development WSL — do not chase with product-code changes unless a
-   test proves the prompt waits on SQLite). Concurrent-writer contention (cases
+   (W-1–W-4 correctness recorded; release percentile misses the provisional
+   budget on development WSL and on the 2026-08-16 cloud remeasure — p95=2546 µs
+   in `docs/benchmarks/2026-08-16-history-write-ack-cloud.md`; do not chase with
+   product-code changes unless a test proves the prompt waits on SQLite).
+   Concurrent-writer contention (cases
    1–3 and 6), 100k query p95, hostile inertness, invariance/admission-parity
    PTY, WAL crash/corrupt (K-1–K-4 in `crates/cli/src/storage.rs`), WAL/SHM
    `0600` never-more-permissive (P-1–P-4 in `crates/cli/src/storage.rs`),
@@ -647,3 +649,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Completed color capability negotiation for `PRM-002` (T-1–T-6 in `crates/cli/src/environment.rs`, `crates/cli/src/prompt.rs`, `bash/config.bash`, `bash/fallback.bash`; `docs/prm-002-color-capability-plan.md`). `PRM-002` stays `discovery` for wrap-column PTY probes. Foreign-user open and write-ack budget remain. |
 | 2026-08-16 | Refreshed linked green GitHub Actions CI on `origin/main` to `2ea3be4` (https://github.com/ishitvagoel/ColorBash/actions/runs/31935853161); `FND-001` and `BST-005` remain complete (`docs/fnd-001-ci-plan.md`). `G0` validation remains open for platform matrix, `HRD-001` macOS PTY run, and `PRM-004` representative percentiles. Remaining `G2` is still foreign-user open and write-ack budget. |
 | 2026-08-16 | Completed foreign-user open evidence for `HIST-007` (F-1–F-4 in `crates/cli/src/storage.rs`; `docs/history-g2-foreign-user-plan.md`; `sudo -n -u nobody` uid 65534). `G2` and `HIST-007` stay `validation` for write-ack budget. `PRM-002` stays `discovery` for wrap-column PTY probes. |
+| 2026-08-16 | Cloud remeasure of prompt-boundary write-ack percentiles (`docs/history-g2-write-ack-cloud-plan.md`; `docs/benchmarks/2026-08-16-history-write-ack-cloud.md`): p50=2412, p95=2546, p99=2752 µs — p95 misses the provisional budget. `G2` and `HIST-007` stay `validation`; write-ack budget remains. No product-code changes. |
