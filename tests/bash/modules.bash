@@ -733,6 +733,9 @@ assert_eq 2 ${#_MBX_COMP_ORDER[@]} 'order length should match COMPREPLY'
 assert_eq 1 "${_MBX_COMP_ORDER[0]}" 'best-scoring aaflag index should sort first'
 assert_eq aaflag "${_MBX_COMP_RANKED_REPLY:-}" \
     'ranked reply should prefer aaflag over stock COMPREPLY[0]'
+assert_eq 2 ${#_MBX_COMP_RANKED_LIST[@]} 'ranked list should snapshot ordered candidates'
+assert_eq aaflag "${_MBX_COMP_RANKED_LIST[0]}" 'ranked list head should match ranked reply'
+assert_eq zzflag "${_MBX_COMP_RANKED_LIST[1]}" 'ranked list should keep zzflag after aaflag'
 
 # COMP-004 ranked accept: replace current word; refuse stale unrelated words.
 READLINE_LINE='mbx_comp_rank aa'
@@ -748,6 +751,41 @@ _MBX_COMP_RANKED_REPLY=aaflag
 _mbx_comp_accept_ranked
 assert_eq 'echo ok' "$READLINE_LINE" \
     'ranked accept must not mutate an unrelated current word'
+
+# COMP-004 ranked cycle: prefix inserts head; equal head rotates; unrelated is no-op.
+_mbx_comp_wrap_backend _mbx_comp_r2_backend
+READLINE_LINE='mbx_comp_rank aa'
+READLINE_POINT=${#READLINE_LINE}
+_mbx_comp_cycle_next
+assert_eq 'mbx_comp_rank aaflag' "$READLINE_LINE" \
+    'cycle-next on a prefix should insert the ranked head without rotating'
+assert_eq aaflag "${_MBX_COMP_RANKED_REPLY:-}" \
+    'prefix cycle-next must not rotate the ranked head'
+assert_eq aaflag "${_MBX_COMP_RANKED_LIST[0]}" \
+    'prefix cycle-next must not rotate the ranked list'
+_mbx_comp_cycle_next
+assert_eq 'mbx_comp_rank zzflag' "$READLINE_LINE" \
+    'cycle-next from the ranked head should replace with the next candidate'
+assert_eq zzflag "${_MBX_COMP_RANKED_REPLY:-}" \
+    'cycle-next should update the ranked head to zzflag'
+assert_eq zzflag "${_MBX_COMP_RANKED_LIST[0]}" \
+    'cycle-next should rotate zzflag to the list head'
+_mbx_comp_wrap_backend _mbx_comp_r2_backend
+READLINE_LINE='mbx_comp_rank aaflag'
+READLINE_POINT=${#READLINE_LINE}
+_mbx_comp_cycle_prev
+assert_eq 'mbx_comp_rank zzflag' "$READLINE_LINE" \
+    'cycle-prev from the ranked head should wrap to the last candidate'
+assert_eq zzflag "${_MBX_COMP_RANKED_REPLY:-}" \
+    'cycle-prev should update the ranked head to zzflag'
+_mbx_comp_wrap_backend _mbx_comp_r2_backend
+READLINE_LINE='echo ok'
+READLINE_POINT=${#READLINE_LINE}
+_mbx_comp_cycle_next
+assert_eq 'echo ok' "$READLINE_LINE" \
+    'ranked cycle must not mutate an unrelated current word'
+assert_eq aaflag "${_MBX_COMP_RANKED_REPLY:-}" \
+    'unrelated cycle-next must not rotate the ranked head'
 
 _mbx_comp_r3_backend() {
     local i
@@ -769,6 +807,7 @@ _mbx_comp_wrap_backend _mbx_comp_r3_backend
 assert_eq 80 ${#COMPREPLY[@]} 'R-3 backend should return 80 candidates'
 assert_eq 80 ${#_MBX_COMP_SCORES[@]} 'scores length should match COMPREPLY'
 assert_eq 80 ${#_MBX_COMP_ORDER[@]} 'order length should match COMPREPLY'
+assert_eq 64 ${#_MBX_COMP_RANKED_LIST[@]} 'ranked cycle list should cap at 64'
 for ((i = 64; i < 80; i++)); do
     assert_eq 0 "${_MBX_COMP_SCORES[i]}" "reply index $i should keep score 0 beyond the 64-candidate bound"
 done

@@ -474,7 +474,7 @@ line. Do not move completion functions into a subprocess unless live-state and
 | `COMP-001` | Build a non-popup stock-completion adapter harness | `complete` | `docs/comp-001-harness-plan.md`; H-1–H-4; `G4` complete; 5 ms leftover `deferred` |
 | `COMP-002` | Prove file and one `-F` function's exact insertion parity | `complete` | `docs/comp-002-parity-plan.md`; P-1–P-4, F-1–F-4, L-1–L-4, N-1–N-2, S-1–S-4; `docs/g4-gate-close-plan.md`; 5 ms leftover `deferred` |
 | `COMP-003` | Add typed candidate metadata and bounded ranking | `complete` | `docs/comp-003-metadata-plan.md` K-1–K-4; `docs/comp-003-ranking-plan.md` R-1–R-4 in `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs` |
-| `COMP-004` | Add popup navigation and terminal-safe rendering | `discovery` | `docs/comp-004-popup-plan.md` P-1–P-4; `docs/comp-004-ranked-accept-plan.md` A-1–A-5; overlay unproven |
+| `COMP-004` | Add popup navigation and terminal-safe rendering | `discovery` | `docs/comp-004-popup-plan.md` P-1–P-4; `docs/comp-004-ranked-accept-plan.md` A-1–A-6; `docs/comp-004-ranked-cycle-plan.md` C-1–C-6; overlay unproven |
 | `COMP-005` | Insert/fall through exactly and pass the parity/PTY matrix | `blocked` | `COMP-004`, Git candidates when enabled |
 
 Exit condition: `G4` for the adapter slice; `COMP-005` for the MVP completion
@@ -560,9 +560,11 @@ Exit condition: `G5` after every `HRD-*` item is complete.
 percentile leftovers are `deferred` and must not block product slices
 (`docs/latency-budget-deferral.md`).
 
-1. Next unblocked leftover is the `HIST-010` / `GIT-003` pair (repo context on
-   history rows). Do not start overlay, ghost, or highlighting. `COMP-004`
-   stays `discovery`. Do not mark `COMP-004` or `COMP-005` complete.
+1. Overlay, ghost, and highlighting stay blocked on unproven continuous
+   decoration. `COMP-004` stays `discovery` (ranked-accept and ranked-cycle
+   chords exist; no GUI overlay). Do not mark `COMP-004` or `COMP-005`
+   complete. Next unblocked leftover is the `HIST-010` / `GIT-003` pair
+   (repo context on history rows).
 2. `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
    slice on FND-001 SHA refresh or percentile benches unless a functional
    prompt-path defect is proven.
@@ -695,3 +697,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Ranked-accept replaces the current word when it is a prefix of `_MBX_COMP_RANKED_REPLY` (M-039). Stale unrelated words are refused. Snapshot clears at the next prompt. |
 | 2026-08-16 | Completed `GIT-004` Git completion kinds (`docs/git-004-kinds-plan.md`). `COMP-001` / `COMP-002` move to `complete` (G4 evidence; 5 ms `deferred`). |
 | 2026-08-16 | Completed `HIST-009` bounded fuzzy search (`docs/hist-009-fuzzy-plan.md`; `mbx history search fuzzy`). `HIST-010` remains. |
+| 2026-08-16 | Completed `COMP-004` ranked-cycle chords C-1–C-6 (`docs/comp-004-ranked-cycle-plan.md`; default `\C-x\C-n` / `\C-x\C-p`). `COMP-004` stays `discovery`; overlay unproven. |
