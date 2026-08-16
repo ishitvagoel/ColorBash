@@ -402,7 +402,8 @@ highlighting:
    leftover matrix, N-1–N-2, wrap fallthrough S-1–S-4, and `G4` decision
    in `docs/g4-decision-plan.md`);
 6. decide whether duration timing remains opt-in or integrates with an existing
-   preexec framework through an explicit adapter.
+   preexec framework through an explicit adapter
+   (`docs/prm-006-duration-plan.md`).
 
 The roadmap, not this architecture description, selects the next slice. A genuine
 PTY driver now covers foundation prompt lifecycle, helper failure, Ctrl+C,

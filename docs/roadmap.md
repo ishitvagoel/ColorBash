@@ -7,7 +7,7 @@
 
 - Last reviewed: 2026-08-16 UTC
 - Current milestone: Phase 3A sidecar implemented; `G0` and `G2` complete; `G1` accepted
-- Active workstream: `G3` and `G4` in `validation` (`EDT-001` / `COMP-001` / `COMP-002` in `validation`; `COMP-003` blocked)
+- Active workstream: `PRM-006` duration policy (`G3` / `G4` in `validation`; `COMP-003` blocked)
 - Next decision gate: `G3` editor integration
 - Editor-facing work is blocked by: `G3` editor integration, as identified per phase
 - Timing policy: unmet percentile targets are `deferred` and do not block
@@ -377,7 +377,7 @@ Outcome: an adaptive, semantic, safe prompt that remains fast under failure.
 | `PRM-003` | End-to-end deadline, capped Git acquisition, and warm cache | `complete` | one Bash deadline, capped 50-ms Git refresh, 128-entry/1-s cache, failure tests, and `docs/benchmarks/2026-08-15-solid-hardening.md` |
 | `PRM-004` | Full prompt p50/p95/p99 benchmark matrix | `deferred` | controlled warm-Git case recorded; remaining matrix deferred (`docs/latency-budget-deferral.md`) |
 | `PRM-005` | Real PTY prompt, wrap, signal, resize, and restoration tests | `complete` | lifecycle, helper failure, Ctrl+C/Z, resize, `stty -g`, multiline, narrow wrap, and wide-glyph coverage |
-| `PRM-006` | Decide opt-in duration policy or explicit preexec adapter | `discovery` | must not compose arbitrary DEBUG traps silently |
+| `PRM-006` | Decide opt-in duration policy or explicit preexec adapter | `discovery` | specified in `docs/prm-006-duration-plan.md`; must not compose arbitrary DEBUG traps silently |
 | `PRM-007` | Give native and fallback adapters one explicit input/safety contract and shared hostile-state corpus | `complete` | explicit four-field context, shared C0/DEL/expansion corpus, production precedence, and SSH-only test |
 | `PRM-008` | Preserve raw additive prompt flags across coprocess, per-call, and fallback paths | `complete` | raw `--flags` CLI boundary plus coprocess/per-call/fallback unknown-bit tests |
 | `PRM-009` | Reassess semantic composition versus typed PS1 encoding and validated theme styles | `discovery` | wait for `PRM-002` or a second renderer; avoid a speculative abstraction |
@@ -554,10 +554,10 @@ Exit condition: `G5` after every `HRD-*` item is complete.
 percentile leftovers are `deferred` and must not block product slices
 (`docs/latency-budget-deferral.md`).
 
-1. `G3` stays `validation`. Functional evidence is recorded in
-   `docs/g3-decision-plan.md`. Continuous decoration stays unproven. Do not
-   start ghost, popup, or `COMP-003`. `G4` stays `validation`. Do not mark
-   `G3`, `G4`, `EDT-001`, `COMP-001`, or `COMP-002` complete.
+1. `PRM-006` duration policy — follow `docs/prm-006-duration-plan.md`.
+   Remain opt-in; do not compose `DEBUG`. Do not start ghost, popup, or
+   `COMP-003`. `G3` / `G4` stay `validation`. Do not mark `PRM-006`, `G3`,
+   or `G4` complete.
 2. `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
    slice on FND-001 SHA refresh or percentile benches unless a functional
    prompt-path defect is proven.
@@ -674,3 +674,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Completed `G4` decision inventory (`docs/g4-decision-plan.md`; `docs/latency-budget-deferral.md`). `G4` moves to `validation`; 5 ms leftover stays `deferred`. `COMP-001` / `COMP-002` stay `validation`. Do not start `COMP-003` or popup. |
 | 2026-08-16 | Specified `G3` decision inventory in `docs/g3-decision-plan.md`. Continuous decoration stays unproven. Do not mark `G3` complete. Do not start ghost, popup, or `COMP-003`. |
 | 2026-08-16 | Completed `G3` decision inventory (`docs/g3-decision-plan.md`). `G3` stays `validation`; continuous decoration stays unproven. Do not start ghost, popup, or `COMP-003`. |
+| 2026-08-16 | Specified `PRM-006` duration policy decision in `docs/prm-006-duration-plan.md`. Remain opt-in; do not compose `DEBUG`. Do not start ghost, popup, or `COMP-003`. |
