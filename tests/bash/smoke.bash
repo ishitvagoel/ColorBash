@@ -23,9 +23,12 @@ baseline_log=$transcript_dir/baseline.log
 enhanced_log=$transcript_dir/enhanced.log
 baseline_markers=$transcript_dir/baseline.markers
 enhanced_markers=$transcript_dir/enhanced.markers
+trace_err=$transcript_dir/trace.err
+trace_out=$transcript_dir/trace.out
 cleanup() {
     local file
-    for file in "$baseline_log" "$enhanced_log" "$baseline_markers" "$enhanced_markers"; do
+    for file in "$baseline_log" "$enhanced_log" "$baseline_markers" \
+        "$enhanced_markers" "$trace_err" "$trace_out"; do
         [[ ! -e $file ]] || unlink "$file"
     done
     rmdir "$transcript_dir" 2>/dev/null || true
@@ -103,5 +106,31 @@ exit
 EOF
 )
 [[ $recovery_state == *'RECOVERY:alive:engine=0'* ]] || fail 'helper exit did not degrade to the per-call renderer'
+
+idempotent_state=$(env MBX_TEST_ROOT="$ROOT" MBX_BIN="$MBX_TEST_BIN" TERM=dumb \
+    bash --noprofile --norc -i 2>/dev/null <<'EOF'
+source "$MBX_TEST_ROOT/bash/init.bash"
+before=$(declare -p PROMPT_COMMAND)
+source "$MBX_TEST_ROOT/bash/init.bash"
+after=$(declare -p PROMPT_COMMAND)
+[[ $before == "$after" && ${_MBX_INITIALIZED} == 1 ]] && printf 'idempotent:ok\n'
+exit
+EOF
+)
+[[ $idempotent_state == *'idempotent:ok'* ]] || fail 're-sourcing init.bash was not idempotent'
+
+: >"$trace_err"
+env MBX_TEST_ROOT="$ROOT" MBX_BIN="$MBX_TEST_BIN" TERM=dumb \
+    bash --noprofile --norc -i >"$trace_out" 2>"$trace_err" <<'EOF'
+source "$MBX_TEST_ROOT/bash/init.bash"
+false
+printf 'NO_TRACE_PROBE\n'
+exit
+EOF
+if grep -F -q 'mbx trace' "$trace_err" "$trace_out"; then
+    fail 'default install emitted helper traces'
+fi
+grep -F -q 'NO_TRACE_PROBE' "$trace_out" || \
+    fail 'default-off trace smoke lost its probe'
 
 printf 'PASS: Bash compatibility smoke suite\n'
