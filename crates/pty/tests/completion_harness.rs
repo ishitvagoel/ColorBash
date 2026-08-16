@@ -216,6 +216,7 @@ fn default_install_does_not_define_fixtures() {
         .write_str(
             "if declare -F mbx_comp_flag >/dev/null 2>&1 || \
 declare -F mbx_comp_rank >/dev/null 2>&1 || \
+declare -F mbx_comp_git >/dev/null 2>&1 || \
 complete -p mbx_comp_flag >/dev/null 2>&1; then \
 printf 'MBX_COMP:fixture_present\\n'; else printf 'MBX_COMP:fixture_absent\\n'; fi\n",
             deadline(2),
@@ -641,4 +642,31 @@ fn ranked_accept_metadata_never_inserted() {
         !text.contains("EXTRA"),
         "completion description leaked into terminal output: {text}"
     );
+}
+
+#[test]
+fn git_kinds_tab_keeps_prefix() {
+    let home = TempHome::new("comp-g2");
+    let mut session = spawn_fixture_shell(home.path());
+    wait_prompt(&mut session);
+    session
+        .write_str("mbx_comp_git aa", deadline(2))
+        .expect("type git prefix");
+    send_tab(&mut session);
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["\nGOT:aa|", "> "]);
+}
+
+#[test]
+fn git_kinds_ranked_accept_replaces_ref() {
+    let home = TempHome::new("comp-g1");
+    let mut session = spawn_fixture_shell(home.path());
+    wait_prompt(&mut session);
+    session
+        .write_str("mbx_comp_git aa", deadline(2))
+        .expect("type git prefix");
+    send_tab(&mut session);
+    send_accept_ranked(&mut session);
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["\nGOT:aaref|", "> "]);
 }

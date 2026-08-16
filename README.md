@@ -17,6 +17,8 @@ These slices have working code you can exercise in an interactive shell:
 | Stock Tab completion | Always | File/`-F` insertion stays Bash; no popup yet |
 | Wrapped `-F` metadata | `_mbx_comp_wrap_existing_f NAME` | Additive kinds/scores; Tab bytes unchanged |
 | Ranked-accept chord | Default `Ctrl-X Ctrl-A` after wrapped Tab | Replaces current word with ranked candidate; Tab stays stock |
+| Git completion kinds | Wrap `git` or `mbx_comp_git` fixture | Additive `ref`/`flag`/`file`; no Git subprocess |
+| Fuzzy history search | `MBX_HISTORY=1` then `mbx history search fuzzy TEXT` | Ranks a bounded recent pool |
 
 ## What remains
 
@@ -28,9 +30,7 @@ These MVP features are **not** implemented for interactive use:
 | Completion popup | Overlay unproven; ranked-accept chord exists |
 | Syntax highlighting | Same continuous-decoration leftover |
 | Enhanced Ctrl+R | Same leftover; explicit search UI not built |
-| Fuzzy history ranking | `HIST-009` |
 | Repository-context history | `HIST-010` |
-| Git completion kinds | `GIT-004` |
 | macOS PTY matrix | `HRD-001` needs a macOS host |
 
 Canonical status lives in [`docs/roadmap.md`](docs/roadmap.md). `G0`, `G2`,
@@ -120,6 +120,7 @@ echo hello-mbx
 "$MBX_BIN" history search recent --limit 5
 "$MBX_BIN" history search prefix echo --limit 5
 "$MBX_BIN" history search cwd "$PWD" --limit 5
+"$MBX_BIN" history search fuzzy git --limit 5
 "$MBX_BIN" history path
 ```
 

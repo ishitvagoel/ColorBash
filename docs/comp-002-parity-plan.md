@@ -1,10 +1,10 @@
 # COMP-002 slice: core exact-insertion parity (P-1–P-4)
 
-Status: `validation` (2026-08-16). `COMP-001` is in `validation`. P-1–P-4
+Status: `complete` (2026-08-16). `COMP-001` and `G4` are `complete`. P-1–P-4
 and leftover-prep F-1–F-4 evidence is in `bash/completion.bash`,
 `tests/bash/modules.bash`, and `crates/pty/tests/completion_harness.rs`.
-Do not mark `G4` or `COMP-002` complete. Leftover matrix cases stay out of
-scope.
+The 5 ms adapter leftover stays `deferred`. Leftover overlay work is
+`COMP-004`.
 
 ## Why this slice
 

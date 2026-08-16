@@ -601,6 +601,8 @@ declare -F mbx_comp_probe >/dev/null 2>&1 && \
     fail 'default completion install must not define mbx_comp_probe'
 declare -F mbx_comp_rank >/dev/null 2>&1 && \
     fail 'default completion install must not define mbx_comp_rank'
+declare -F mbx_comp_git >/dev/null 2>&1 && \
+    fail 'default completion install must not define mbx_comp_git'
 
 # Inspect-before-wrap: wrap a caller-defined -F; skip absent and non -F specs.
 mbx_comp_wrap_src() { :; }
@@ -770,6 +772,30 @@ assert_eq 80 ${#_MBX_COMP_ORDER[@]} 'order length should match COMPREPLY'
 for ((i = 64; i < 80; i++)); do
     assert_eq 0 "${_MBX_COMP_SCORES[i]}" "reply index $i should keep score 0 beyond the 64-candidate bound"
 done
+
+# GIT-004: git candidate kinds stay additive; COMPREPLY order stays stock.
+_mbx_comp_git_kinds_backend() {
+    COMPREPLY=(zzref aaref --git-flag src/lib.rs)
+}
+COMPREPLY=()
+_MBX_COMP_KINDS=()
+_MBX_COMP_SCORES=()
+_MBX_COMP_ORDER=()
+COMP_LINE='mbx_comp_git aa'
+COMP_POINT=${#COMP_LINE}
+COMP_WORDS=(mbx_comp_git aa)
+COMP_CWORD=1
+COMP_TYPE=9
+COMP_KEY=$'\t'
+_mbx_comp_wrap_backend _mbx_comp_git_kinds_backend
+assert_eq 4 ${#COMPREPLY[@]} 'git backend should return four candidates'
+assert_eq zzref "${COMPREPLY[0]}" 'git COMPREPLY order must stay stock'
+assert_eq ref "${_MBX_COMP_KINDS[0]:-}" 'zzref should be kind ref'
+assert_eq ref "${_MBX_COMP_KINDS[1]:-}" 'aaref should be kind ref'
+assert_eq flag "${_MBX_COMP_KINDS[2]:-}" '--git-flag should be kind flag'
+assert_eq file "${_MBX_COMP_KINDS[3]:-}" 'src/lib.rs should be kind file'
+assert_eq aaref "${_MBX_COMP_RANKED_REPLY:-}" \
+    'prefix aa should rank aaref over stock zzref'
 
 # History module contract: MBX2 record encoding, ACK decoding, exclusions,
 # and the fork-free epoch-to-ISO conversion.

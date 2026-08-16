@@ -287,6 +287,21 @@ impl HistorySearch for QueuedHistoryStore {
             &[cwd.to_owned(), limit.to_string()],
         )
     }
+
+    fn fuzzy(&self, needle: &str, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError> {
+        let mut pool = self.recent(crate::history::FUZZY_CANDIDATE_LIMIT)?;
+        pool.retain(|entry| crate::history::fuzzy_score(needle, &entry.command_text) > 0);
+        pool.sort_by(|left, right| {
+            let left_score = crate::history::fuzzy_score(needle, &left.command_text);
+            let right_score = crate::history::fuzzy_score(needle, &right.command_text);
+            right_score
+                .cmp(&left_score)
+                .then_with(|| right.completed_at.cmp(&left.completed_at))
+                .then_with(|| right.event_sequence.cmp(&left.event_sequence))
+        });
+        pool.truncate(limit);
+        Ok(pool)
+    }
 }
 
 impl HistoryControl for QueuedHistoryStore {
@@ -1077,6 +1092,36 @@ mod tests {
         assert_eq!(prefix.len(), 2);
         let by_cwd = store.by_cwd("/repo", 10).unwrap();
         assert_eq!(by_cwd.len(), 2);
+        drop(dir);
+    }
+
+    #[test]
+    fn fuzzy_ranks_prefix_above_subsequence_over_bounded_pool() {
+        let (dir, path) = temp_store("fuzzy");
+        {
+            let store = QueuedHistoryStore::open(&path, 32).unwrap();
+            store
+                .record(entry("s1", 1, "ls", "/w", "2026-08-15T10:00:00Z"))
+                .unwrap();
+            store
+                .record(entry("s1", 2, "git status", "/w", "2026-08-15T10:00:01Z"))
+                .unwrap();
+            store
+                .record(entry("s1", 3, "git stash", "/w", "2026-08-15T10:00:02Z"))
+                .unwrap();
+        }
+        let store = QueuedHistoryStore::open(&path, 32).unwrap();
+        let rows = store.fuzzy("git sta", 10).unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].command_text, "git stash");
+        assert_eq!(rows[1].command_text, "git status");
+        assert!(
+            store
+                .fuzzy("ls", 10)
+                .unwrap()
+                .iter()
+                .any(|row| row.command_text == "ls")
+        );
         drop(dir);
     }
 
