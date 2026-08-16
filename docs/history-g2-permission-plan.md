@@ -1,8 +1,8 @@
 # HIST-007 slice: store permissions beyond dir+db mode bits
 
 Status: `complete` for WAL/SHM `0600` and never-more-permissive cases P-1–P-4
-(2026-08-16). Do not mark `G2` or `HIST-007` complete. Foreign-user open,
-many-match prefix latency, and write-ack budget remain.
+(2026-08-16). Do not mark `G2` or `HIST-007` complete. Foreign-user open and
+write-ack budget remain.
 
 ## Why this slice (do not pick a different leftover)
 
@@ -311,6 +311,6 @@ fn unreadable_store_fails_closed_without_widening() {
 
 ## Follow-on `G2` slices (not this change)
 
-1. Foreign-user open (`HIST-004` case 7 remainder) when a second uid exists.
-2. Many-match prefix latency (schema/index ADR).
+1. Many-match prefix latency (schema/index ADR; `docs/history-g2-prefix-plan.md`).
+2. Foreign-user open (`HIST-004` case 7 remainder) when a second uid exists.
 3. Write-ack budget only after a test proves SQLite is on the prompt path.

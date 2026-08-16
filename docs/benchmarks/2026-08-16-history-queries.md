@@ -24,8 +24,9 @@ Interpretation:
 
 - Warm recent, selective exact-prefix, and cwd p95 are inside the `HIST-004`
   10 ms reader budget (0.48 ms, 0.39 ms, and 4.06 ms).
-- A many-match `git` prefix is about 61 ms p95. Newest-first prefix search still
-  sorts every match; that case is not the gate and remains a later `G2` item.
+- A many-match `git` prefix was about 61 ms p95 before schema v2. Follow-up
+  percentiles after the covering index are in
+  `docs/benchmarks/2026-08-16-history-prefix.md`.
 - cwd p99 was 11.6 ms on this loaded WSL host; the gate is p95.
 - In-process `record()` enqueue is a microbench footnote (p95 < 1 µs here), not
   the prompt-boundary write budget.
@@ -34,5 +35,6 @@ This does not complete `G2`. Prompt-boundary write-ack percentiles are recorded
 in `docs/benchmarks/2026-08-16-history-write-ack.md` (budget miss on the
 development WSL host). WAL crash/corrupt recovery and WAL/SHM `0600`
 never-more-permissive evidence are recorded in `crates/cli/src/storage.rs`.
-The write-ack budget gate, foreign-user open, and many-match prefix latency
-remain.
+Many-match prefix follow-up percentiles are in
+`docs/benchmarks/2026-08-16-history-prefix.md`. The write-ack budget gate and
+foreign-user open remain.

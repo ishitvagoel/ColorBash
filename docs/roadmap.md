@@ -7,7 +7,7 @@
 
 - Last reviewed: 2026-08-16 UTC
 - Current milestone: Phase 3A sidecar implemented; `G2` evidence remaining (`HIST-007`); `G1` accepted; `G0` validation remains
-- Active workstream: remaining `HIST-007` `G2` evidence (foreign-user open, many-match prefix, write-ack budget)
+- Active workstream: remaining `HIST-007` `G2` evidence (foreign-user open, write-ack budget)
 - Next decision gate: `G2` history readiness (after remaining `HIST-007` evidence)
 - Editor-facing work is blocked by: `G2` history readiness and/or `G3` editor
   integration, as identified per phase
@@ -97,7 +97,7 @@ Implemented foundation:
   render deadline;
 - a fixed-spec Git provider with capped acquisition, a 50-ms refresh deadline,
   typed failure diagnostics, and a bounded one-second warm cache;
-- an opt-in SQLite history sidecar with schema v1, WAL, `0700`/`0600`
+- an opt-in SQLite history sidecar with schema v2 (forward-only from v1), WAL, `0700`/`0600`
   permissions, retention, exclusions, path/count/clear/delete controls, and
   deterministic recent/prefix/cwd queries; capture remains off unless
   `MBX_HISTORY=1`;
@@ -119,10 +119,7 @@ Not implemented:
 - arbitrary key-injection coverage (Tab, arrows, Ctrl+R), the release platform
   matrix, or CI-linked baseline evidence;
 - remaining `G2` evidence: prompt-boundary write-ack budget (correctness recorded;
-  percentile miss on development WSL), foreign-user open, and many-match prefix
-  latency (100k query p95, hostile inertness, invariance, contention, WAL
-  crash/corrupt, WAL/SHM `0600` never-more-permissive, and write-ack correctness
-  evidence exist); or
+  percentile miss on development WSL) and foreign-user open; or
 - asynchronous feature IPC or the broader completion/history provider model.
 
 Known foundation debt:
@@ -287,7 +284,7 @@ latency budgets.
 | 0 | Research / architecture | `validation` | platform matrix and remaining `G0` evidence |
 | 1 | Bootstrap | `validation` | clean baseline/CI evidence and broader lifecycle tracing |
 | 2 | Prompt | `validation` | width model and representative prompt percentiles |
-| 3 | History | `in-progress` | Phase 3A slice implemented; remaining `G2` foreign-user open, many-match prefix, and write-ack budget evidence |
+| 3 | History | `in-progress` | Phase 3A slice implemented; remaining `G2` foreign-user open and write-ack budget evidence |
 | 4 | Ghost suggestions | `blocked` | `G2` and `G3` |
 | 5 | Completion | `discovery` | adapter experiment produces `G4`; popup waits for `G3` and `G4` |
 | 6 | Syntax highlighting | `blocked` | `G3`; intentionally after search/ghost/completion evidence |
@@ -392,7 +389,7 @@ accept or revise these details before implementation:
 | `HIST-012` | Define queue drain, shell-exit, crash, retry, and acceptable-loss semantics | `complete` | durability contract in `docs/history-phase3a-contract.md`; writer commits eagerly and Shutdown drains |
 | `HIST-006` | Implement SQLite schema, migrations, permissions, retention, and writer | `complete` | `crates/cli/src/storage.rs` schema v1, WAL, `0700`/`0600`, retention prune, batched writer |
 | `HIST-011` | Implement exclusions, no-log policy, disable/path/clear/delete controls | `complete` | `crates/cli/src/policy.rs` plus `mbx history path|count|clear|delete` and env controls |
-| `HIST-007` | Add opt-in Bash observation and bounded protocol ingestion | `validation` | `bash/history.bash`, MBX2 RECORD ingestion, PTY recording/invariance tests, seeded 100k corpus, hostile inertness, query p95, concurrent-writer contention, prompt-boundary write-ack correctness, WAL crash/corrupt recovery, and WAL/SHM `0600` never-more-permissive in `crates/cli/src/storage.rs`; write-ack percentile budget, many-match prefix, and foreign-user open remain |
+| `HIST-007` | Add opt-in Bash observation and bounded protocol ingestion | `validation` | `bash/history.bash`, MBX2 RECORD ingestion, PTY recording/invariance tests, seeded 100k corpus, hostile inertness, query p95, concurrent-writer contention, prompt-boundary write-ack correctness, WAL crash/corrupt recovery, WAL/SHM `0600` never-more-permissive, and many-match prefix covering index in `crates/cli/src/storage.rs`; write-ack percentile budget and foreign-user open remain |
 | `HIST-008` | Add recent, exact-prefix, cwd queries and deterministic ranking | `complete` | `mbx history search recent|prefix|cwd` with bounded limits and NOCASE prefix index |
 | `HIST-009` | Add bounded fuzzy ranking | `blocked` | `HIST-008`, deterministic-query evidence, and 100k+ benchmark |
 | `HIST-010` | Add repository context | `blocked` | history-scoped `GIT-003` root/branch provider subset |
@@ -524,14 +521,16 @@ controls, deterministic queries, MBX2 ingestion, and opt-in Bash observation
 (`HIST-005`–`HIST-008`, `HIST-011`–`HIST-013`). Capture stays disabled by
 default. Remaining before `G2`:
 
-1. `HIST-007` remaining `G2` evidence: foreign-user open, many-match prefix
-   latency, and the prompt-boundary write-ack budget (W-1–W-4 correctness
-   recorded; release percentile still misses the provisional budget on
-   development WSL — do not chase with product-code changes unless a test proves
-   the prompt waits on SQLite). Concurrent-writer contention (cases 1–3 and 6),
-   100k query p95, hostile inertness, invariance/admission-parity PTY, WAL
-   crash/corrupt (K-1–K-4 in `crates/cli/src/storage.rs`), WAL/SHM `0600`
-   never-more-permissive (P-1–P-4 in `crates/cli/src/storage.rs`), and
+1. `HIST-007` remaining `G2` evidence: foreign-user open and the
+   prompt-boundary write-ack budget (W-1–W-4 correctness recorded; release
+   percentile still misses the provisional budget on development WSL — do not
+   chase with product-code changes unless a test proves the prompt waits on
+   SQLite). Concurrent-writer contention (cases 1–3 and 6), 100k query p95,
+   hostile inertness, invariance/admission-parity PTY, WAL crash/corrupt
+   (K-1–K-4 in `crates/cli/src/storage.rs`), WAL/SHM `0600`
+   never-more-permissive (P-1–P-4 in `crates/cli/src/storage.rs`), many-match
+   prefix covering index (Q-A–Q-C in `crates/cli/src/storage.rs`; release
+   percentiles in `docs/benchmarks/2026-08-16-history-prefix.md`), and
    write-ack correctness evidence are recorded.
 2. `FND-001` / `G0`: CI evidence via the pushed baseline is pending the run.
 3. `PRM-002` remains discovery until the width model is designed from the
@@ -608,3 +607,5 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Completed WAL crash/corrupt storage tests (K-1–K-4) in `crates/cli/src/storage.rs` (`docs/history-g2-wal-crash-plan.md`). Write-ack budget, permission beyond mode bits, and many-match prefix remain. |
 | 2026-08-16 | Identified the next `HIST-007` slice as WAL/SHM `0600` plus never-more-permissive chmod; plan in `docs/history-g2-permission-plan.md`. Foreign-user open, many-match prefix, and write-ack budget remain. Do not chase write-ack product-code optimization unless a test proves SQLite is on the prompt path. |
 | 2026-08-16 | Completed WAL/SHM `0600` and never-more-permissive storage tests (P-1–P-4) plus tighten-only chmod in `crates/cli/src/storage.rs` (`docs/history-g2-permission-plan.md`; `M-033`). Foreign-user open, many-match prefix, and write-ack budget remain. |
+| 2026-08-16 | Identified the next `HIST-007` slice as many-match exact-prefix latency (covering index, schema v2, ADR 0008); plan in `docs/history-g2-prefix-plan.md`. Foreign-user open and write-ack budget remain. Do not chase write-ack product-code optimization unless a test proves SQLite is on the prompt path. |
+| 2026-08-16 | Completed many-match exact-prefix covering index (schema v2, ADR 0008, Q-A–Q-C in `crates/cli/src/storage.rs`; release percentiles in `docs/benchmarks/2026-08-16-history-prefix.md`; `docs/history-g2-prefix-plan.md`). Foreign-user open and write-ack budget remain. |

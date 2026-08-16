@@ -326,7 +326,8 @@ helper drops enhancement data only and must not block prompt construction.
 The helper opens `$XDG_DATA_HOME/mbx/history.sqlite3` (falling back to
 `$HOME/.local/share/mbx/history.sqlite3`) with directory mode `0700` and file
 mode `0600`. A bounded in-process queue acknowledges enqueue; a per-session
-writer commits schema v1 in WAL mode, applies retention, and treats
+writer commits schema v2 in WAL mode (forward-only migration from v1; see ADR
+0008), applies retention, and treats
 `(session_id, event_sequence)` as the idempotency key. `ACK` means the record
 was accepted by the queue, not that SQLite has committed. Search is a direct
 CLI operation (`mbx history search recent|prefix|cwd`), not an MBX2 query.
@@ -342,8 +343,10 @@ percentile evidence is in `crates/pty/tests/history_write_ack.rs` and
 percentile budget still open on development WSL). WAL crash/corrupt recovery
 and WAL/SHM `0600` never-more-permissive evidence are in
 `crates/cli/src/storage.rs` (`docs/history-g2-wal-crash-plan.md`,
-`docs/history-g2-permission-plan.md`). `G2` still requires prompt-boundary
-write-ack budget pass, many-match prefix latency, and foreign-user open.
+`docs/history-g2-permission-plan.md`). Many-match prefix covering-index evidence
+is in `crates/cli/src/storage.rs` (Q-A–Q-C) and
+`docs/benchmarks/2026-08-16-history-prefix.md`. `G2` still requires
+prompt-boundary write-ack budget pass and foreign-user open.
 
 ## Compatibility and degradation
 

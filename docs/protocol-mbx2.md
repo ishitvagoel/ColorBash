@@ -1,11 +1,11 @@
 # MBX2 protocol — history record ingestion
 
 Status: implemented for the Phase 3A RECORD slice (`HIST-007`). Remaining `G2`
-evidence is prompt-boundary write-ack budget pass, many-match prefix latency,
-and foreign-user open. Invariance, admission-parity, hostile inertness, 100k
-query p95, concurrent-writer contention, write-ack correctness, WAL
-crash/corrupt recovery, and WAL/SHM `0600` never-more-permissive evidence are
-recorded.
+evidence is prompt-boundary write-ack budget pass and foreign-user open.
+Invariance, admission-parity, hostile inertness, 100k query p95,
+concurrent-writer contention, write-ack correctness, WAL crash/corrupt recovery,
+WAL/SHM `0600` never-more-permissive, and many-match prefix covering-index
+evidence are recorded.
 
 ## Purpose
 

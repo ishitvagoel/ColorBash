@@ -105,10 +105,13 @@ whose status cannot be attributed drops per the ambiguity rule.
 
 ### 6. Schema, versioning, and migrations
 
-- SQLite schema v1 with `PRAGMA user_version = 1`; migrations are forward-only
-  and applied by the writer before use.
+- SQLite schema v1 with forward-only migrations to v2 (`PRAGMA user_version`);
+  applied by the writer before use. See ADR 0008 for the v2 covering prefix
+  index.
 - Indexes: `(completed_at DESC)`, `(command_text COLLATE NOCASE)` prefix
-  support, `(start_cwd)`, and the unique `(session_id, event_sequence)`.
+  support, `(command_text COLLATE NOCASE, completed_at DESC, event_sequence DESC)`
+  covering prefix support (v2), `(start_cwd)`, and the unique
+  `(session_id, event_sequence)`.
 - The schema stores values only through parameterized statements; command text
   is inert data, never SQL or terminal control.
 
@@ -211,7 +214,8 @@ whose status cannot be attributed drops per the ambiguity rule.
   correctness recorded; percentile budget still open on development WSL);
   concurrent-writer contention; WAL crash/corrupt recovery (K-1–K-4 in
   `crates/cli/src/storage.rs`); WAL/SHM `0600` never-more-permissive (P-1–P-4
-  in `crates/cli/src/storage.rs`); many-match prefix latency; foreign-user
+  in `crates/cli/src/storage.rs`); many-match prefix latency
+  (`docs/benchmarks/2026-08-16-history-prefix.md`; ADR 0008); foreign-user
   open; and command-text-free diagnostics.
 - Every claim in this ADR maps to a test in `HIST-005`–`HIST-008`,
   `HIST-011`–`HIST-013` before `G2` passes.

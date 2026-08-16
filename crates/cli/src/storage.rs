@@ -37,6 +37,23 @@ CREATE INDEX IF NOT EXISTS history_prefix ON history (command_text COLLATE NOCAS
 CREATE INDEX IF NOT EXISTS history_cwd ON history (start_cwd);
 ";
 
+const SCHEMA_V2_INDEX: &str = "
+CREATE INDEX IF NOT EXISTS history_prefix_completed
+    ON history (command_text COLLATE NOCASE, completed_at DESC, event_sequence DESC);
+";
+
+const EXACT_PREFIX_SQL: &str = "SELECT session_id, event_sequence, history_number, command_text, \
+     start_cwd, completed_at, status, duration_ms, host, user \
+     FROM history INDEXED BY history_prefix_completed \
+     WHERE command_text COLLATE NOCASE LIKE ?1 \
+     ORDER BY completed_at DESC, event_sequence DESC LIMIT ?2";
+
+const EXACT_PREFIX_ESCAPE_SQL: &str = "SELECT session_id, event_sequence, history_number, \
+     command_text, start_cwd, completed_at, status, duration_ms, host, user \
+     FROM history INDEXED BY history_prefix_completed \
+     WHERE command_text COLLATE NOCASE LIKE ?1 ESCAPE '\\' \
+     ORDER BY completed_at DESC, event_sequence DESC LIMIT ?2";
+
 enum QueueMessage {
     Write(HistoryEntry),
     Shutdown,
@@ -196,21 +213,11 @@ impl HistorySearch for QueuedHistoryStore {
         let escaped = escape_like(prefix);
         let pattern = format!("{escaped}%");
         if escaped == prefix {
-            query(
-                &connection,
-                "SELECT session_id, event_sequence, history_number, command_text, start_cwd, \
-                 completed_at, status, duration_ms, host, user \
-                 FROM history WHERE command_text LIKE ?1 \
-                 ORDER BY completed_at DESC, event_sequence DESC LIMIT ?2",
-                &[pattern, limit.to_string()],
-            )
+            query(&connection, EXACT_PREFIX_SQL, &[pattern, limit.to_string()])
         } else {
             query(
                 &connection,
-                "SELECT session_id, event_sequence, history_number, command_text, start_cwd, \
-                 completed_at, status, duration_ms, host, user \
-                 FROM history WHERE command_text LIKE ?1 ESCAPE '\\' \
-                 ORDER BY completed_at DESC, event_sequence DESC LIMIT ?2",
+                EXACT_PREFIX_ESCAPE_SQL,
                 &[pattern, limit.to_string()],
             )
         }
@@ -411,10 +418,16 @@ fn try_migrate(connection: &rusqlite::Connection) -> Result<(), rusqlite::Error>
     }
     connection.execute_batch("BEGIN IMMEDIATE;")?;
     let migrated = (|| -> Result<(), rusqlite::Error> {
-        if schema_version(connection)? >= SCHEMA_VERSION {
+        let version = schema_version(connection)?;
+        if version >= SCHEMA_VERSION {
             return Ok(());
         }
-        connection.execute_batch(SCHEMA_V1)?;
+        if version < 1 {
+            connection.execute_batch(SCHEMA_V1)?;
+        }
+        if version < 2 {
+            connection.execute_batch(SCHEMA_V2_INDEX)?;
+        }
         connection.execute(&format!("PRAGMA user_version = {SCHEMA_VERSION}"), [])?;
         Ok(())
     })();
@@ -657,6 +670,16 @@ mod tests {
         store.count().unwrap()
     }
 
+    fn index_count(connection: &rusqlite::Connection, name: &str) -> i64 {
+        connection
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?1",
+                [name],
+                |row| row.get(0),
+            )
+            .unwrap()
+    }
+
     fn assert_unique_keys(path: &Path) {
         let connection = rusqlite::Connection::open(path).unwrap();
         let duplicates: i64 = connection
@@ -889,6 +912,8 @@ mod tests {
             )
             .unwrap();
         assert_eq!(tables, 1);
+        assert_eq!(index_count(&connection, "history_prefix"), 1);
+        assert_eq!(index_count(&connection, "history_prefix_completed"), 1);
         drop(connection);
         drop(dir);
     }
@@ -1467,6 +1492,133 @@ mod tests {
         assert_eq!(mode_of(&path), 0o000);
         assert!(path.exists());
         assert_eq!(std::fs::metadata(&path).unwrap().len(), original_len);
+        drop(dir);
+    }
+
+    #[test]
+    fn schema_v1_store_migrates_to_v2_prefix_index() {
+        let (dir, path) = temp_store("qa");
+        {
+            let connection = rusqlite::Connection::open(&path).unwrap();
+            connection
+                .execute_batch("PRAGMA journal_mode=WAL;")
+                .unwrap();
+            connection.execute_batch(SCHEMA_V1).unwrap();
+            connection.execute("PRAGMA user_version = 1", []).unwrap();
+            connection
+                .execute(
+                    "INSERT OR IGNORE INTO history \
+                     (session_id, event_sequence, history_number, command_text, start_cwd, \
+                      completed_at, status, duration_ms, host, user) \
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                    rusqlite::params![
+                        "s1",
+                        1u64,
+                        1i64,
+                        "git status",
+                        "/w",
+                        "2026-08-16T14:00:00Z",
+                        0i32,
+                        None::<u64>,
+                        "host",
+                        "user",
+                    ],
+                )
+                .unwrap();
+        }
+        let original_len = std::fs::metadata(&path).unwrap().len();
+        let store = QueuedHistoryStore::open(&path, 8).unwrap();
+        drop(store);
+        let connection = rusqlite::Connection::open(&path).unwrap();
+        let version: i64 = connection
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, 2);
+        assert_eq!(index_count(&connection, "history_prefix"), 1);
+        assert_eq!(index_count(&connection, "history_prefix_completed"), 1);
+        assert_eq!(count_rows(&path), 1);
+        assert_eq!(
+            QueuedHistoryStore::open(&path, 8)
+                .unwrap()
+                .recent(1)
+                .unwrap()[0]
+                .command_text,
+            "git status"
+        );
+        assert_ne!(std::fs::metadata(&path).unwrap().len(), 0);
+        assert!(std::fs::metadata(&path).unwrap().len() >= original_len);
+        drop(dir);
+    }
+
+    #[test]
+    fn empty_store_opens_at_schema_v2() {
+        let (dir, path) = temp_store("qb");
+        {
+            let store = QueuedHistoryStore::open(&path, 8).unwrap();
+            drop(store);
+        }
+        let connection = rusqlite::Connection::open(&path).unwrap();
+        let version: i64 = connection
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, 2);
+        assert_eq!(index_count(&connection, "history_prefix"), 1);
+        assert_eq!(index_count(&connection, "history_prefix_completed"), 1);
+        drop(dir);
+    }
+
+    #[test]
+    fn many_match_prefix_uses_covering_index_and_stays_newest_first() {
+        let (dir, path) = temp_store("qc");
+        {
+            let store = QueuedHistoryStore::open(&path, 64).unwrap();
+            for sequence in 0..48u64 {
+                enqueue(
+                    &store,
+                    entry(
+                        "s1",
+                        sequence,
+                        &format!("git cmd {sequence}"),
+                        "/w",
+                        &format!("2026-08-16T14:{sequence:02}:00Z"),
+                    ),
+                );
+            }
+            for sequence in 48..64u64 {
+                enqueue(
+                    &store,
+                    entry(
+                        "s1",
+                        sequence,
+                        "echo other",
+                        "/w",
+                        &format!("2026-08-16T15:{:02}:00Z", sequence - 48),
+                    ),
+                );
+            }
+        }
+        let store = QueuedHistoryStore::open(&path, 8).unwrap();
+        let rows = store.exact_prefix("git", 5).unwrap();
+        assert_eq!(rows.len(), 5);
+        assert_eq!(rows[0].command_text, "git cmd 47");
+        assert!(rows.iter().all(|row| row.command_text.starts_with("git ")));
+        let connection = rusqlite::Connection::open(&path).unwrap();
+        let mut statement = connection
+            .prepare(&format!("EXPLAIN QUERY PLAN {EXACT_PREFIX_SQL}"))
+            .unwrap();
+        let plan_rows = statement
+            .query_map(["git%", "5"], |row| row.get::<_, String>(3))
+            .unwrap();
+        let plan = plan_rows
+            .map(|row| row.unwrap())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            plan.to_ascii_lowercase()
+                .contains("history_prefix_completed"),
+            "expected covering index in plan: {plan}"
+        );
+        drop(store);
         drop(dir);
     }
 }

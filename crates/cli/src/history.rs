@@ -6,7 +6,7 @@ pub const DEFAULT_RETENTION_DAYS: u64 = 90;
 pub const DEFAULT_QUERY_LIMIT: usize = 50;
 pub const MAX_QUERY_LIMIT: usize = 500;
 pub const MAX_COMMAND_BYTES: usize = 64 * 1024;
-pub const SCHEMA_VERSION: i64 = 1;
+pub const SCHEMA_VERSION: i64 = 2;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HistoryEntry {
