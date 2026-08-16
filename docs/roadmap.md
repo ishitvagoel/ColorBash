@@ -113,8 +113,8 @@ hardening working tree on 2026-08-15, with focused evidence recorded in
 `docs/solid-hardening-checklist.md` and release measurements in
 `docs/benchmarks/2026-08-15-solid-hardening.md`. GitHub Actions workflow `CI`
 recorded a green run on `origin/main` at commit
-`5c077ce1e9a51a89528bf97f4a4aa9b038148bd2`
-(https://github.com/ishitvagoel/ColorBash/actions/runs/31932933113), completing
+`2b98026f47ecd69173dd7339ae1364a9cafc726d`
+(https://github.com/ishitvagoel/ColorBash/actions/runs/31934458862), completing
 `FND-001` and `BST-005`. `G0` validation remains open.
 
 Not implemented:
@@ -305,7 +305,7 @@ latency budgets.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `FND-001` | Review and land the SOLID refactor as a clean baseline | `complete` | green GitHub Actions `CI` run on `origin/main` at `5c077ce` (https://github.com/ishitvagoel/ColorBash/actions/runs/31932933113); `docs/fnd-001-ci-plan.md` |
+| `FND-001` | Review and land the SOLID refactor as a clean baseline | `complete` | green GitHub Actions `CI` run on `origin/main` at `2b98026` (https://github.com/ishitvagoel/ColorBash/actions/runs/31934458862); `docs/fnd-001-ci-plan.md` |
 | `FND-002` | Make transport own response correlation/framing postconditions and test `RequestHandler` substitutes directly | `complete` | `crates/cli/src/service.rs`, `transport.rs`, and direct substitute/oversize/correlation tests |
 | `FND-003` | Complete port-contract tests for full prompt mapping, ping isolation, provider error/disable behavior, and crate-internal seam construction | `complete` | service, prompt-provider, disabled-provider, and sibling seam tests in `crates/cli/src/` |
 | `PTY-001` | Genuine PTY driver for input, signal, resize, and terminal-state probes | `complete` | `crates/pty` driver tests plus foundation prompt/helper/Ctrl+C/Ctrl+Z/resize/`stty -g` coverage |
@@ -337,7 +337,7 @@ degradation.
 | `BST-002` | Interactive guard, idempotence, status preservation, and fallback | `validation` | shell suites plus PTY lifecycle/failure tests; platform matrix remains `HRD-001` |
 | `BST-003` | MBX1 coprocess and per-call adapters | `validation` | bounded protocol/module tests pass; PTY helper-crash coverage exists; platform matrix remains |
 | `BST-004` | Debug/trace logging without command text | `validation` | minimal Rust trace exists; broader lifecycle diagnostics deferred |
-| `BST-005` | CI and canonical verification suite | `complete` | `.github/workflows/ci.yml` runs `bash tests/run.bash`; green run https://github.com/ishitvagoel/ColorBash/actions/runs/31932933113 on `origin/main` at `5c077ce` |
+| `BST-005` | CI and canonical verification suite | `complete` | `.github/workflows/ci.yml` runs `bash tests/run.bash`; green run https://github.com/ishitvagoel/ColorBash/actions/runs/31934458862 on `origin/main` at `2b98026` |
 | `BST-006` | Enforce a terminator-independent 64-KiB boundary and cap Bash response acquisition before allocation | `complete` | Rust/Bash `MAX-1`/`MAX`/`MAX+1` EOF/LF/CRLF, NUL, and oversized-producer tests |
 | `BST-007` | Prove socket collision refusal, `0600` mode, cleanup, and correlation behavior | `complete` | focused Unix tests cover collisions, mode, cleanup ordering, and mismatched IDs |
 
@@ -544,7 +544,7 @@ default. Remaining before `G2`:
    time in `docs/benchmarks/2026-08-16-history-migrate.md`), and write-ack
    correctness evidence are recorded.
 2. `G0`: CI URL recorded via `FND-001` / `BST-005`
-   (https://github.com/ishitvagoel/ColorBash/actions/runs/31932933113;
+   (https://github.com/ishitvagoel/ColorBash/actions/runs/31934458862;
    `docs/fnd-001-ci-plan.md`). Darwin PTY constant cfg-split (D-1–D-3 in
    `crates/pty/src/sys.rs`; `docs/hrd-001-darwin-pty-constants-plan.md`) is
    recorded; platform matrix, `HRD-001` macOS PTY run, and representative
@@ -631,3 +631,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Completed 100k-row v1→v2 migration evidence (M-2 in `crates/cli/src/corpus.rs`; release wall time in `docs/benchmarks/2026-08-16-history-migrate.md`; `docs/history-g2-migrate-100k-plan.md`). Foreign-user open and write-ack budget remain. |
 | 2026-08-16 | Linked green GitHub Actions CI on `origin/main` at `5c077ce` (https://github.com/ishitvagoel/ColorBash/actions/runs/31932933113); completed `FND-001` and `BST-005` (`docs/fnd-001-ci-plan.md`). `G0` validation remains open for platform matrix, `HRD-001` macOS, and `PRM-004` representative percentiles. Foreign-user open and write-ack budget remain. |
 | 2026-08-16 | Completed Darwin PTY constant cfg-split pre-work for `HRD-001` (D-1–D-3 in `crates/pty/src/sys.rs`; `docs/hrd-001-darwin-pty-constants-plan.md`). Linux PTY tests stay green on WSL; full macOS matrix evidence still required. `HRD-001` and `G0` remain open. Foreign-user open and write-ack budget remain. |
+| 2026-08-16 | Refreshed linked green GitHub Actions CI on `origin/main` to `2b98026` (https://github.com/ishitvagoel/ColorBash/actions/runs/31934458862); `FND-001` and `BST-005` remain complete (`docs/fnd-001-ci-plan.md`). `G0` validation remains open for platform matrix, `HRD-001` macOS PTY run, and `PRM-004` representative percentiles. Foreign-user open and write-ack budget remain. |

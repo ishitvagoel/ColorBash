@@ -44,12 +44,12 @@ Remaining work, ranked. Implement **only row 1** in this change.
 
 - Repository: `ishitvagoel/ColorBash`
 - Branch: `main`
-- Commit: `5c077ce1e9a51a89528bf97f4a4aa9b038148bd2`
+- Commit: `2b98026f47ecd69173dd7339ae1364a9cafc726d`
 - Workflow: `CI` (`.github/workflows/ci.yml`)
 - Event: `push`
 - Conclusion: `success`
-- Updated: 2026-08-16T07:04:09Z
-- Run URL: https://github.com/ishitvagoel/ColorBash/actions/runs/31932933113
+- Updated: 2026-08-16T07:40:44Z
+- Run URL: https://github.com/ishitvagoel/ColorBash/actions/runs/31934458862
 
 Reproduce probe:
 
@@ -66,7 +66,8 @@ curl -sS "https://api.github.com/repos/ishitvagoel/ColorBash/actions/runs?branch
 
 ## Follow-on work (not this change)
 
-1. `G0` platform matrix, `HRD-001` macOS PTY constants, `PRM-004`
-   representative percentiles
+1. `G0` platform matrix, `HRD-001` macOS PTY run, `PRM-004` representative
+   percentiles (Darwin PTY constant cfg-split D-1–D-3 already recorded in
+   `docs/hrd-001-darwin-pty-constants-plan.md`)
 2. `HIST-007` remaining `G2`: foreign-user open when a second host uid exists
 3. Write-ack budget only after a test proves SQLite is on the prompt path
