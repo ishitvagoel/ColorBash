@@ -7,7 +7,7 @@
 
 - Last reviewed: 2026-08-16 UTC
 - Current milestone: Phase 3A sidecar implemented; `G0` and `G2` complete; `G1` accepted
-- Active workstream: unblocked leftovers (`GIT-004` / `HIST-009`); overlay/ghost/highlighting blocked on unproven continuous decoration
+- Active workstream: unblocked leftovers (`HIST-010` / `GIT-003`); overlay/ghost/highlighting blocked on unproven continuous decoration
 - Next decision gate: continuous-decoration leftover (blocks ghost / highlighting)
 - Editor-facing work is blocked by: unproven after-every-key decoration, as identified per phase
 - Timing policy: unmet percentile targets are `deferred` and do not block
@@ -377,7 +377,7 @@ Outcome: an adaptive, semantic, safe prompt that remains fast under failure.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `PRM-001` | Path, Git, status, duration, SSH, production, icon, and theme segments | `validation` | Rust/Bash renderers and semantic tests |
+| `PRM-001` | Path, Git, status, duration, SSH, production, icon, and theme segments | `complete` | Rust/Bash renderers; nerd-icon exact bytes in `crates/cli/src/prompt.rs`; fallback stays ASCII (`docs/prm-001-gate-close-plan.md`) |
 | `PRM-002` | Capability, redirected-output, visible-width, and resize model | `complete` | redirected-output color policy recorded (`docs/prm-002-redirected-output-plan.md`; `crates/cli/src/environment.rs`); display-width path compaction helper recorded (`docs/prm-002-width-plan.md`; `crates/cli/src/prompt.rs`); color capability (16/256/truecolor) recorded (`docs/prm-002-color-capability-plan.md`; `crates/cli/src/environment.rs`, `crates/cli/src/prompt.rs`, `bash/config.bash`, `bash/fallback.bash`); non-DSR wrap-column PTY usability recorded (`docs/prm-002-wrap-column-plan.md`; `crates/pty/tests/multiline_width.rs`) |
 | `PRM-003` | End-to-end deadline, capped Git acquisition, and warm cache | `complete` | one Bash deadline, capped 50-ms Git refresh, 128-entry/1-s cache, failure tests, and `docs/benchmarks/2026-08-15-solid-hardening.md` |
 | `PRM-004` | Full prompt p50/p95/p99 benchmark matrix | `deferred` | controlled warm-Git case recorded; remaining matrix deferred (`docs/latency-budget-deferral.md`) |
@@ -563,7 +563,8 @@ percentile leftovers are `deferred` and must not block product slices
 1. Next unblocked leftover is the `HIST-010` / `GIT-003` pair (repo context on
    history rows). Do not start overlay, ghost, or highlighting. `COMP-004`
    stays `discovery`. Do not mark `COMP-004` or `COMP-005` complete.
-2. `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
+2. `PRM-006` remains `validation` (opt-in duration; do not compose `DEBUG`).
+3. `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
    slice on FND-001 SHA refresh or percentile benches unless a functional
    prompt-path defect is proven.
 
@@ -695,3 +696,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Ranked-accept replaces the current word when it is a prefix of `_MBX_COMP_RANKED_REPLY` (M-039). Stale unrelated words are refused. Snapshot clears at the next prompt. |
 | 2026-08-16 | Completed `GIT-004` Git completion kinds (`docs/git-004-kinds-plan.md`). `COMP-001` / `COMP-002` move to `complete` (G4 evidence; 5 ms `deferred`). |
 | 2026-08-16 | Completed `HIST-009` bounded fuzzy search (`docs/hist-009-fuzzy-plan.md`; `mbx history search fuzzy`). `HIST-010` remains. |
+| 2026-08-16 | Completed `PRM-001` gate close (`docs/prm-001-gate-close-plan.md`; nerd-icon exact bytes in `crates/cli/src/prompt.rs`). Fallback stays font-safe ASCII. `PRM-006` stays `validation`. `HIST-010` remains. Do not start overlay or ghost. |

@@ -44,7 +44,20 @@ The renderer names presentation intent before choosing ANSI values:
 
 `MBX_ICONS=nerd` is an explicit enhancement. Auto mode currently stays with
 font-safe text because terminal capability detection cannot prove that a Nerd
-Font is installed. `NO_COLOR`, redirected output, and `TERM=dumb` use plain text.
+Font is installed. Native substitutions (exact bytes in
+`crates/cli/src/prompt.rs`):
+
+| Role | ASCII | Nerd |
+| --- | --- | --- |
+| warning SSH | `ssh: host` | `󰒍 host` |
+| path | path text | ` ` + path |
+| git | `git:branch` | `󰊢 ` + branch |
+| error | `exit N` | ` N` |
+| danger | `! PROD · host · user` | `󰀪 PROD · host · user` |
+| primary | `>` | `❯` |
+
+The process-free Bash fallback keeps the ASCII column even when the nerd flag
+is set. `NO_COLOR`, redirected output, and `TERM=dumb` use plain text.
 
 ## Interaction principles
 

@@ -287,6 +287,11 @@ default hierarchy is:
 4. non-zero exit status;
 5. duration when at least two seconds.
 
+Native nerd-icon substitutions (`MBX_ICONS=nerd`) are locked by exact-byte
+fixtures in `crates/cli/src/prompt.rs`. ASCII wins when both icon flags are
+set. The process-free Bash fallback stays font-safe ASCII even when the nerd
+flag is present (`docs/prm-001-gate-close-plan.md`). `PRM-001` is `complete`.
+
 Repository-controlled branch/path/host text is bounded to 256 **characters** and
 strips control characters, `$`, backticks, and backslashes before entering PS1.
 The current `RepositoryStatusProvider` is the bounded prompt slice of ADR 0007.
