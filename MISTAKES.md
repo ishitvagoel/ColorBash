@@ -744,10 +744,14 @@ to prevent recurrence, not to assign blame.
   are left unchanged. The snapshot is cleared at the next prompt.
 - Prevention: a completion-accept action must replace the current word, not
   splice after it. PTY tests must cover Tab-without-chord, accept-with-prefix,
-  and a stale unrelated word.
+  and a stale unrelated word. Ranked-cycle must also replace when the current
+  word equals `_MBX_COMP_RANKED_REPLY` (prefix-only cannot rotate `aaflag` to
+  `zzflag`) and must not rotate the list unless replacement is allowed.
 - Evidence: `_mbx_comp_accept_ranked` in `bash/completion.bash`;
   `ranked_accept_inserts_top_ranked_bytes`,
   `ranked_accept_tab_without_chord_keeps_prefix`, and
   `ranked_accept_refuses_stale_unrelated_word` in
-  `crates/pty/tests/completion_harness.rs`.
+  `crates/pty/tests/completion_harness.rs`. Ranked-cycle: `_mbx_comp_cycle_ranked`,
+  `ranked_cycle_next_rotates_from_accepted_head`, and
+  `ranked_cycle_refuses_stale_unrelated_word`.
 
