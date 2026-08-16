@@ -175,6 +175,20 @@ printf 'kinds=%s scores=%s order=%s\n' \
 Do not set `MBX_COMP_FIXTURES=1` in a daily shell; that flag is for automated
 tests only.
 
+### 7. Ranked-accept chord (`bind -x`)
+
+After Tab on a wrapped completion, MBX records `_MBX_COMP_RANKED_REPLY` (top of
+`_MBX_COMP_ORDER`). Default chord is `Ctrl-X` then `Ctrl-A`. It inserts that
+text at the cursor without executing it. Tab insertion bytes stay stock.
+
+```bash
+MBX_COMP_FIXTURES=1 source /absolute/path/to/ColorBash/bash/init.bash
+mbx_comp_rank aa   # Tab to run the wrapped adapter, then Ctrl-X Ctrl-A
+```
+
+If the chord is already bound, MBX leaves it alone unless
+`MBX_COMP_ACCEPT_OVERRIDE=1`.
+
 ## Prototype controls
 
 ```bash
@@ -192,6 +206,8 @@ MBX_HISTORY_EXCLUDE='git *'     # colon-separated glob exclusions
 MBX_EDITOR_INSERT_TOKEN=hello   # text inserted by Ctrl-X Ctrl-Y
 MBX_EDITOR_INSERT_KEYSEQ='\C-x\C-y'
 MBX_EDITOR_OVERRIDE=1           # overwrite an occupied insert chord
+MBX_COMP_ACCEPT_KEYSEQ='\C-x\C-a'  # ranked-accept chord (default)
+MBX_COMP_ACCEPT_OVERRIDE=1      # overwrite an occupied ranked-accept chord
 MBX_LOG=trace                   # helper timing/events; never logs command text
 ```
 

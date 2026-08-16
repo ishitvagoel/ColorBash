@@ -6,6 +6,9 @@ use std::fs;
 use std::path::Path;
 
 const TAB: u8 = 0x09;
+const CTRL_X: u8 = 0x18;
+const CTRL_A: u8 = 0x01;
+const ACCEPT_KEYSEQ: &[u8] = &[CTRL_X, CTRL_A];
 
 fn spawn_fixture_shell(home: &Path) -> PtySession {
     spawn_mbx_shell(home, &[("MBX_COMP_FIXTURES", "1")], "")
@@ -49,6 +52,12 @@ fn wait_prompt(session: &mut PtySession) {
 
 fn send_tab(session: &mut PtySession) {
     session.write_all(&[TAB], deadline(2)).expect("tab");
+}
+
+fn send_accept_ranked(session: &mut PtySession) {
+    session
+        .write_all(ACCEPT_KEYSEQ, deadline(2))
+        .expect("accept ranked chord");
 }
 
 #[test]
@@ -497,5 +506,63 @@ fn ranking_description_never_inserted() {
     assert!(
         text.contains("GOT:--mbx-comp-flag"),
         "expected stock flag insertion bytes, got: {text}"
+    );
+}
+
+#[test]
+fn ranked_accept_inserts_top_ranked_bytes() {
+    let home = TempHome::new("comp-a1");
+    let mut session = spawn_fixture_shell(home.path());
+    wait_prompt(&mut session);
+    session
+        .write_str("mbx_comp_rank aa", deadline(2))
+        .expect("type rank prefix");
+    send_tab(&mut session);
+    send_accept_ranked(&mut session);
+    session.write_str("\n", deadline(2)).expect("submit");
+    let output = wait_all(&mut session, &["\nGOT:", "> "]);
+    let text = String::from_utf8_lossy(&output);
+    assert!(
+        text.contains("aaflag"),
+        "expected ranked aaflag insertion bytes, got: {text}"
+    );
+    assert!(
+        !text.contains("zzflag"),
+        "stock COMPREPLY[0] must not be inserted by ranked accept: {text}"
+    );
+}
+
+#[test]
+fn ranked_accept_without_snapshot_is_noop() {
+    let home = TempHome::new("comp-a3");
+    let mut session = spawn_mbx_shell(home.path(), &[], "");
+    wait_prompt(&mut session);
+    send_accept_ranked(&mut session);
+    session
+        .write_str("echo ok\n", deadline(2))
+        .expect("echo after noop accept");
+    wait_all(&mut session, &["\nok", "> "]);
+}
+
+#[test]
+fn ranked_accept_metadata_never_inserted() {
+    let home = TempHome::new("comp-a5");
+    let mut session = spawn_fixture_shell(home.path());
+    wait_prompt(&mut session);
+    session
+        .write_str("mbx_comp_rank aa", deadline(2))
+        .expect("type rank prefix");
+    send_tab(&mut session);
+    send_accept_ranked(&mut session);
+    session.write_str("\n", deadline(2)).expect("submit");
+    let output = wait_all(&mut session, &["\nGOT:", "> "]);
+    let text = String::from_utf8_lossy(&output);
+    assert!(
+        !text.contains("EXTRA"),
+        "completion description leaked into terminal output: {text}"
+    );
+    assert!(
+        text.contains("aaflag"),
+        "expected ranked insertion bytes, got: {text}"
     );
 }

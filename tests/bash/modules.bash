@@ -727,6 +727,8 @@ assert_eq 2 ${#_MBX_COMP_ORDER[@]} 'order length should match COMPREPLY'
 (( _MBX_COMP_SCORES[1] > _MBX_COMP_SCORES[0] )) || \
     fail 'aaflag should score higher than zzflag for prefix aa'
 assert_eq 1 "${_MBX_COMP_ORDER[0]}" 'best-scoring aaflag index should sort first'
+assert_eq aaflag "${_MBX_COMP_RANKED_REPLY:-}" \
+    'ranked reply should prefer aaflag over stock COMPREPLY[0]'
 
 _mbx_comp_r3_backend() {
     local i
@@ -751,6 +753,19 @@ assert_eq 80 ${#_MBX_COMP_ORDER[@]} 'order length should match COMPREPLY'
 for ((i = 64; i < 80; i++)); do
     assert_eq 0 "${_MBX_COMP_SCORES[i]}" "reply index $i should keep score 0 beyond the 64-candidate bound"
 done
+
+# COMP-004 ranked accept: occupied keyseq skip and override (A-4).
+_MBX_COMP_ACCEPT_INSTALLED=0
+_mbx_user_accept_binding() { :; }
+bind -x '"\C-x\C-a": _mbx_user_accept_binding'
+_mbx_comp_install_accept
+assert_eq 0 "${_MBX_COMP_ACCEPT_BOUND:-missing}" \
+    'occupied accept keyseq must not install without override'
+MBX_COMP_ACCEPT_OVERRIDE=1
+_MBX_COMP_ACCEPT_INSTALLED=0
+_mbx_comp_install_accept
+assert_eq 1 "${_MBX_COMP_ACCEPT_BOUND:-missing}" \
+    'override should install accept chord over occupied keyseq'
 
 # History module contract: MBX2 record encoding, ACK decoding, exclusions,
 # and the fork-free epoch-to-ISO conversion.

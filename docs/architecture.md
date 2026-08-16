@@ -412,7 +412,9 @@ before any renderer consumes them (`docs/comp-003-metadata-plan.md`). Additive
 `_MBX_COMP_SCORES` / `_MBX_COMP_ORDER` rank candidates for display without
 reordering `COMPREPLY` (`docs/comp-003-ranking-plan.md`). There is no GUI
 overlay or popup menu in this milestone: Tab insertion stays stock Bash
-behavior (`docs/comp-004-popup-plan.md`).
+behavior (`docs/comp-004-popup-plan.md`). An optional ranked-accept `bind -x`
+chord (default `\C-x\C-a`) inserts `_MBX_COMP_RANKED_REPLY` at
+`READLINE_POINT` without changing Tab (`docs/comp-004-ranked-accept-plan.md`).
 
 The roadmap, not this architecture description, selects the next slice. A genuine
 PTY driver now covers foundation prompt lifecycle, helper failure, Ctrl+C,
@@ -423,5 +425,5 @@ multiline-width-pty.md`), and the Bash history admission corpus
 implemented; `G2` is complete and write-ack percentiles are `deferred`. Provider expansion,
 highlighting remain gated by unproven continuous decoration
 (`docs/g3-gate-close-plan.md`). `COMP-004` popup policy records no GUI overlay;
-a ranked-accept `bind -x` chord is a later leftover
-(`docs/comp-004-popup-plan.md`). `G3` explicit `bind -x` evidence is complete.
+ranked-accept `bind -x` evidence is complete (`docs/comp-004-ranked-accept-plan.md`).
+`G3` explicit `bind -x` evidence is complete.
