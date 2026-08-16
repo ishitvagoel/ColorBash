@@ -689,3 +689,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Completed `COMP-003` bounded ranking R-1–R-4 (`docs/comp-003-ranking-plan.md`; `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`). `COMP-003` moves to `complete`. Do not start popup or ghost. |
 | 2026-08-16 | Specified `G3` gate-close decision in `docs/g3-gate-close-plan.md`. Explicit `bind -x` evidence recorded; continuous decoration stays unproven. Do not start popup or ghost. |
 | 2026-08-16 | Completed `G3` gate close (`docs/g3-gate-close-plan.md`; `docs/g3-decision-plan.md`). `G3` and `EDT-001` move to `complete`. Continuous decoration leftover still blocks ghost / highlighting. `COMP-004` unblocked for planning. Do not start popup or ghost. |
+| 2026-08-16 | Documented tryable features and remaining MVP leftovers in `README.md` (prompt, duration, history, `bind -x` insert, stock Tab, wrap metadata). |
