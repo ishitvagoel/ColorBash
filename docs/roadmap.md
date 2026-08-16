@@ -7,7 +7,7 @@
 
 - Last reviewed: 2026-08-16 UTC
 - Current milestone: Phase 3A sidecar implemented; `G0` and `G2` complete; `G1` accepted
-- Active workstream: `EDT-001` exact-byte / quoting / multiline insert (`docs/edt-001-g3-matrix-plan.md` remaining bullets); `COMP-001` may start in parallel
+- Active workstream: `COMP-001` non-popup completion adapter (`G3` / `EDT-001` in `validation`)
 - Next decision gate: `G3` editor integration
 - Editor-facing work is blocked by: `G3` editor integration, as identified per phase
 - Timing policy: unmet percentile targets are `deferred` and do not block
@@ -264,7 +264,7 @@ It requires `HIST-002` through `HIST-008` plus `HIST-011`, `HIST-012`, and
 
 ### G3 — Editor integration feasibility
 
-Status: `discovery`
+Status: `validation`
 
 `EDT-001` produces this gate. It blocks ghost suggestions, completion popup
 ownership, highlighting, and enhanced Ctrl+R UI. Pass only when a configurable,
@@ -329,7 +329,7 @@ latency budgets.
 | `FND-002` | Make transport own response correlation/framing postconditions and test `RequestHandler` substitutes directly | `complete` | `crates/cli/src/service.rs`, `transport.rs`, and direct substitute/oversize/correlation tests |
 | `FND-003` | Complete port-contract tests for full prompt mapping, ping isolation, provider error/disable behavior, and crate-internal seam construction | `complete` | service, prompt-provider, disabled-provider, and sibling seam tests in `crates/cli/src/` |
 | `PTY-001` | Genuine PTY driver for input, signal, resize, and terminal-state probes | `complete` | `crates/pty` driver tests plus foundation prompt/helper/Ctrl+C/Ctrl+Z/resize/`stty -g` coverage |
-| `EDT-001` | Non-destructive `bind -x` insertion/redisplay feasibility prototype | `validation` | E-1–E-4 and M-1–M-4 in `crates/pty/tests/editor_bind_x.rs` and `bash/editor.bash`; exact-byte leftover remains; `G3` stays `discovery` |
+| `EDT-001` | Non-destructive `bind -x` insertion/redisplay feasibility prototype | `validation` | E-1–E-4, M-1–M-4, B-1–B-4 in `crates/pty/tests/editor_bind_x.rs` and `bash/editor.bash`; B-5 redraw note in `docs/edt-001-exact-bytes-plan.md`; continuous decoration unproven |
 
 ### Phase 0 — Research and architecture
 
@@ -554,10 +554,10 @@ Exit condition: `G5` after every `HRD-*` item is complete.
 percentile leftovers are `deferred` and must not block product slices
 (`docs/latency-budget-deferral.md`).
 
-1. `EDT-001` exact-byte / quoting / multiline insert — next leftover after
-   M-1–M-4 (`docs/edt-001-g3-matrix-plan.md`). `G3` stays `discovery`.
-2. `COMP-001` non-popup stock-completion adapter harness may start in parallel.
-3. `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
+1. `COMP-001` non-popup stock-completion adapter harness — `G3` and `EDT-001`
+   are in `validation`; do not mark either complete (continuous decoration
+   unproven; `docs/edt-001-exact-bytes-plan.md` B-5).
+2. `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
    slice on FND-001 SHA refresh or percentile benches unless a functional
    prompt-path defect is proven.
 
@@ -659,3 +659,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Accepted timing-deferral policy (`docs/latency-budget-deferral.md`): unmet percentile targets no longer block development. Marked `G0` complete; `PRM-004` `deferred`; `EDT-001` `ready` (`docs/edt-001-bind-x-plan.md`). `HRD-001` remains release-matrix work. |
 | 2026-08-16 | Completed `EDT-001` E-1–E-4 non-destructive `bind -x` insertion prototype (`bash/editor.bash`, `crates/pty/tests/editor_bind_x.rs`). `EDT-001` moves to `validation`; `G3` stays `discovery` until the remaining matrix bullets have evidence. Default chord `\C-x\C-y`; `MBX_EDITOR_OVERRIDE=1` opts into overwrite. |
 | 2026-08-16 | Completed `EDT-001` G3 matrix M-1–M-4 (`docs/edt-001-g3-matrix-plan.md`): vi-insert `bind -x`, bracketed paste, resize after insert, Ctrl+Z then insert (`bash/editor.bash`, `crates/pty/tests/editor_bind_x.rs`). `G3` stays `discovery`; exact-byte / quoting / multiline insert remains. |
+| 2026-08-16 | Completed `EDT-001` exact-byte / quoting / multiline insert B-1–B-4 (`docs/edt-001-exact-bytes-plan.md`, `crates/pty/tests/editor_bind_x.rs`). B-5 insert-time redraw note recorded; `G3` moves to `validation`; continuous decoration remains unproven. Do not mark `G3` or `EDT-001` complete. |

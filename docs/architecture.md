@@ -395,7 +395,8 @@ highlighting:
    development (`docs/latency-budget-deferral.md`);
 3. test prompt callback ordering against popular prompt/preexec frameworks;
 4. prototype one non-destructive `bind -x` editing action that only inserts text
-   (`bash/editor.bash`, `crates/pty/tests/editor_bind_x.rs`; `EDT-001` E-1–E-4);
+   (`bash/editor.bash`, `crates/pty/tests/editor_bind_x.rs`; `EDT-001` E-1–E-4,
+   M-1–M-4, B-1–B-4; B-5 redraw note in `docs/edt-001-exact-bytes-plan.md`);
 5. prototype reuse of one standard completion function and document quoting,
    `compopt`, and dynamic-completion failures;
 6. decide whether duration timing remains opt-in or integrates with an existing

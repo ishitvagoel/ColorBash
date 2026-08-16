@@ -65,7 +65,4 @@ Reuse `crates/pty` helpers. Do not wait on CPR/DSR.
 
 ## Remaining after this slice
 
-Exact bytes, cursor position, suffixes, quoting, and multiline input.
-Redraw-without-rebinding-printables write-up. G3 matrix M-1–M-4 is complete
-(`docs/edt-001-g3-matrix-plan.md`); `G3` stays `discovery` until those bullets
-and the redraw assessment are evidenced.
+Exact-byte / quoting / multiline insert is complete (`docs/edt-001-exact-bytes-plan.md` B-1–B-4). G3 matrix M-1–M-4 is complete (`docs/edt-001-g3-matrix-plan.md`). `G3` may move to `validation` with the B-5 redraw note; do not mark `G3` or `EDT-001` complete.
