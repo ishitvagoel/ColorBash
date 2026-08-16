@@ -606,6 +606,28 @@ assert_eq "$COMP_POINT" "${_MBX_COMP_POINT:-missing}" 'snapshot COMP_POINT misma
 assert_eq 1 "${_MBX_COMP_CWORD:-missing}" 'snapshot COMP_CWORD mismatch'
 assert_eq mbx_comp_candidate "${_MBX_COMP_LAST_REPLY:-}" \
     'adapter should preserve the backend COMPREPLY candidate'
+COMP_LINE='mbx_comp_flag --mbx-co'
+COMP_POINT=${#COMP_LINE}
+COMP_WORDS=(mbx_comp_flag --mbx-co)
+COMP_CWORD=1
+COMP_TYPE=9
+COMP_KEY=$'\t'
+_mbx_comp_flag_adapter
+assert_eq --mbx-comp-flag "${_MBX_COMP_LAST_REPLY:-}" \
+    'flag adapter should preserve the backend COMPREPLY candidate'
+_mbx_comp_flag_nospace_adapter
+assert_eq --mbx-comp-flag "${_MBX_COMP_LAST_REPLY:-}" \
+    'nospace flag adapter should preserve the backend COMPREPLY candidate'
+assert_eq 1 "${_MBX_COMPLETION_INSTALLED:-missing}" \
+    'completion install should leave the installed flag set after flag adapters'
+complete -p ls 2>/dev/null | grep -Fq '_mbx_comp' && \
+    fail 'ls completion must not be wrapped by the MBX adapter'
+complete -p printf 2>/dev/null | grep -Fq '_mbx_comp' && \
+    fail 'printf completion must not be wrapped by the MBX adapter'
+_mbx_comp_command_uses_flag_adapter mbx_comp_flag || \
+    fail 'mbx_comp_flag should use the MBX flag adapter'
+_mbx_comp_command_uses_flag_adapter mbx_comp_flag_nospace || \
+    fail 'mbx_comp_flag_nospace should use the MBX flag adapter'
 
 # History module contract: MBX2 record encoding, ACK decoding, exclusions,
 # and the fork-free epoch-to-ISO conversion.
