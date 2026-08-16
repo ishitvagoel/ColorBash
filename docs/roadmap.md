@@ -7,7 +7,7 @@
 
 - Last reviewed: 2026-08-16 UTC
 - Current milestone: Phase 3A sidecar implemented; `G0` and `G2` complete; `G1` accepted
-- Active workstream: `G4` complete (`G3` in `validation`; `COMP-003` unblocked for planning)
+- Active workstream: `COMP-003` in `validation` (`G4` complete; `G3` in `validation`)
 - Next decision gate: `G3` editor integration
 - Editor-facing work is blocked by: `G3` editor integration, as identified per phase
 - Timing policy: unmet percentile targets are `deferred` and do not block
@@ -318,7 +318,7 @@ latency budgets.
 | 2 | Prompt | `complete` | capability/width/wrap recorded; `PRM-004` percentiles `deferred` |
 | 3 | History | `complete` | Phase 3A slice implemented; `G2` complete; write-ack percentiles `deferred` |
 | 4 | Ghost suggestions | `blocked` | `G3` |
-| 5 | Completion | `validation` | `G4` complete; deferred 5 ms leftover; `COMP-003` unblocked for planning; popup waits on `G3` |
+| 5 | Completion | `validation` | `G4` complete; `COMP-003` metadata in `validation`; ranking leftover; popup waits on `G3` |
 | 6 | Syntax highlighting | `blocked` | `G3`; intentionally after search/ghost/completion evidence |
 | 7 | Git/provider expansion | `discovery` | bounded prompt subset exists; richer capabilities await a consumer |
 | 8 | Enhanced Ctrl+R | `blocked` | `G3` |
@@ -472,7 +472,7 @@ line. Do not move completion functions into a subprocess unless live-state and
 | --- | --- | --- | --- |
 | `COMP-001` | Build a non-popup stock-completion adapter harness | `validation` | `docs/comp-001-harness-plan.md`; H-1–H-4 in `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`; `G4` complete |
 | `COMP-002` | Prove file and one `-F` function's exact insertion parity | `validation` | `docs/comp-002-parity-plan.md`; P-1–P-4, F-1–F-4, L-1–L-4, N-1–N-2, S-1–S-4 landed; `docs/g4-gate-close-plan.md`; 5 ms leftover `deferred` |
-| `COMP-003` | Add typed candidate metadata and bounded ranking | `not-started` | `G4` complete; separate slice — do not bundle with gate close |
+| `COMP-003` | Add typed candidate metadata and bounded ranking | `validation` | `docs/comp-003-metadata-plan.md`; K-1–K-4 in `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`; ranking leftover remains |
 | `COMP-004` | Add popup navigation and terminal-safe rendering | `blocked` | `G3`, `COMP-003` |
 | `COMP-005` | Insert/fall through exactly and pass the parity/PTY matrix | `blocked` | `COMP-004`, Git candidates when enabled |
 
@@ -559,10 +559,10 @@ Exit condition: `G5` after every `HRD-*` item is complete.
 percentile leftovers are `deferred` and must not block product slices
 (`docs/latency-budget-deferral.md`).
 
-1. `G3` stays `validation`. Continuous decoration stays unproven
-   (`docs/g3-decision-plan.md`). Do not start ghost, popup, or `COMP-003`.
-   `G4` is `complete`; deferred 5 ms leftover does not block. Do not mark
-   `COMP-001`, `COMP-002`, `G3`, or `PRM-006` complete.
+1. `COMP-003` stays `validation`. Ranking leftover is a later slice; do not
+   start popup, ghost, or fuzzy ranking here (`docs/comp-003-metadata-plan.md`).
+   `G3` continuous decoration stays unproven (`docs/g3-decision-plan.md`). Do
+   not mark `COMP-003`, `COMP-001`, `COMP-002`, `G3`, or `PRM-006` complete.
 2. `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
    slice on FND-001 SHA refresh or percentile benches unless a functional
    prompt-path defect is proven.
@@ -683,3 +683,5 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Completed `PRM-006` duration policy decision (`docs/prm-006-duration-plan.md`; `tests/bash/smoke.bash` D-1–D-3). Remain opt-in; do not compose `DEBUG`. `PRM-006` moves to `validation`. Do not start ghost, popup, or `COMP-003`. |
 | 2026-08-16 | Specified `G4` gate-close decision in `docs/g4-gate-close-plan.md`. Functional parity recorded; 5 ms stays `deferred`. Do not start `COMP-003` or popup. |
 | 2026-08-16 | Completed `G4` gate close (`docs/g4-gate-close-plan.md`; `docs/g4-decision-plan.md`). `G4` moves to `complete`; 5 ms leftover stays `deferred`. `COMP-001` / `COMP-002` stay `validation`. `COMP-003` unblocked for planning. Do not start `COMP-003` or popup. |
+| 2026-08-16 | Specified `COMP-003` typed metadata slice in `docs/comp-003-metadata-plan.md`. K-1–K-4; no ranking or popup. |
+| 2026-08-16 | Completed `COMP-003` typed metadata K-1–K-4 (`docs/comp-003-metadata-plan.md`; `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`). `COMP-003` moves to `validation`; ranking leftover remains. Do not start popup or ghost. |

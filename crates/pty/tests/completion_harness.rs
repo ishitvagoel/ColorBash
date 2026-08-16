@@ -425,3 +425,40 @@ complete -F _mbx_comp_empty_backend mbx_comp_empty
     session.write_str("\n", deadline(2)).expect("submit");
     wait_all(&mut session, &["\nGOT:nosuch|", "> "]);
 }
+
+#[test]
+fn metadata_preserves_flag_insertion_bytes() {
+    let home = TempHome::new("comp-k1");
+    let mut session = spawn_fixture_shell(home.path());
+    wait_prompt(&mut session);
+    session
+        .write_str("mbx_comp_flag --mbx-co", deadline(2))
+        .expect("type prefix");
+    send_tab(&mut session);
+    session
+        .write_str("X\n", deadline(2))
+        .expect("suffix and submit");
+    wait_all(&mut session, &["\nGOT:--mbx-comp-flag X|", "> "]);
+}
+
+#[test]
+fn metadata_description_never_inserted() {
+    let home = TempHome::new("comp-k3");
+    let mut session = spawn_fixture_shell(home.path());
+    wait_prompt(&mut session);
+    session
+        .write_str("mbx_comp_flag --mbx-co", deadline(2))
+        .expect("type prefix");
+    send_tab(&mut session);
+    session.write_str("\n", deadline(2)).expect("submit");
+    let output = wait_all(&mut session, &["\nGOT:", "> "]);
+    let text = String::from_utf8_lossy(&output);
+    assert!(
+        !text.contains("EXTRA"),
+        "completion description leaked into terminal output: {text}"
+    );
+    assert!(
+        text.contains("GOT:--mbx-comp-flag"),
+        "expected stock flag insertion bytes, got: {text}"
+    );
+}

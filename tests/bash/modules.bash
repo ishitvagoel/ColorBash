@@ -654,6 +654,8 @@ assert_eq 1 "${_MBX_COMP_CWORD:-missing}" 'snapshot COMP_CWORD mismatch'
 assert_eq 2 "${#_MBX_COMP_WORDS[@]}" 'snapshot COMP_WORDS count mismatch'
 assert_eq mbx_comp_candidate "${_MBX_COMP_LAST_REPLY:-}" \
     'adapter should preserve the backend COMPREPLY candidate'
+assert_eq word "${_MBX_COMP_KINDS[0]:-}" \
+    'probe adapter should record kind word for the candidate'
 COMP_LINE='mbx_comp_flag --mbx-co'
 COMP_POINT=${#COMP_LINE}
 COMP_WORDS=(mbx_comp_flag --mbx-co)
@@ -663,6 +665,12 @@ COMP_KEY=$'\t'
 _mbx_comp_flag_adapter
 assert_eq --mbx-comp-flag "${_MBX_COMP_LAST_REPLY:-}" \
     'flag adapter should preserve the backend COMPREPLY candidate'
+assert_eq flag "${_MBX_COMP_KINDS[0]:-}" \
+    'flag adapter should record kind flag for the candidate'
+assert_eq ${#COMPREPLY[@]} ${#_MBX_COMP_KINDS[@]} \
+    'kinds array length should match COMPREPLY'
+assert_eq ${#COMPREPLY[@]} ${#_MBX_COMP_DESCS[@]} \
+    'descriptions array length should match COMPREPLY'
 _mbx_comp_flag_nospace_adapter
 assert_eq --mbx-comp-flag "${_MBX_COMP_LAST_REPLY:-}" \
     'nospace flag adapter should preserve the backend COMPREPLY candidate'
@@ -676,6 +684,27 @@ _mbx_comp_command_uses_flag_adapter mbx_comp_flag || \
     fail 'mbx_comp_flag should use the MBX flag adapter'
 _mbx_comp_command_uses_flag_adapter mbx_comp_flag_nospace || \
     fail 'mbx_comp_flag_nospace should use the MBX flag adapter'
+
+# COMP-003 metadata: sanitize and bound descriptions (K-4).
+_mbx_comp_k4_backend() {
+    local long desc
+    long=$(printf 'a%.0s' {1..80})
+    printf -v desc '%s $ ` %s' "$long" "$(printf '\001')"
+    COMPREPLY=(candidate1)
+    _MBX_COMP_BACKEND_DESCS=("$desc")
+}
+COMPREPLY=()
+_MBX_COMP_KINDS=()
+_MBX_COMP_DESCS=()
+_mbx_comp_wrap_backend _mbx_comp_k4_backend
+assert_eq 1 ${#COMPREPLY[@]} 'K-4 backend should return one candidate'
+assert_eq 1 ${#_MBX_COMP_DESCS[@]} 'metadata should match COMPREPLY length'
+[[ ${#_MBX_COMP_DESCS[0]} -le 64 ]] || \
+    fail 'sanitized description exceeded the 64-character cap'
+[[ ${_MBX_COMP_DESCS[0]} != *'$'* ]] || fail 'description still contains $'
+[[ ${_MBX_COMP_DESCS[0]} != *'`'* ]] || fail 'description still contains backtick'
+[[ ${_MBX_COMP_DESCS[0]} != *'\'* ]] || fail 'description still contains backslash'
+[[ ${_MBX_COMP_DESCS[0]} != *$'\001'* ]] || fail 'description still contains a C0 byte'
 
 # History module contract: MBX2 record encoding, ACK decoding, exclusions,
 # and the fork-free epoch-to-ISO conversion.
