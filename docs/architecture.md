@@ -72,7 +72,8 @@ crates/cli/src/
   provider.rs        repository-status port and current Git adapter
   storage.rs         SQLite schema, WAL writer queue, queries, and controls
   transport.rs       stdio/Unix-socket server and client adapters
-  telemetry.rs       opt-in trace output
+  telemetry.rs       opt-in `MBX_LOG=trace` output; default install is silent
+                     (`docs/bst-002-004-gate-close-plan.md`)
 
 crates/pty/          genuine POSIX PTY test driver; not a product path
 docs/                research, UX/compatibility contracts, and ADRs

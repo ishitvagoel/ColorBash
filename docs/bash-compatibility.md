@@ -51,8 +51,9 @@ interactive Bash. The suite compares semantic markers for:
 - arrays and status preservation;
 - `set -u` across prompt cycles.
 
-Additional tests confirm that noninteractive sourcing is a no-op, a pre-existing
-DEBUG trap is preserved, and a missing helper uses the Bash fallback.
+Additional tests confirm that noninteractive sourcing is a no-op, re-sourcing
+`init.bash` is idempotent, a pre-existing DEBUG trap is preserved, default
+install emits no helper traces, and a missing helper uses the Bash fallback.
 
 A genuine PTY suite in `crates/pty` covers interactive prompt lifecycle, helper
 failure, Ctrl+C, Ctrl+Z, resize, and `stty -g` restoration, plus history

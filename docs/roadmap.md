@@ -122,7 +122,7 @@ recorded a green run on `origin/main` at commit
 
 Not implemented:
 
-- fuzzy history ranking or repository-context history fields;
+- repository-context history fields;
 - enhanced Ctrl+R, ghost suggestions, completion UI, or live highlighting;
 - arbitrary key-injection coverage (Tab, arrows, Ctrl+R), the release platform
   matrix, or remaining `G0` platform-matrix evidence;
@@ -156,7 +156,8 @@ Known foundation debt:
   `HRD-001` macOS PTY matrix still requires a macOS host (`O_NOCTTY` and
   `Termios`/`TIOC*` were already cfg-split);
 - duration timing is opt-in because composing arbitrary DEBUG traps is unsafe;
-- tracing is intentionally minimal;
+- tracing is intentionally minimal (`BST-004` complete; broader lifecycle
+  diagnostics deferred);
 - the experimental socket server is sequential, and abrupt termination can leave
   a socket path; and
 - direct `mbx prompt` defaults disable color when stdout is not a terminal;
@@ -314,7 +315,7 @@ latency budgets.
 | Phase | Name | Status | Principal unfinished condition |
 | ---: | --- | --- | --- |
 | 0 | Research / architecture | `complete` | `G0` complete; `HRD-001` macOS remains release-matrix work |
-| 1 | Bootstrap | `complete` | CI linked; broader lifecycle tracing deferred |
+| 1 | Bootstrap | `complete` | `BST-002`–`BST-004` complete; broader lifecycle tracing deferred; `HRD-001` macOS remains |
 | 2 | Prompt | `complete` | capability/width/wrap recorded; `PRM-004` percentiles `deferred` |
 | 3 | History | `complete` | Phase 3A / `G2` complete; `HIST-009` complete; `HIST-010` remains; write-ack percentiles `deferred` |
 | 4 | Ghost suggestions | `blocked` | unproven continuous decoration |
@@ -359,9 +360,9 @@ degradation.
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
 | `BST-001` | Rust workspace, Bash loader, and development setup | `complete` | `Cargo.toml`, `bash/init.bash`, `scripts/dev-setup.bash` |
-| `BST-002` | Interactive guard, idempotence, status preservation, and fallback | `validation` | shell suites plus PTY lifecycle/failure tests; platform matrix remains `HRD-001` |
-| `BST-003` | MBX1 coprocess and per-call adapters | `validation` | bounded protocol/module tests pass; PTY helper-crash coverage exists; platform matrix remains |
-| `BST-004` | Debug/trace logging without command text | `validation` | minimal Rust trace exists; broader lifecycle diagnostics deferred |
+| `BST-002` | Interactive guard, idempotence, status preservation, and fallback | `complete` | smoke noninteractive no-op, corpus markers, `PROMPT_COMMAND` status, re-source idempotence; PTY helper-crash/missing-helper; macOS matrix remains `HRD-001` (`docs/bst-002-004-gate-close-plan.md`) |
+| `BST-003` | MBX1 coprocess and per-call adapters | `complete` | bounded protocol/module tests; PTY helper-crash; smoke recovery to per-call; macOS matrix remains `HRD-001` (`docs/bst-002-004-gate-close-plan.md`) |
+| `BST-004` | Debug/trace logging without command text | `complete` | `MBX_LOG=trace` only; default install emits no `mbx trace`; provider/history diagnostics omit command text; broader lifecycle diagnostics deferred (`docs/bst-002-004-gate-close-plan.md`) |
 | `BST-005` | CI and canonical verification suite | `complete` | `.github/workflows/ci.yml` runs `bash tests/run.bash`; green run https://github.com/ishitvagoel/ColorBash/actions/runs/31937499009 on `origin/main` at `8c8dad2` |
 | `BST-006` | Enforce a terminator-independent 64-KiB boundary and cap Bash response acquisition before allocation | `complete` | Rust/Bash `MAX-1`/`MAX`/`MAX+1` EOF/LF/CRLF, NUL, and oversized-producer tests |
 | `BST-007` | Prove socket collision refusal, `0600` mode, cleanup, and correlation behavior | `complete` | focused Unix tests cover collisions, mode, cleanup ordering, and mismatched IDs |
@@ -563,7 +564,9 @@ percentile leftovers are `deferred` and must not block product slices
 1. Next unblocked leftover is the `HIST-010` / `GIT-003` pair (repo context on
    history rows). Do not start overlay, ghost, or highlighting. `COMP-004`
    stays `discovery`. Do not mark `COMP-004` or `COMP-005` complete.
-2. `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
+2. `BST-002` / `BST-003` / `BST-004` are `complete` (macOS matrix remains
+   `HRD-001`; broader lifecycle tracing stays deferred).
+3. `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
    slice on FND-001 SHA refresh or percentile benches unless a functional
    prompt-path defect is proven.
 
@@ -695,3 +698,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Ranked-accept replaces the current word when it is a prefix of `_MBX_COMP_RANKED_REPLY` (M-039). Stale unrelated words are refused. Snapshot clears at the next prompt. |
 | 2026-08-16 | Completed `GIT-004` Git completion kinds (`docs/git-004-kinds-plan.md`). `COMP-001` / `COMP-002` move to `complete` (G4 evidence; 5 ms `deferred`). |
 | 2026-08-16 | Completed `HIST-009` bounded fuzzy search (`docs/hist-009-fuzzy-plan.md`; `mbx history search fuzzy`). `HIST-010` remains. |
+| 2026-08-16 | Completed `BST-002` / `BST-003` / `BST-004` gate close (`docs/bst-002-004-gate-close-plan.md`; re-source idempotence and default-off traces in `tests/bash/smoke.bash`). macOS matrix remains `HRD-001`. Broader lifecycle tracing stays deferred. `HIST-010` remains. Do not start overlay or ghost. |
