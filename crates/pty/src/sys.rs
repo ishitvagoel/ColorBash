@@ -3,6 +3,8 @@ use crate::error::PtyError;
 use std::ffi::CStr;
 use std::io;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+#[cfg(target_os = "macos")]
+use std::os::raw::c_uint;
 use std::os::raw::{c_char, c_int, c_short, c_void};
 use std::path::PathBuf;
 use std::time::Instant;
@@ -12,6 +14,11 @@ const O_RDWR: c_int = 2;
 pub(crate) const O_NOCTTY: c_int = 0x20000;
 #[cfg(not(target_os = "macos"))]
 pub(crate) const O_NOCTTY: c_int = 0o400;
+// Darwin bsd/sys/fcntl.h: O_CLOEXEC 0x01000000 when __DARWIN_C_LEVEL >= 200809L
+#[cfg(target_os = "macos")]
+const O_CLOEXEC: c_int = 0x0100_0000;
+// Linux/glibc fcntl.h: O_CLOEXEC 02000000
+#[cfg(not(target_os = "macos"))]
 const O_CLOEXEC: c_int = 0o2000000;
 const O_NONBLOCK: c_int = 0o4000;
 const F_GETFL: c_int = 3;
@@ -75,15 +82,22 @@ pub struct Termios {
     pub c_ospeed: u64,
 }
 
+// Darwin bsd/sys/poll.h typedef unsigned int nfds_t; Linux x86_64 uses unsigned long.
+#[cfg(not(target_os = "macos"))]
+type PollNfds = u64;
+#[cfg(target_os = "macos")]
+type PollNfds = c_uint;
+
 unsafe extern "C" {
     fn posix_openpt(flags: c_int) -> c_int;
     fn grantpt(fd: c_int) -> c_int;
     fn unlockpt(fd: c_int) -> c_int;
+    // POSIX.1-2001; macOS grantpt(3) since 10.13.4. Fixed buffer avoids ptsname().
     fn ptsname_r(fd: c_int, buf: *mut c_char, buflen: usize) -> c_int;
     fn fcntl(fd: c_int, cmd: c_int, ...) -> c_int;
     fn ioctl(fd: c_int, request: usize, ...) -> c_int;
     fn setsid() -> c_int;
-    fn poll(fds: *mut PollFd, nfds: u64, timeout: c_int) -> c_int;
+    fn poll(fds: *mut PollFd, nfds: PollNfds, timeout: c_int) -> c_int;
     fn tcgetattr(fd: c_int, termios_p: *mut Termios) -> c_int;
     fn kill(pid: c_int, sig: c_int) -> c_int;
 }
@@ -233,5 +247,48 @@ pub fn send_group_signal(pid: u32, signal: i32) -> io::Result<()> {
         Err(io::Error::last_os_error())
     } else {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod platform_constants {
+    use super::*;
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn linux_open_flags_match_glibc() {
+        assert_eq!(O_CLOEXEC, 0o2000000);
+        assert_eq!(O_NOCTTY, 0o400);
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn darwin_open_flags_match_fcntl_h() {
+        assert_eq!(O_CLOEXEC, 0x0100_0000);
+        assert_eq!(O_NOCTTY, 0x20000);
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn linux_poll_nfds_matches_unsigned_long() {
+        assert_eq!(std::mem::size_of::<PollNfds>(), std::mem::size_of::<u64>());
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn darwin_poll_nfds_matches_unsigned_int() {
+        assert_eq!(
+            std::mem::size_of::<PollNfds>(),
+            std::mem::size_of::<c_uint>()
+        );
+    }
+
+    #[test]
+    fn slave_path_is_bounded_and_nul_terminated() {
+        let master = open_master().expect("open master");
+        let path = slave_path(&master).expect("slave path");
+        let rendered = path.to_string_lossy();
+        assert!(rendered.starts_with("/dev/"));
+        assert!(rendered.len() < 128);
     }
 }

@@ -146,9 +146,11 @@ Known foundation debt:
 - terminal capability and formal display-width handling do not yet cover
   16/256/true color or width math; PTY round-trip evidence exists for
   wide/combining glyphs and resize;
-- the PTY driver in `crates/pty/src/sys.rs` is Linux/WSL-accurate; the macOS
-  values for `O_CLOEXEC`, `poll`'s `nfds_t`, and `ptsname_r` must be verified
-  before the `HRD-001` macOS leg (`O_NOCTTY` is already cfg-split);
+- the PTY driver in `crates/pty/src/sys.rs` is Linux/WSL-accurate; Darwin
+  `O_CLOEXEC`, `poll`'s `nfds_t`, and `ptsname_r` are cfg-split with cited
+  header values (`docs/hrd-001-darwin-pty-constants-plan.md`); the full
+  `HRD-001` macOS PTY matrix still requires a macOS host (`O_NOCTTY` and
+  `Termios`/`TIOC*` were already cfg-split);
 - duration timing is opt-in because composing arbitrary DEBUG traps is unsafe;
 - tracing is intentionally minimal;
 - the experimental socket server is sequential, and abrupt termination can leave
@@ -512,7 +514,7 @@ combinations are impractical.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `HRD-001` | Supported Bash/OS/terminal pairwise PTY matrix | `not-started` | all MVP feature exits |
+| `HRD-001` | Supported Bash/OS/terminal pairwise PTY matrix | `not-started` | all MVP feature exits; Darwin PTY constant pre-work (D-1–D-3) recorded in `docs/hrd-001-darwin-pty-constants-plan.md`; macOS matrix run still required |
 | `HRD-002` | Hostile input, protocol bounds, privacy, and no-execution audit | `not-started` | feature-complete candidate |
 | `HRD-003` | Release-mode end-to-end latency and resource evidence | `not-started` | accepted workloads/budgets |
 | `HRD-004` | Install, upgrade, disable, removal, crash, and recovery evidence | `not-started` | release packaging |
@@ -543,8 +545,10 @@ default. Remaining before `G2`:
    correctness evidence are recorded.
 2. `G0`: CI URL recorded via `FND-001` / `BST-005`
    (https://github.com/ishitvagoel/ColorBash/actions/runs/31932933113;
-   `docs/fnd-001-ci-plan.md`). Platform matrix, `HRD-001` macOS, and
-   representative `PRM-004` percentiles remain.
+   `docs/fnd-001-ci-plan.md`). Darwin PTY constant cfg-split (D-1–D-3 in
+   `crates/pty/src/sys.rs`; `docs/hrd-001-darwin-pty-constants-plan.md`) is
+   recorded; platform matrix, `HRD-001` macOS PTY run, and representative
+   `PRM-004` percentiles remain.
 3. `PRM-002` remains discovery until the width model is designed from the
    `RSH-004` baseline; `EDT-001` stays blocked on remaining `G0` / `G2` gates.
 
@@ -626,3 +630,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Identified the next `HIST-007` slice as 100k-row v1→v2 migration (`HIST-004` case 8); plan in `docs/history-g2-migrate-100k-plan.md`. Foreign-user open and write-ack budget remain. Do not fake `seteuid`. Do not chase write-ack product-code optimization unless a test proves SQLite is on the prompt path. |
 | 2026-08-16 | Completed 100k-row v1→v2 migration evidence (M-2 in `crates/cli/src/corpus.rs`; release wall time in `docs/benchmarks/2026-08-16-history-migrate.md`; `docs/history-g2-migrate-100k-plan.md`). Foreign-user open and write-ack budget remain. |
 | 2026-08-16 | Linked green GitHub Actions CI on `origin/main` at `5c077ce` (https://github.com/ishitvagoel/ColorBash/actions/runs/31932933113); completed `FND-001` and `BST-005` (`docs/fnd-001-ci-plan.md`). `G0` validation remains open for platform matrix, `HRD-001` macOS, and `PRM-004` representative percentiles. Foreign-user open and write-ack budget remain. |
+| 2026-08-16 | Completed Darwin PTY constant cfg-split pre-work for `HRD-001` (D-1–D-3 in `crates/pty/src/sys.rs`; `docs/hrd-001-darwin-pty-constants-plan.md`). Linux PTY tests stay green on WSL; full macOS matrix evidence still required. `HRD-001` and `G0` remain open. Foreign-user open and write-ack budget remain. |
