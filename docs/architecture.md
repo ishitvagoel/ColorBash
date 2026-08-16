@@ -367,6 +367,9 @@ prompt-boundary write-ack budget pass and foreign-user open.
   `FLAG_TRUECOLOR`); when neither is set and color is enabled, renderers keep
   the default 256-color palette. Redirected stdout still defaults to
   `FLAG_NO_COLOR`.
+- Display-width path compaction and 16/256/truecolor capability are recorded
+  (`docs/prm-002-width-plan.md`, `docs/prm-002-color-capability-plan.md`);
+  wrap-column PTY probes remain `PRM-002` discovery.
 - Coprocess failure falls back without disabling the shell.
 - Native and fallback rendering replace the complete C0/DEL range and Bash
   expansion characters using a shared hostile-state corpus.
