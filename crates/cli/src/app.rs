@@ -1,11 +1,11 @@
-use crate::VERSION;
 use crate::cli::{self, CliCommand, HistoryCommand, ServeTarget};
 use crate::history::{HistoryControl, HistoryPolicy, HistorySearch};
 use crate::prompt::PromptRendering;
 use crate::service::ProtocolService;
-use crate::storage::{QueuedHistoryStore, default_store_path};
+use crate::storage::{default_store_path, QueuedHistoryStore};
 use crate::telemetry::trace_duration;
 use crate::transport::{self, SocketClient};
+use crate::VERSION;
 use mbx_protocol::{Request, RequestKind, ResponseKind};
 use std::io::{self, Write};
 use std::num::NonZeroU64;
@@ -118,6 +118,10 @@ fn execute_history(command: HistoryCommand) -> Result<(), String> {
                     .fuzzy(&needle, limit)
                     .map_err(|error| error.to_string())?,
             )
+        }
+        HistoryCommand::SearchFailed { limit } => {
+            let store = open_history_store()?;
+            print_entries(store.failed(limit).map_err(|error| error.to_string())?)
         }
     }
 }

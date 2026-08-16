@@ -332,7 +332,7 @@ writer commits schema v2 in WAL mode (forward-only migration from v1; see ADR
 `WRITER_BATCH_SIZE=32` for busy ingest, applies retention after full batches
 and shutdown, and treats `(session_id, event_sequence)` as the idempotency key.
 `ACK` means the record was accepted by the queue, not that SQLite has committed.
-Search is a direct CLI operation (`mbx history search recent|prefix|cwd`), not
+Search is a direct CLI operation (`mbx history search recent|prefix|cwd|fuzzy|failed`), not
 an MBX2 query.
 `path`, `count`, `clear`, and `delete` are the privacy controls. Command text
 never enters traces.

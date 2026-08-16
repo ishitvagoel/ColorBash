@@ -429,7 +429,7 @@ accept or revise these details before implementation:
 | `HIST-006` | Implement SQLite schema, migrations, permissions, retention, and writer | `complete` | `crates/cli/src/storage.rs` schema v1, WAL, `0700`/`0600`, retention prune, batched writer |
 | `HIST-011` | Implement exclusions, no-log policy, disable/path/clear/delete controls | `complete` | `crates/cli/src/policy.rs` plus `mbx history path|count|clear|delete` and env controls |
 | `HIST-007` | Add opt-in Bash observation and bounded protocol ingestion | `complete` | `bash/history.bash`, MBX2 RECORD ingestion, PTY recording/invariance tests, seeded 100k corpus, hostile inertness, query p95, concurrent-writer contention, prompt-boundary write-ack correctness, WAL crash/corrupt recovery, WAL/SHM `0600` never-more-permissive, many-match prefix covering index, writer idle-flush for live readers, 100k-row v1→v2 migration (`crates/cli/src/corpus.rs`), and foreign-user open (`docs/history-g2-foreign-user-plan.md`; F-1–F-4 in `crates/cli/src/storage.rs`); write-ack percentile leftover `deferred` (`docs/history-g2-write-ack-deferral.md`) |
-| `HIST-008` | Add recent, exact-prefix, cwd queries and deterministic ranking | `complete` | `mbx history search recent|prefix|cwd` with bounded limits and NOCASE prefix index |
+| `HIST-008` | Add recent, exact-prefix, cwd queries and deterministic ranking | `complete` | `mbx history search recent|prefix|cwd|failed` with bounded limits and NOCASE prefix index; failed leftover in `docs/hist-008-failed-search-plan.md` |
 | `HIST-009` | Add bounded fuzzy ranking | `complete` | `docs/hist-009-fuzzy-plan.md`; `mbx history search fuzzy`; scores over the most recent 256 rows; `crates/cli/src/history.rs`, `storage.rs` |
 | `HIST-010` | Add repository context | `blocked` | history-scoped `GIT-003` root/branch provider subset |
 
@@ -695,3 +695,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Ranked-accept replaces the current word when it is a prefix of `_MBX_COMP_RANKED_REPLY` (M-039). Stale unrelated words are refused. Snapshot clears at the next prompt. |
 | 2026-08-16 | Completed `GIT-004` Git completion kinds (`docs/git-004-kinds-plan.md`). `COMP-001` / `COMP-002` move to `complete` (G4 evidence; 5 ms `deferred`). |
 | 2026-08-16 | Completed `HIST-009` bounded fuzzy search (`docs/hist-009-fuzzy-plan.md`; `mbx history search fuzzy`). `HIST-010` remains. |
+| 2026-08-16 | Completed `HIST-008` failed-status search leftover (`docs/hist-008-failed-search-plan.md`; `mbx history search failed`). Schema unchanged. `HIST-010` remains. `SRCH-003` stays `blocked`. |

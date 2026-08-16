@@ -115,6 +115,7 @@ pub trait HistorySearch: Send + Sync {
     fn exact_prefix(&self, prefix: &str, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError>;
     fn by_cwd(&self, cwd: &str, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError>;
     fn fuzzy(&self, needle: &str, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError>;
+    fn failed(&self, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError>;
 }
 
 /// Scores `command` against `needle` for bounded fuzzy ranking (HIST-009).

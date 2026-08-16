@@ -19,6 +19,7 @@ These slices have working code you can exercise in an interactive shell:
 | Ranked-accept chord | Default `Ctrl-X Ctrl-A` after wrapped Tab | Replaces current word with ranked candidate; Tab stays stock |
 | Git completion kinds | Wrap `git` or `mbx_comp_git` fixture | Additive `ref`/`flag`/`file`; no Git subprocess |
 | Fuzzy history search | `MBX_HISTORY=1` then `mbx history search fuzzy TEXT` | Ranks a bounded recent pool |
+| Failed history search | `MBX_HISTORY=1` then `mbx history search failed` | Rows with nonzero exit status |
 
 ## What remains
 
@@ -121,6 +122,7 @@ echo hello-mbx
 "$MBX_BIN" history search prefix echo --limit 5
 "$MBX_BIN" history search cwd "$PWD" --limit 5
 "$MBX_BIN" history search fuzzy git --limit 5
+"$MBX_BIN" history search failed --limit 5
 "$MBX_BIN" history path
 ```
 
