@@ -1,6 +1,6 @@
 # COMP-004 leftover: ranked-cycle `bind -x` chords (C-1–C-6)
 
-Status: `ready` (2026-08-16). Popup policy P-1–P-4 is recorded in
+Status: `complete` (2026-08-16). Popup policy P-1–P-4 is recorded in
 `docs/comp-004-popup-plan.md`. Ranked-accept A-1–A-6 is complete. Tab stays
 stock. This packet adds optional next/prev chords that rotate the ranked
 candidate list and replace the current word without drawing an overlay or
@@ -77,12 +77,12 @@ the current ranked head is required for rotation.
 
 | ID | Case | Assert | Status |
 | --- | --- | --- | --- |
-| C-1 | Prefix cycle inserts head without rotating | Module: after R-2 wrap, cycle-next on `aa` → `aaflag`; list head stays `aaflag`. PTY: Tab + next chord + Enter → `\nGOT:aaflag\|`. | planned |
-| C-2 | Equal head rotates to next | Module + PTY: from `aaflag`, cycle-next → `zzflag`. Tab + next + next + Enter → `\nGOT:zzflag\|`. Accept then next also yields `zzflag`. | planned |
-| C-3 | Prev rotates to last | Module: from `aaflag` with list `(aaflag, zzflag)`, cycle-prev → `zzflag`. | planned |
-| C-4 | Occupied keyseq skipped | PTY: pre-bind `\C-x\C-n`; without override next is not bound; with `MBX_COMP_CYCLE_OVERRIDE=1` it is. | planned |
-| C-5 | Stale unrelated word refused | Module + PTY: current word `ok` unchanged; list not rotated. | planned |
-| C-6 | Metadata never inserted | PTY: cycle path output must not contain `EXTRA`. | planned |
+| C-1 | Prefix cycle inserts head without rotating | Module: after R-2 wrap, cycle-next on `aa` → `aaflag`; list head stays `aaflag`. PTY: Tab + next chord + Enter → `\nGOT:aaflag\|`. | complete — `tests/bash/modules.bash`, `ranked_cycle_next_inserts_head_from_prefix` |
+| C-2 | Equal head rotates to next | Module + PTY: from `aaflag`, cycle-next → `zzflag`. Tab + next + next + Enter → `\nGOT:zzflag\|`. Accept then next also yields `zzflag`. | complete — `ranked_cycle_next_rotates_from_accepted_head`, `ranked_cycle_after_accept_rotates_to_next` |
+| C-3 | Prev rotates to last | Module: from `aaflag` with list `(aaflag, zzflag)`, cycle-prev → `zzflag`. PTY: Tab + next + prev → `\nGOT:zzflag\|`. | complete — `tests/bash/modules.bash`, `ranked_cycle_prev_wraps_to_last` |
+| C-4 | Occupied keyseq skipped | PTY: pre-bind `\C-x\C-n`; without override next is not bound; with `MBX_COMP_CYCLE_OVERRIDE=1` it is. | complete — `occupied_cycle_next_chord_is_not_overwritten`, `occupied_cycle_next_chord_override_installs` |
+| C-5 | Stale unrelated word refused | Module + PTY: current word `ok` unchanged; list not rotated. | complete — `tests/bash/modules.bash`, `ranked_cycle_refuses_stale_unrelated_word` |
+| C-6 | Metadata never inserted | PTY: cycle path output must not contain `EXTRA`. | complete — `ranked_cycle_metadata_never_inserted` |
 
 If a measured result differs, record host bytes in the Status cell. Do not make
 Tab follow `_MBX_COMP_ORDER`.

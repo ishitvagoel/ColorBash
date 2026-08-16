@@ -729,10 +729,7 @@ fn occupied_cycle_next_chord_is_not_overwritten() {
     let mut session = spawn_mbx_shell(home.path(), &[], prelude);
     wait_prompt(&mut session);
     session
-        .write_str(
-            "bind -X | grep -F '_mbx_user_cycle_binding'\n",
-            deadline(2),
-        )
+        .write_str("bind -X | grep -F '_mbx_user_cycle_binding'\n", deadline(2))
         .expect("query binding");
     wait_all(&mut session, &["_mbx_user_cycle_binding", "> "]);
     session
@@ -751,11 +748,7 @@ fn occupied_cycle_next_chord_override_installs() {
         "_mbx_user_cycle_binding() { :; }\n",
         "bind -x '\"\\C-x\\C-n\": _mbx_user_cycle_binding'\n",
     );
-    let mut session = spawn_mbx_shell(
-        home.path(),
-        &[("MBX_COMP_CYCLE_OVERRIDE", "1")],
-        prelude,
-    );
+    let mut session = spawn_mbx_shell(home.path(), &[("MBX_COMP_CYCLE_OVERRIDE", "1")], prelude);
     wait_prompt(&mut session);
     session
         .write_str(
