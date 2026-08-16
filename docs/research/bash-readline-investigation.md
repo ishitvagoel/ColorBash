@@ -102,3 +102,14 @@ strict fallback path. Validate history and explicit `bind -x` insertions next.
 Defer continuous highlighting and popup ownership until a focused advanced-editor
 prototype proves terminal restoration and stock completion parity.
 
+### Insert-time redraw evidence (2026-08-16)
+
+`bind -x` insertions in `bash/editor.bash` redraw through Readline without
+rebinding printable keys. PTY cases E-1–E-4, M-1–M-4, and B-1–B-4 in
+`crates/pty/tests/editor_bind_x.rs` show mid-line, quoted, and `PS2` continuation
+buffers preserve exact bytes and usable prompts after insert, cancel, resize, and
+job control. This satisfies the **insert-time** redraw question for explicit
+actions only. Continuous syntax decoration, ghost text, and popup menus still
+have no supported after-every-key hook; they remain deferred per ADR 0003 until a
+separate strategy is evidenced (`docs/edt-001-exact-bytes-plan.md` B-5).
+

@@ -7,10 +7,12 @@ use std::path::Path;
 
 const CTRL_X: u8 = 0x18;
 const CTRL_Y: u8 = 0x19;
+const CTRL_B: u8 = 0x02;
 const DEFAULT_KEYSEQ: &[u8] = &[CTRL_X, CTRL_Y];
 const ALT_KEYSEQ: &[u8] = &[CTRL_X, 0x0F]; // Ctrl+X Ctrl+O
 const BRACKETED_PASTE_START: &[u8] = b"\x1b[200~";
 const BRACKETED_PASTE_END: &[u8] = b"\x1b[201~";
+const TOKEN_ENV: &[(&str, &str)] = &[("MBX_EDITOR_INSERT_TOKEN", "MBX_EDT_TOKEN")];
 
 fn spawn_mbx_editor(home: &Path, extra_env: &[(&str, &str)], rc_prelude: &str) -> PtySession {
     fs::write(
@@ -83,6 +85,12 @@ fn send_bracketed_paste(session: &mut PtySession, text: &str) {
     session
         .write_all(BRACKETED_PASTE_END, deadline(2))
         .expect("paste end");
+}
+
+fn send_ctrl_b(session: &mut PtySession, count: usize) {
+    for _ in 0..count {
+        session.write_all(&[CTRL_B], deadline(2)).expect("ctrl-b");
+    }
 }
 
 #[test]
@@ -232,4 +240,81 @@ fn ctrl_z_then_insert_still_works() {
     session
         .write_str("kill %1 2>/dev/null || true\n", deadline(2))
         .expect("cleanup");
+}
+
+#[test]
+fn mid_line_insert_preserves_prefix_and_suffix() {
+    let home = TempHome::new("edt-b1");
+    let mut session = spawn_mbx_editor(home.path(), TOKEN_ENV, "");
+    wait_prompt(&mut session);
+    session
+        .write_str("printf 'GOT:%s\\n' 'XX'", deadline(2))
+        .expect("type prefix and suffix");
+    send_ctrl_b(&mut session, 3);
+    send_keyseq(&mut session, DEFAULT_KEYSEQ);
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["\nGOT:MBX_EDT_TOKENXX", "> "]);
+}
+
+#[test]
+fn cursor_lands_after_inserted_token() {
+    let home = TempHome::new("edt-b2");
+    let mut session = spawn_mbx_editor(home.path(), TOKEN_ENV, "");
+    wait_prompt(&mut session);
+    session
+        .write_str("printf 'GOT:%s\\n' '", deadline(2))
+        .expect("type prefix");
+    send_keyseq(&mut session, DEFAULT_KEYSEQ);
+    session
+        .write_str("YY'\n", deadline(2))
+        .expect("type suffix and submit");
+    wait_all(&mut session, &["\nGOT:MBX_EDT_TOKENYY", "> "]);
+}
+
+#[test]
+fn quoted_insert_is_data_not_execution() {
+    let home = TempHome::new("edt-b3");
+    let mut session = spawn_mbx_editor(home.path(), &[], "");
+    wait_prompt(&mut session);
+    session
+        .write_str("printf 'GOT:%s\\n' '", deadline(2))
+        .expect("type prefix");
+    send_keyseq(&mut session, DEFAULT_KEYSEQ);
+    assert_no_insert_output(&mut session);
+    session
+        .write_str("'\n", deadline(2))
+        .expect("close quote and submit");
+    let output = wait_all(&mut session, &["\nGOT:printf", "> "]);
+    let text = visible_text(&output);
+    assert!(
+        !text.contains("\nMBX_EDT:ok\n"),
+        "inserted command executed as a standalone line: {text}"
+    );
+    assert!(
+        text.contains("MBX_EDT:ok"),
+        "token text missing from GOT output: {text}"
+    );
+}
+
+#[test]
+fn multiline_ps2_insert_preserves_exact_bytes() {
+    let home = TempHome::new("edt-b4");
+    let mut session = spawn_mbx_editor(
+        home.path(),
+        &[
+            ("MBX_EDITOR_INSERT_TOKEN", "MBX_EDT_TOKEN"),
+            ("PS2", "CONT> "),
+        ],
+        "",
+    );
+    wait_prompt(&mut session);
+    session
+        .write_str("printf 'GOT:%s\\n' '\n", deadline(2))
+        .expect("open quoted line");
+    wait_all(&mut session, &["CONT> "]);
+    send_keyseq(&mut session, DEFAULT_KEYSEQ);
+    session
+        .write_str("'\n", deadline(2))
+        .expect("close and submit");
+    wait_all(&mut session, &["\nGOT:", "MBX_EDT_TOKEN", "> "]);
 }
