@@ -73,8 +73,7 @@ Do not rewrite those case IDs or expected GOT lines.
 
 ## Remaining after this slice
 
-`G4` is `validation`, not `complete`. `COMP-003` stays `blocked`. Popup
-stays blocked on `G3` and `G4`. Continuous decoration stays unproven
-(`docs/edt-001-exact-bytes-plan.md` B-5). `HRD-001` still needs a macOS
-host. The 5 ms leftover is reviewed before `G5`, not as Immediate next
-work.
+`G4` is `validation`, not `complete`. The `G3` decision is specified in
+`docs/g3-decision-plan.md`. `COMP-003` stays `blocked`. Popup stays
+blocked on `G3` and `G4`. Continuous decoration stays unproven. `HRD-001`
+still needs a macOS host. The 5 ms leftover is reviewed before `G5`.
