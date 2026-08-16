@@ -70,7 +70,7 @@ wait on CPR/DSR. Use sentinels `MBX_COMP_UNIQUE`, `MBX_COMP_A B`, `--mbx-comp-fl
 
 ## Remaining after this slice
 
-Leftover insertion matrix L-1–L-4 and `--` / nested insertion N-1–N-2 are
-in `validation`. Slow/stateful wrap fallthrough S-1–S-4 is specified in
-`docs/comp-002-fallthrough-plan.md`. After that: the provisional 5 ms
-adapter overhead budget. Popup stays blocked until `G4` passes.
+Leftover insertion matrix L-1–L-4, `--` / nested insertion N-1–N-2, and
+wrap fallthrough S-1–S-4 are in `validation`. The `G4` decision is
+specified in `docs/g4-decision-plan.md`. The 5 ms leftover stays
+`deferred`. Popup stays blocked until `G4` passes.
