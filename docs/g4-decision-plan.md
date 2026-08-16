@@ -2,8 +2,12 @@
 
 Status: `validation` (2026-08-16). COMP-001 / COMP-002 functional slices are in
 `validation`. This packet records which G4 bullets have PTY evidence and
-defers the 5 ms adapter leftover. Do not mark `G4`, `COMP-001`, or
-`COMP-002` complete.
+defers the 5 ms adapter leftover. Do not mark `COMP-001` or `COMP-002`
+complete.
+
+**Gate closed:** `G4` moved to `complete` in `docs/g4-gate-close-plan.md`
+(2026-08-16). Functional parity evidence is satisfied; the 5 ms leftover
+stays `deferred`.
 
 Do not start `COMP-003`, popup, or a latency bench.
 
@@ -73,7 +77,8 @@ Do not rewrite those case IDs or expected GOT lines.
 
 ## Remaining after this slice
 
-`G4` is `validation`, not `complete`. The `G3` decision is specified in
-`docs/g3-decision-plan.md`. `COMP-003` stays `blocked`. Popup stays
-blocked on `G3` and `G4`. Continuous decoration stays unproven. `HRD-001`
-still needs a macOS host. The 5 ms leftover is reviewed before `G5`.
+`G4` is `complete` (`docs/g4-gate-close-plan.md`). `COMP-001` / `COMP-002`
+stay `validation`. The `G3` decision is specified in `docs/g3-decision-plan.md`.
+`COMP-003` is unblocked for planning. Popup stays blocked on `G3`.
+Continuous decoration stays unproven. `HRD-001` still needs a macOS host. The
+5 ms leftover is reviewed before `G5`.

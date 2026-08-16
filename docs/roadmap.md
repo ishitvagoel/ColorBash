@@ -7,7 +7,7 @@
 
 - Last reviewed: 2026-08-16 UTC
 - Current milestone: Phase 3A sidecar implemented; `G0` and `G2` complete; `G1` accepted
-- Active workstream: `PRM-006` in `validation` (`G3` / `G4` in `validation`; `COMP-003` blocked)
+- Active workstream: `G4` complete (`G3` in `validation`; `COMP-003` unblocked for planning)
 - Next decision gate: `G3` editor integration
 - Editor-facing work is blocked by: `G3` editor integration, as identified per phase
 - Timing policy: unmet percentile targets are `deferred` and do not block
@@ -280,11 +280,11 @@ non-destructive `bind -x` prototype:
 
 ### G4 — Completion parity
 
-Status: `validation`
+Status: `complete` (2026-08-16)
 
-The non-popup `COMP-001`/`COMP-002` adapter experiment produces this gate. It may
+The non-popup `COMP-001`/`COMP-002` adapter experiment produced this gate. It may
 run alongside `G3`, using the shared PTY harness, but a custom completion menu is
-blocked by both gates. Pass only when file completion and at least one existing
+blocked by `G3`. Passed when file completion and at least one existing
 `-F` completion function preserve stock Bash behavior for:
 
 - `COMP_*` inputs, `COMPREPLY`, and `compopt` effects;
@@ -294,9 +294,14 @@ blocked by both gates. Pass only when file completion and at least one existing
   and
 - the accepted latency budget over the original completion function.
 
+Functional parity evidence is recorded in `docs/g4-decision-plan.md` and
+`docs/g4-gate-close-plan.md`. The provisional 5 ms adapter overhead leftover
+stays `deferred` per `docs/latency-budget-deferral.md` and does not block gate
+close (same precedent as `G2` write-ack deferral).
+
 ### G5 — MVP release
 
-Status: `blocked` by `G3`, `G4`, and the MVP phase exits
+Status: `blocked` by `G3` and the MVP phase exits
 
 Requires `GHST-004`, `COMP-005`, `HLT-003`, `GIT-004`, `SRCH-003`, and all
 `HRD-*` release deliverables, plus real-PTY evidence across the supported Bash/OS
@@ -313,7 +318,7 @@ latency budgets.
 | 2 | Prompt | `complete` | capability/width/wrap recorded; `PRM-004` percentiles `deferred` |
 | 3 | History | `complete` | Phase 3A slice implemented; `G2` complete; write-ack percentiles `deferred` |
 | 4 | Ghost suggestions | `blocked` | `G3` |
-| 5 | Completion | `validation` | `G4` in `validation`; deferred 5 ms leftover; popup waits for `G3` and `G4` gate close |
+| 5 | Completion | `validation` | `G4` complete; deferred 5 ms leftover; `COMP-003` unblocked for planning; popup waits on `G3` |
 | 6 | Syntax highlighting | `blocked` | `G3`; intentionally after search/ghost/completion evidence |
 | 7 | Git/provider expansion | `discovery` | bounded prompt subset exists; richer capabilities await a consumer |
 | 8 | Enhanced Ctrl+R | `blocked` | `G3` |
@@ -455,7 +460,7 @@ Exit condition: `GHST-004` meets the accepted editing and safety budgets.
 
 ### Phase 5 — Completion
 
-Status: `validation`; popup/enrichment work is blocked by `G3` and `G4`.
+Status: `validation`; popup/enrichment work is blocked by `G3`.
 
 First adapt stock Bash completion and prove exact insertion parity. Only then add
 typed candidate metadata, bounded ranking, popup navigation, and Git candidates.
@@ -465,10 +470,10 @@ line. Do not move completion functions into a subprocess unless live-state and
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `COMP-001` | Build a non-popup stock-completion adapter harness | `validation` | `docs/comp-001-harness-plan.md`; H-1–H-4 in `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`; `G4` in `validation` |
-| `COMP-002` | Prove file and one `-F` function's exact insertion parity | `validation` | `docs/comp-002-parity-plan.md`; P-1–P-4, F-1–F-4, L-1–L-4, N-1–N-2, S-1–S-4 landed; `docs/g4-decision-plan.md`; 5 ms leftover `deferred` |
-| `COMP-003` | Add typed candidate metadata and bounded ranking | `blocked` | `G4` |
-| `COMP-004` | Add popup navigation and terminal-safe rendering | `blocked` | `G3`, `G4`, `COMP-003` |
+| `COMP-001` | Build a non-popup stock-completion adapter harness | `validation` | `docs/comp-001-harness-plan.md`; H-1–H-4 in `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`; `G4` complete |
+| `COMP-002` | Prove file and one `-F` function's exact insertion parity | `validation` | `docs/comp-002-parity-plan.md`; P-1–P-4, F-1–F-4, L-1–L-4, N-1–N-2, S-1–S-4 landed; `docs/g4-gate-close-plan.md`; 5 ms leftover `deferred` |
+| `COMP-003` | Add typed candidate metadata and bounded ranking | `not-started` | `G4` complete; separate slice — do not bundle with gate close |
+| `COMP-004` | Add popup navigation and terminal-safe rendering | `blocked` | `G3`, `COMP-003` |
 | `COMP-005` | Insert/fall through exactly and pass the parity/PTY matrix | `blocked` | `COMP-004`, Git candidates when enabled |
 
 Exit condition: `G4` for the adapter slice; `COMP-005` for the MVP completion
@@ -500,7 +505,7 @@ Status: `discovery`; a synchronous prompt-status subset was pulled forward.
 | `GIT-001` | Typed prompt repository-status provider | `complete` | `crates/cli/src/provider.rs`, ADR 0007, and provider substitution/degradation tests |
 | `GIT-002` | Deadline, capped acquisition, TTL cache, refresh, invalidation | `complete` | ADR 0007, provider outcome/process/cache tests, and `docs/benchmarks/2026-08-15-solid-hardening.md` |
 | `GIT-003` | Repository root/branch context, then upstream/branches/remotes/tags | `blocked` | `HIST-010` is the first scoped consumer; no expansion is authorized yet |
-| `GIT-004` | Structured completion metadata/ranking | `blocked` | `G4` and Phase 5 candidate model |
+| `GIT-004` | Structured completion metadata/ranking | `blocked` | Phase 5 candidate model (`COMP-003`) |
 | `GIT-005` | General provider capabilities/SDK | `deferred` | post-MVP evidence; ADR 0007 update required |
 
 Do not add Python, Node, Docker, arbitrary executable plugins, or a generic SDK
@@ -554,10 +559,10 @@ Exit condition: `G5` after every `HRD-*` item is complete.
 percentile leftovers are `deferred` and must not block product slices
 (`docs/latency-budget-deferral.md`).
 
-1. `PRM-006` stays `validation`. Duration remains opt-in; do not compose
-   `DEBUG` (`docs/prm-006-duration-plan.md`). Do not start ghost, popup, or
-   `COMP-003`. `G3` / `G4` stay `validation`. Do not mark `PRM-006`, `G3`,
-   or `G4` complete.
+1. `G3` stays `validation`. Continuous decoration stays unproven
+   (`docs/g3-decision-plan.md`). Do not start ghost, popup, or `COMP-003`.
+   `G4` is `complete`; deferred 5 ms leftover does not block. Do not mark
+   `COMP-001`, `COMP-002`, `G3`, or `PRM-006` complete.
 2. `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
    slice on FND-001 SHA refresh or percentile benches unless a functional
    prompt-path defect is proven.
@@ -676,3 +681,5 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Completed `G3` decision inventory (`docs/g3-decision-plan.md`). `G3` stays `validation`; continuous decoration stays unproven. Do not start ghost, popup, or `COMP-003`. |
 | 2026-08-16 | Specified `PRM-006` duration policy decision in `docs/prm-006-duration-plan.md`. Remain opt-in; do not compose `DEBUG`. Do not start ghost, popup, or `COMP-003`. |
 | 2026-08-16 | Completed `PRM-006` duration policy decision (`docs/prm-006-duration-plan.md`; `tests/bash/smoke.bash` D-1–D-3). Remain opt-in; do not compose `DEBUG`. `PRM-006` moves to `validation`. Do not start ghost, popup, or `COMP-003`. |
+| 2026-08-16 | Specified `G4` gate-close decision in `docs/g4-gate-close-plan.md`. Functional parity recorded; 5 ms stays `deferred`. Do not start `COMP-003` or popup. |
+| 2026-08-16 | Completed `G4` gate close (`docs/g4-gate-close-plan.md`; `docs/g4-decision-plan.md`). `G4` moves to `complete`; 5 ms leftover stays `deferred`. `COMP-001` / `COMP-002` stay `validation`. `COMP-003` unblocked for planning. Do not start `COMP-003` or popup. |
