@@ -79,7 +79,8 @@ Run against a populated store with the writer active:
 The 100k-row corpus is the required scale for `G2`; a 1M-row run is recorded as
 an informational stress datapoint, not a gate. Query p95 evidence for recent,
 selective prefix, and cwd is in `docs/benchmarks/2026-08-16-history-queries.md`.
-A many-match `git` prefix currently misses the 10 ms p95 budget.
+A many-match `git` prefix p95 is recorded in
+`docs/benchmarks/2026-08-16-history-prefix.md` after schema v2.
 
 ## Reporting
 

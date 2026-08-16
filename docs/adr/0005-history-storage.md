@@ -137,10 +137,13 @@ whose status cannot be attributed drops per the ambiguity rule.
   shared history daemon is assumed for the MVP.
 - The prompt path enqueues (bounded queue, acknowledgement p95 < 2 ms, p99 <
   5 ms) and never waits on database locks. The writer commits inserts in
-  batches of 32 (`BEGIN IMMEDIATE` / `COMMIT`) before prune. Full queues and
-  storage errors drop enhancement data according to the accepted durability
-  contract in `HIST-012`. Retention limits are captured when the store is
-  opened, not re-read on every prune.
+  batches of 32 (`BEGIN IMMEDIATE` / `COMMIT`) when the queue stays busy, and
+  idle-flushes partial batches when the queue is empty so live readers can see
+  committed rows without waiting for shutdown. Prune runs after full-batch
+  commits and on shutdown, not on idle flush. Full queues and storage errors
+  drop enhancement data according to the accepted durability contract in
+  `HIST-012`. Retention limits are captured when the store is opened, not
+  re-read on every prune.
 - Retries use the `(session_id, event_sequence)` key so duplicates are
   impossible; concurrent shells never share an idempotency key.
 - Retention, corruption, and lock-contention behavior are exercised by tests
@@ -215,7 +218,9 @@ whose status cannot be attributed drops per the ambiguity rule.
   concurrent-writer contention; WAL crash/corrupt recovery (K-1–K-4 in
   `crates/cli/src/storage.rs`); WAL/SHM `0600` never-more-permissive (P-1–P-4
   in `crates/cli/src/storage.rs`); many-match prefix latency
-  (`docs/benchmarks/2026-08-16-history-prefix.md`; ADR 0008); foreign-user
-  open; and command-text-free diagnostics.
+  (`docs/benchmarks/2026-08-16-history-prefix.md`; ADR 0008); writer idle-flush
+  for live readers (V-1–V-2 in `crates/cli/src/storage.rs`; V-3 in
+  `crates/pty/tests/history_invariance.rs`); foreign-user open; and
+  command-text-free diagnostics.
 - Every claim in this ADR maps to a test in `HIST-005`–`HIST-008`,
   `HIST-011`–`HIST-013` before `G2` passes.

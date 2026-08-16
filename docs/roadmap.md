@@ -386,10 +386,10 @@ accept or revise these details before implementation:
 | `HIST-004` | Define datasets, contention cases, and benchmark budgets | `complete` | `docs/benchmarks/history-budgets.md` |
 | `HIST-005` | Add narrow recorder/search/policy and reader/writer ports | `complete` | `crates/cli/src/history.rs` ports plus policy and history-service substitutes |
 | `HIST-013` | Decide SQLite linkage/dependency and supported-platform packaging | `complete` | bundled rusqlite; measured +1.97 MiB release binary and first-build cost in ADR 0005 section 6a |
-| `HIST-012` | Define queue drain, shell-exit, crash, retry, and acceptable-loss semantics | `complete` | durability contract in `docs/history-phase3a-contract.md`; writer commits eagerly and Shutdown drains |
+| `HIST-012` | Define queue drain, shell-exit, crash, retry, and acceptable-loss semantics | `complete` | durability contract in `docs/history-phase3a-contract.md`; writer batches busy queues to 32 and idle-flushes partial batches; Shutdown drains |
 | `HIST-006` | Implement SQLite schema, migrations, permissions, retention, and writer | `complete` | `crates/cli/src/storage.rs` schema v1, WAL, `0700`/`0600`, retention prune, batched writer |
 | `HIST-011` | Implement exclusions, no-log policy, disable/path/clear/delete controls | `complete` | `crates/cli/src/policy.rs` plus `mbx history path|count|clear|delete` and env controls |
-| `HIST-007` | Add opt-in Bash observation and bounded protocol ingestion | `validation` | `bash/history.bash`, MBX2 RECORD ingestion, PTY recording/invariance tests, seeded 100k corpus, hostile inertness, query p95, concurrent-writer contention, prompt-boundary write-ack correctness, WAL crash/corrupt recovery, WAL/SHM `0600` never-more-permissive, and many-match prefix covering index in `crates/cli/src/storage.rs`; write-ack percentile budget and foreign-user open remain |
+| `HIST-007` | Add opt-in Bash observation and bounded protocol ingestion | `validation` | `bash/history.bash`, MBX2 RECORD ingestion, PTY recording/invariance tests, seeded 100k corpus, hostile inertness, query p95, concurrent-writer contention, prompt-boundary write-ack correctness, WAL crash/corrupt recovery, WAL/SHM `0600` never-more-permissive, many-match prefix covering index, and writer idle-flush for live readers in `crates/cli/src/storage.rs`; write-ack percentile budget and foreign-user open remain |
 | `HIST-008` | Add recent, exact-prefix, cwd queries and deterministic ranking | `complete` | `mbx history search recent|prefix|cwd` with bounded limits and NOCASE prefix index |
 | `HIST-009` | Add bounded fuzzy ranking | `blocked` | `HIST-008`, deterministic-query evidence, and 100k+ benchmark |
 | `HIST-010` | Add repository context | `blocked` | history-scoped `GIT-003` root/branch provider subset |
@@ -530,8 +530,10 @@ default. Remaining before `G2`:
    (K-1–K-4 in `crates/cli/src/storage.rs`), WAL/SHM `0600`
    never-more-permissive (P-1–P-4 in `crates/cli/src/storage.rs`), many-match
    prefix covering index (Q-A–Q-C in `crates/cli/src/storage.rs`; release
-   percentiles in `docs/benchmarks/2026-08-16-history-prefix.md`), and
-   write-ack correctness evidence are recorded.
+   percentiles in `docs/benchmarks/2026-08-16-history-prefix.md`), writer
+   idle-flush for live readers (V-1–V-2 in `crates/cli/src/storage.rs`; V-3 in
+   `crates/pty/tests/history_invariance.rs`; `docs/history-g2-idle-commit-plan.md`),
+   and write-ack correctness evidence are recorded.
 2. `FND-001` / `G0`: CI evidence via the pushed baseline is pending the run.
 3. `PRM-002` remains discovery until the width model is designed from the
    `RSH-004` baseline; `EDT-001` stays blocked on `FND-001`.
@@ -609,3 +611,5 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Completed WAL/SHM `0600` and never-more-permissive storage tests (P-1–P-4) plus tighten-only chmod in `crates/cli/src/storage.rs` (`docs/history-g2-permission-plan.md`; `M-033`). Foreign-user open, many-match prefix, and write-ack budget remain. |
 | 2026-08-16 | Identified the next `HIST-007` slice as many-match exact-prefix latency (covering index, schema v2, ADR 0008); plan in `docs/history-g2-prefix-plan.md`. Foreign-user open and write-ack budget remain. Do not chase write-ack product-code optimization unless a test proves SQLite is on the prompt path. |
 | 2026-08-16 | Completed many-match exact-prefix covering index (schema v2, ADR 0008, Q-A–Q-C in `crates/cli/src/storage.rs`; release percentiles in `docs/benchmarks/2026-08-16-history-prefix.md`; `docs/history-g2-prefix-plan.md`). Foreign-user open and write-ack budget remain. |
+| 2026-08-16 | Identified the next `HIST-007` slice as writer idle-flush for live reader visibility (PTY `wait_for_count` at `count=0`); plan in `docs/history-g2-idle-commit-plan.md`. Foreign-user open and write-ack budget remain. Do not change `WRITER_BATCH_SIZE` or ACK meaning. Do not fake `seteuid`. |
+| 2026-08-16 | Completed writer idle-flush for live reader visibility (V-1–V-3 in `crates/cli/src/storage.rs`; PTY invariance `wait_for_count`; `docs/history-g2-idle-commit-plan.md`; `M-034`). Foreign-user open and write-ack budget remain. |

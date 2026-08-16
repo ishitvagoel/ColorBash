@@ -6,7 +6,7 @@ use crate::telemetry::trace_message;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
+use std::sync::mpsc::{self, Receiver, SyncSender, TryRecvError, TrySendError};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -113,13 +113,73 @@ impl QueuedHistoryStore {
     }
 }
 
+fn commit_partial_batch(
+    connection: &rusqlite::Connection,
+    pending: &mut usize,
+    error_message: &'static str,
+) {
+    if *pending == 0 {
+        return;
+    }
+    if execute_batch_with_lock_retry(connection, "COMMIT;").is_err() {
+        trace_history_failure(&HistoryError::new(HistoryErrorKind::Write, error_message));
+        let _ = connection.execute_batch("ROLLBACK;");
+    }
+    *pending = 0;
+}
+
+fn commit_full_batch(
+    connection: &rusqlite::Connection,
+    pending: &mut usize,
+    settings: &WriterSettings,
+) {
+    if execute_batch_with_lock_retry(connection, "COMMIT;").is_err() {
+        trace_history_failure(&HistoryError::new(
+            HistoryErrorKind::Write,
+            "writer could not commit a batch",
+        ));
+        let _ = connection.execute_batch("ROLLBACK;");
+        *pending = 0;
+    } else {
+        *pending = 0;
+        let _ = prune(connection, settings);
+    }
+}
+
 fn writer_loop(
     receiver: Receiver<QueueMessage>,
     connection: rusqlite::Connection,
     settings: WriterSettings,
 ) {
     let mut pending = 0usize;
-    while let Ok(message) = receiver.recv() {
+    loop {
+        let message = if pending == 0 {
+            match receiver.recv() {
+                Ok(message) => message,
+                Err(_) => break,
+            }
+        } else {
+            match receiver.try_recv() {
+                Ok(message) => message,
+                Err(TryRecvError::Empty) => {
+                    commit_partial_batch(
+                        &connection,
+                        &mut pending,
+                        "writer could not commit an idle batch",
+                    );
+                    continue;
+                }
+                Err(TryRecvError::Disconnected) => {
+                    commit_partial_batch(
+                        &connection,
+                        &mut pending,
+                        "writer could not commit a partial batch",
+                    );
+                    let _ = prune(&connection, &settings);
+                    break;
+                }
+            }
+        };
         match message {
             QueueMessage::Write(entry) => {
                 if pending == 0
@@ -135,17 +195,7 @@ fn writer_loop(
                     Ok(()) => {
                         pending += 1;
                         if pending >= WRITER_BATCH_SIZE {
-                            if execute_batch_with_lock_retry(&connection, "COMMIT;").is_err() {
-                                trace_history_failure(&HistoryError::new(
-                                    HistoryErrorKind::Write,
-                                    "writer could not commit a batch",
-                                ));
-                                let _ = connection.execute_batch("ROLLBACK;");
-                                pending = 0;
-                            } else {
-                                pending = 0;
-                                let _ = prune(&connection, &settings);
-                            }
+                            commit_full_batch(&connection, &mut pending, &settings);
                         }
                     }
                     Err(error) => {
@@ -156,13 +206,11 @@ fn writer_loop(
                 }
             }
             QueueMessage::Shutdown => {
-                if pending > 0 && execute_batch_with_lock_retry(&connection, "COMMIT;").is_err() {
-                    trace_history_failure(&HistoryError::new(
-                        HistoryErrorKind::Write,
-                        "writer could not commit a partial batch",
-                    ));
-                    let _ = connection.execute_batch("ROLLBACK;");
-                }
+                commit_partial_batch(
+                    &connection,
+                    &mut pending,
+                    "writer could not commit a partial batch",
+                );
                 let _ = prune(&connection, &settings);
                 break;
             }
@@ -1619,6 +1667,69 @@ mod tests {
             "expected covering index in plan: {plan}"
         );
         drop(store);
+        drop(dir);
+    }
+
+    const IDLE_SENTINEL: &str = "secret-idle-token";
+
+    fn wait_for_external_count(path: &Path, expected: u64) {
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        let mut reader = None;
+        let mut last = 0u64;
+        loop {
+            if reader.is_none() {
+                reader = QueuedHistoryStore::open(path, 8).ok();
+            }
+            if let Some(store) = reader.as_ref() {
+                if let Ok(count) = store.count() {
+                    last = count;
+                    if count == expected {
+                        return;
+                    }
+                }
+            }
+            if std::time::Instant::now() >= deadline {
+                panic!("external reader never reached count {expected}; last={last}");
+            }
+            thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    #[test]
+    fn idle_writer_commits_one_row_for_a_live_external_reader() {
+        let (dir, path) = temp_store("v1");
+        let writer = QueuedHistoryStore::open(&path, 8).unwrap();
+        enqueue(
+            &writer,
+            entry("s1", 1, IDLE_SENTINEL, "/w", "2026-08-16T16:00:00Z"),
+        );
+        wait_for_external_count(&path, 1);
+        let reader = QueuedHistoryStore::open(&path, 8).unwrap();
+        assert_eq!(reader.recent(1).unwrap()[0].command_text, IDLE_SENTINEL);
+        drop(reader);
+        drop(writer);
+        drop(dir);
+    }
+
+    #[test]
+    fn idle_writer_commits_a_partial_batch_under_writer_batch_size() {
+        let (dir, path) = temp_store("v2");
+        let writer = QueuedHistoryStore::open(&path, 64).unwrap();
+        for sequence in 0..8u64 {
+            enqueue(
+                &writer,
+                entry(
+                    "s1",
+                    sequence,
+                    &format!("cmd {sequence}"),
+                    "/w",
+                    "2026-08-16T16:00:00Z",
+                ),
+            );
+        }
+        wait_for_external_count(&path, 8);
+        assert_unique_keys(&path);
+        drop(writer);
         drop(dir);
     }
 }

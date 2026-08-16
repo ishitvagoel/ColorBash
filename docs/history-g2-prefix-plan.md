@@ -313,5 +313,5 @@ For Q-B, assert version 2 on a fresh `temp_store` after `open` + `drop`.
 
 ## Follow-on `G2` slices (not this change)
 
-1. Foreign-user open (`HIST-004` case 7 remainder) when a second uid exists.
+1. Foreign-user open (`HIST-004` case 7 remainder) when a second host uid exists.
 2. Write-ack budget only after a test proves SQLite is on the prompt path.

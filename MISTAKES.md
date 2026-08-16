@@ -630,3 +630,21 @@ to prevent recurrence, not to assign blame.
 - Evidence: `tighten_mode`, `restrict_store_permissions`, and permission tests
   P-1–P-4 in `crates/cli/src/storage.rs`; `docs/history-g2-permission-plan.md`.
 
+## M-034 — Open writer batches were invisible to live readers
+
+- Discovered: 2026-08-16
+- Status: Fixed
+- Failed assumption: queue acknowledgement plus eventual shutdown commit was
+  enough for PTY and CLI readers to observe rows while the helper stayed alive.
+- Impact: with `WRITER_BATCH_SIZE=32`, partial batches stayed inside an open
+  `BEGIN IMMEDIATE` transaction until 32 inserts or helper shutdown. External
+  `mbx history count` and PTY `wait_for_count` saw `count=0` even after ACK,
+  breaking invariance evidence despite a populated queue.
+- Correction: when the writer queue is idle and `pending > 0`, commit the
+  partial batch without prune; busy queues still batch to 32 (`M-030`).
+- Prevention: any path that lets live readers query while the writer is alive
+  needs storage tests that keep the writer open (V-1–V-2) and PTY invariance
+  (V-3). Do not weaken `wait_for_count` or change ACK meaning to hide the gap.
+- Evidence: `writer_loop`, V-1–V-2 in `crates/cli/src/storage.rs`, V-3 in
+  `crates/pty/tests/history_invariance.rs`, and `docs/history-g2-idle-commit-plan.md`.
+
