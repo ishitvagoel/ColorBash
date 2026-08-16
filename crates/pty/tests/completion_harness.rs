@@ -214,6 +214,7 @@ fn default_install_does_not_define_fixtures() {
     session
         .write_str(
             "if declare -F mbx_comp_flag >/dev/null 2>&1 || \
+declare -F mbx_comp_rank >/dev/null 2>&1 || \
 complete -p mbx_comp_flag >/dev/null 2>&1; then \
 printf 'MBX_COMP:fixture_present\\n'; else printf 'MBX_COMP:fixture_absent\\n'; fi\n",
             deadline(2),
@@ -520,16 +521,7 @@ fn ranked_accept_inserts_top_ranked_bytes() {
     send_tab(&mut session);
     send_accept_ranked(&mut session);
     session.write_str("\n", deadline(2)).expect("submit");
-    let output = wait_all(&mut session, &["\nGOT:", "> "]);
-    let text = String::from_utf8_lossy(&output);
-    assert!(
-        text.contains("aaflag"),
-        "expected ranked aaflag insertion bytes, got: {text}"
-    );
-    assert!(
-        !text.contains("zzflag"),
-        "stock COMPREPLY[0] must not be inserted by ranked accept: {text}"
-    );
+    wait_all(&mut session, &["\nGOT:aaaaflag|", "> "]);
 }
 
 #[test]
@@ -537,11 +529,60 @@ fn ranked_accept_without_snapshot_is_noop() {
     let home = TempHome::new("comp-a3");
     let mut session = spawn_mbx_shell(home.path(), &[], "");
     wait_prompt(&mut session);
-    send_accept_ranked(&mut session);
     session
-        .write_str("echo ok\n", deadline(2))
-        .expect("echo after noop accept");
-    wait_all(&mut session, &["\nok", "> "]);
+        .write_str("echo ok", deadline(2))
+        .expect("type echo");
+    send_accept_ranked(&mut session);
+    session.write_str("\n", deadline(2)).expect("submit");
+    let output = wait_all(&mut session, &["\nok", "> "]);
+    let text = String::from_utf8_lossy(&output);
+    assert!(
+        !text.contains("aaflag") && !text.contains("zzflag"),
+        "ranked fixture text leaked into a no-snapshot accept: {text}"
+    );
+}
+
+#[test]
+fn occupied_accept_chord_is_not_overwritten() {
+    let home = TempHome::new("comp-a4");
+    let prelude = concat!(
+        "_mbx_user_accept_binding() { :; }\n",
+        "bind -x '\"\\C-x\\C-a\": _mbx_user_accept_binding'\n",
+    );
+    let mut session = spawn_mbx_shell(home.path(), &[], prelude);
+    wait_prompt(&mut session);
+    session
+        .write_str(
+            "bind -X | grep -F '_mbx_user_accept_binding'\n",
+            deadline(2),
+        )
+        .expect("query binding");
+    wait_all(&mut session, &["_mbx_user_accept_binding", "> "]);
+    session
+        .write_str(
+            "[[ ${_MBX_COMP_ACCEPT_BOUND:-missing} == 0 ]] && printf 'MBX_COMP:refused\\n'\n",
+            deadline(2),
+        )
+        .expect("status");
+    wait_all(&mut session, &["\nMBX_COMP:refused", "> "]);
+}
+
+#[test]
+fn occupied_accept_chord_override_installs() {
+    let home = TempHome::new("comp-a4-override");
+    let prelude = concat!(
+        "_mbx_user_accept_binding() { :; }\n",
+        "bind -x '\"\\C-x\\C-a\": _mbx_user_accept_binding'\n",
+    );
+    let mut session = spawn_mbx_shell(home.path(), &[("MBX_COMP_ACCEPT_OVERRIDE", "1")], prelude);
+    wait_prompt(&mut session);
+    session
+        .write_str(
+            "[[ ${_MBX_COMP_ACCEPT_BOUND:-missing} == 1 ]] && printf 'MBX_COMP:bound\\n'\n",
+            deadline(2),
+        )
+        .expect("status");
+    wait_all(&mut session, &["\nMBX_COMP:bound", "> "]);
 }
 
 #[test]
@@ -555,14 +596,10 @@ fn ranked_accept_metadata_never_inserted() {
     send_tab(&mut session);
     send_accept_ranked(&mut session);
     session.write_str("\n", deadline(2)).expect("submit");
-    let output = wait_all(&mut session, &["\nGOT:", "> "]);
+    let output = wait_all(&mut session, &["\nGOT:aaaaflag|", "> "]);
     let text = String::from_utf8_lossy(&output);
     assert!(
         !text.contains("EXTRA"),
         "completion description leaked into terminal output: {text}"
-    );
-    assert!(
-        text.contains("aaflag"),
-        "expected ranked insertion bytes, got: {text}"
     );
 }

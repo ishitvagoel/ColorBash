@@ -98,11 +98,11 @@ Tests observe bytes through `printf 'GOT:%s|\n' …` (M-023). PTY waits use
 
 | ID | Case | Assert | Status |
 | --- | --- | --- | --- |
-| A-1 | Ranked accept inserts top-ranked bytes | Module: run R-2 wrap backend; `_MBX_COMP_RANKED_REPLY` is `aaflag` while `COMPREPLY[0]` stays `zzflag`. PTY: `mbx_comp_rank aa` + Tab + accept chord + Enter → output contains `aaflag`, not `zzflag`. | complete — `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs` |
+| A-1 | Ranked accept inserts top-ranked bytes | Module: run R-2 wrap backend; `_MBX_COMP_RANKED_REPLY` is `aaflag` while `COMPREPLY[0]` stays `zzflag`. PTY: `mbx_comp_rank aa` + Tab + accept chord + Enter → `\nGOT:aaaaflag|` (`aa` + spliced `aaflag`; not stock `zzflag`). | complete — `tests/bash/modules.bash`, `ranked_accept_inserts_top_ranked_bytes` |
 | A-2 | Tab insertion unchanged | PTY: `mbx_comp_flag --mbx-co` + Tab + Enter → `\nGOT:--mbx-comp-flag` (same as P-1 / R-1). `COMPREPLY[0]` order unchanged. | complete — `ranking_preserves_flag_insertion_bytes` |
-| A-3 | No ranked snapshot → no-op | PTY: fresh prompt, accept chord only, type `echo ok`, Enter → `\nok` without ranked fixture text. | complete — `ranked_accept_without_snapshot_is_noop` |
-| A-4 | Occupied keyseq skipped | Module: pre-bind default keyseq; install without override → accept chord not bound; with `MBX_COMP_ACCEPT_OVERRIDE=1` → bound. | complete — `tests/bash/modules.bash` |
-| A-5 | Metadata never inserted | PTY: ranked fixture path; output must not contain `EXTRA` description text or kind names. | complete — `ranked_accept_metadata_never_inserted` |
+| A-3 | No ranked snapshot → no-op | PTY: type `echo ok`, accept chord, Enter → `\nok` without ranked fixture text. | complete — `ranked_accept_without_snapshot_is_noop` |
+| A-4 | Occupied keyseq skipped | PTY: pre-bind default keyseq; install without override → accept chord not bound; with `MBX_COMP_ACCEPT_OVERRIDE=1` → bound. | complete — `occupied_accept_chord_is_not_overwritten`, `occupied_accept_chord_override_installs` |
+| A-5 | Metadata never inserted | PTY: ranked fixture path; `\nGOT:aaaaflag|` and output must not contain `EXTRA`. | complete — `ranked_accept_metadata_never_inserted` |
 
 If a measured result differs, record host bytes in the Status cell. Do not make
 Tab follow `_MBX_COMP_ORDER`.

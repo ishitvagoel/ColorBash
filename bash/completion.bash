@@ -281,6 +281,10 @@ _mbx_comp_install_accept_keymap() {
 
 _mbx_comp_install_accept() {
     [[ ${_MBX_COMP_ACCEPT_INSTALLED:-0} != 1 ]] || return 0
+    if [[ $- != *i* ]]; then
+        _MBX_COMP_ACCEPT_INSTALLED=1
+        return 0
+    fi
     local keyseq=${MBX_COMP_ACCEPT_KEYSEQ:-$_MBX_COMP_ACCEPT_DEFAULT_KEYSEQ}
     _MBX_COMP_ACCEPT_BOUND=0
     _MBX_COMP_ACCEPT_VI_INSERT_BOUND=0

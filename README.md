@@ -16,6 +16,7 @@ These slices have working code you can exercise in an interactive shell:
 | Insert token (`bind -x`) | Default chord `Ctrl-X Ctrl-Y` | Inserts text; does not run it |
 | Stock Tab completion | Always | File/`-F` insertion stays Bash; no popup yet |
 | Wrapped `-F` metadata | `_mbx_comp_wrap_existing_f NAME` | Additive kinds/scores; Tab bytes unchanged |
+| Ranked-accept chord | Default `Ctrl-X Ctrl-A` after wrapped Tab | Inserts `_MBX_COMP_RANKED_REPLY`; Tab stays stock |
 
 ## What remains
 
@@ -24,7 +25,7 @@ These MVP features are **not** implemented for interactive use:
 | Feature | Why it is waiting |
 | --- | --- |
 | Ghost suggestions | No after-every-key Readline decoration hook |
-| Completion popup | `COMP-004` not started |
+| Completion popup | Overlay unproven; ranked-accept chord exists |
 | Syntax highlighting | Same continuous-decoration leftover |
 | Enhanced Ctrl+R | Same leftover; explicit search UI not built |
 | Fuzzy history ranking | `HIST-009` |
@@ -177,16 +178,18 @@ tests only.
 
 ### 7. Ranked-accept chord (`bind -x`)
 
-After Tab on a wrapped completion, MBX records `_MBX_COMP_RANKED_REPLY` (top of
-`_MBX_COMP_ORDER`). Default chord is `Ctrl-X` then `Ctrl-A`. It inserts that
-text at the cursor without executing it. Tab insertion bytes stay stock.
+After Tab on a wrapped `-F` completion, MBX records `_MBX_COMP_RANKED_REPLY`
+(top of `_MBX_COMP_ORDER`). Default chord is `Ctrl-X` then `Ctrl-A`. It splices
+that text at the cursor without executing it. Tab insertion bytes stay stock.
 
 ```bash
-MBX_COMP_FIXTURES=1 source /absolute/path/to/ColorBash/bash/init.bash
-mbx_comp_rank aa   # Tab to run the wrapped adapter, then Ctrl-X Ctrl-A
+# After source bash/init.bash in an interactive shell:
+_mbx_comp_wrap_existing_f git   # skip if git has no -F spec
+git sta
 ```
 
-If the chord is already bound, MBX leaves it alone unless
+Press Tab (stock insertion), then `Ctrl-X Ctrl-A` to splice the top-ranked
+candidate. If the chord is already bound, MBX leaves it alone unless
 `MBX_COMP_ACCEPT_OVERRIDE=1`.
 
 ## Prototype controls

@@ -711,3 +711,21 @@ to prevent recurrence, not to assign blame.
 - Evidence: `bash/completion.bash`, `default_install_does_not_define_fixtures`
   in `crates/pty/tests/completion_harness.rs`, and `tests/bash/modules.bash`.
 
+## M-038 — Ranked-accept PTY assert accepted Tab-only insertion
+
+- Discovered: 2026-08-16
+- Status: Fixed
+- Failed assumption: a PTY output substring of `aaflag` proved the ranked-accept
+  chord spliced `_MBX_COMP_RANKED_REPLY`.
+- Impact: unique Tab completion of `aaflag` would also contain that substring, so
+  the test could pass if the chord were a no-op. Host bytes were
+  `\nGOT:aaaaflag|` (`aa` + spliced `aaflag`).
+- Correction: A-1 and A-5 wait for the exact `GOT:aaaaflag|` line. A-3 types
+  `echo ok` before the chord so a no-snapshot insert cannot hide in a later
+  command.
+- Prevention: completion-plus-insert PTY tests must assert the exact concatenated
+  bytes that distinguish splice-at-point from stock Tab insertion.
+- Evidence: `ranked_accept_inserts_top_ranked_bytes` and
+  `ranked_accept_metadata_never_inserted` in
+  `crates/pty/tests/completion_harness.rs`; `docs/comp-004-ranked-accept-plan.md`.
+

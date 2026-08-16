@@ -422,7 +422,7 @@ Ctrl+Z, resize, `stty -g` restoration, multiline continuation, narrow wrap,
 resize-mid-line, and wide/combining glyph round trips (`docs/research/
 multiline-width-pty.md`), and the Bash history admission corpus
 (`docs/research/bash-history-admission.md`). The opt-in history sidecar is
-implemented; `G2` is complete and write-ack percentiles are `deferred`. Provider expansion,
+implemented; `G2` is complete and write-ack percentiles are `deferred`. Provider expansion and
 highlighting remain gated by unproven continuous decoration
 (`docs/g3-gate-close-plan.md`). `COMP-004` popup policy records no GUI overlay;
 ranked-accept `bind -x` evidence is complete (`docs/comp-004-ranked-accept-plan.md`).

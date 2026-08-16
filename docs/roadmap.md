@@ -505,7 +505,7 @@ Status: `discovery`; a synchronous prompt-status subset was pulled forward.
 | `GIT-001` | Typed prompt repository-status provider | `complete` | `crates/cli/src/provider.rs`, ADR 0007, and provider substitution/degradation tests |
 | `GIT-002` | Deadline, capped acquisition, TTL cache, refresh, invalidation | `complete` | ADR 0007, provider outcome/process/cache tests, and `docs/benchmarks/2026-08-15-solid-hardening.md` |
 | `GIT-003` | Repository root/branch context, then upstream/branches/remotes/tags | `blocked` | `HIST-010` is the first scoped consumer; no expansion is authorized yet |
-| `GIT-004` | Structured completion metadata/ranking | `blocked` | Phase 5 candidate model (`COMP-003`) |
+| `GIT-004` | Structured completion metadata/ranking | `not-started` | `COMP-003` complete; ranked-accept seam in `docs/comp-004-ranked-accept-plan.md` |
 | `GIT-005` | General provider capabilities/SDK | `deferred` | post-MVP evidence; ADR 0007 update required |
 
 Do not add Python, Node, Docker, arbitrary executable plugins, or a generic SDK
