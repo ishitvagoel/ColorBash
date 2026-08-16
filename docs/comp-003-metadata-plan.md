@@ -1,6 +1,8 @@
 # COMP-003 slice: typed candidate metadata (K-1–K-4)
 
-Status: `validation` (2026-08-16). `G4` is `complete`. `G3` is in `validation`.
+Status: `validation` (2026-08-16). `G4` is `complete`. `G3` is `complete`
+(`docs/g3-gate-close-plan.md`). Continuous decoration leftover still blocks
+ghost / highlighting.
 This packet adds an additive kind/description side channel on the existing
 stock-completion adapter. Insertion bytes stay stock. Do not mark `COMP-003`,
 `COMP-001`, `COMP-002`, or `G3` complete.

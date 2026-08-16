@@ -419,5 +419,6 @@ resize-mid-line, and wide/combining glyph round trips (`docs/research/
 multiline-width-pty.md`), and the Bash history admission corpus
 (`docs/research/bash-history-admission.md`). The opt-in history sidecar is
 implemented; `G2` is complete and write-ack percentiles are `deferred`. Provider expansion,
-highlighting, and completion popup remain gated. Editor-facing work still
-requires `G3`.
+highlighting, and completion popup remain gated by unproven continuous
+decoration (`docs/g3-gate-close-plan.md`). `G3` explicit `bind -x` evidence is
+complete.

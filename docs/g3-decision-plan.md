@@ -1,10 +1,14 @@
 # G3 decision: editor-integration evidence inventory
 
-Status: `validation` (2026-08-16). `EDT-001` and `G3` are in `validation`. This
-packet records which G3 bullets have PTY evidence and keeps continuous
-decoration unproven. Do not mark `G3` or `EDT-001` complete.
+Status: `validation` (2026-08-16). This packet records which G3 bullets have
+PTY evidence and keeps continuous decoration unproven.
 
-Do not start ghost, popup, highlighting, or `COMP-003`.
+**Gate closed:** `G3` and `EDT-001` moved to `complete` in
+`docs/g3-gate-close-plan.md` (2026-08-16). Explicit `bind -x` evidence is
+satisfied; continuous after-every-key decoration stays unproven and still
+blocks ghost / highlighting.
+
+Do not start popup, ghost, highlighting, or `COMP-004`.
 
 ## Why this slice
 
@@ -70,7 +74,7 @@ Do not rewrite those case IDs or expected GOT lines.
 
 ## Remaining after this slice
 
-`G3` is `validation`, not `complete`. Ghost, highlighting, and enhanced
-Ctrl+R stay blocked. `COMP-003` stays blocked on `G4` complete. The 5 ms
-leftover stays `deferred`. `HRD-001` still needs a macOS host.
-`PRM-006` duration policy is specified in `docs/prm-006-duration-plan.md`.
+`G3` is `complete` (`docs/g3-gate-close-plan.md`). Continuous decoration stays
+unproven and still blocks ghost / highlighting. `COMP-004` is unblocked for
+planning. The 5 ms leftover stays `deferred`. `HRD-001` still needs a macOS
+host.
