@@ -599,6 +599,8 @@ complete -p mbx_comp_flag >/dev/null 2>&1 && \
     fail 'default completion install must not bind complete -F on mbx_comp_flag'
 declare -F mbx_comp_probe >/dev/null 2>&1 && \
     fail 'default completion install must not define mbx_comp_probe'
+declare -F mbx_comp_rank >/dev/null 2>&1 && \
+    fail 'default completion install must not define mbx_comp_rank'
 
 # Inspect-before-wrap: wrap a caller-defined -F; skip absent and non -F specs.
 mbx_comp_wrap_src() { :; }
@@ -727,6 +729,8 @@ assert_eq 2 ${#_MBX_COMP_ORDER[@]} 'order length should match COMPREPLY'
 (( _MBX_COMP_SCORES[1] > _MBX_COMP_SCORES[0] )) || \
     fail 'aaflag should score higher than zzflag for prefix aa'
 assert_eq 1 "${_MBX_COMP_ORDER[0]}" 'best-scoring aaflag index should sort first'
+assert_eq aaflag "${_MBX_COMP_RANKED_REPLY:-}" \
+    'ranked reply should prefer aaflag over stock COMPREPLY[0]'
 
 _mbx_comp_r3_backend() {
     local i

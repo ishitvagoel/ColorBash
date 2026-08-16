@@ -148,6 +148,11 @@ _mbx_comp_wrap_backend() {
     _MBX_COMP_LAST_REPLY=${COMPREPLY[0]:-}
     _mbx_comp_fill_metadata
     _mbx_comp_fill_ranking
+    if ((${#_MBX_COMP_ORDER[@]})); then
+        _MBX_COMP_RANKED_REPLY=${COMPREPLY[_MBX_COMP_ORDER[0]]}
+    else
+        _MBX_COMP_RANKED_REPLY=
+    fi
 }
 
 _mbx_comp_identifier_ok() {
@@ -245,6 +250,65 @@ _mbx_comp_flag_nospace_adapter() {
     _mbx_comp_wrap_backend _mbx_comp_flag_nospace_backend "$@"
 }
 
+_MBX_COMP_ACCEPT_DEFAULT_KEYSEQ='\C-x\C-a'
+
+_mbx_comp_accept_ranked() {
+    local token=${_MBX_COMP_RANKED_REPLY-}
+    local point=${READLINE_POINT:-0}
+    local line=${READLINE_LINE-}
+    [[ -n $token ]] || return 0
+    READLINE_LINE=${line:0:point}${token}${line:point}
+    READLINE_POINT=$((point + ${#token}))
+}
+
+_mbx_comp_accept_keyseq_occupied() {
+    local keyseq=$1
+    local keymap=$2
+    bind -m "$keymap" -X 2>/dev/null | grep -Fq "\"$keyseq\":" && return 0
+    bind -m "$keymap" -p 2>/dev/null | grep -Fq "\"$keyseq\":" && return 0
+    return 1
+}
+
+_mbx_comp_install_accept_keymap() {
+    local keymap=$1
+    local keyseq=$2
+    if _mbx_comp_accept_keyseq_occupied "$keyseq" "$keymap" && \
+        [[ ${MBX_COMP_ACCEPT_OVERRIDE:-0} != 1 ]]; then
+        return 1
+    fi
+    bind -m "$keymap" -x "\"$keyseq\": _mbx_comp_accept_ranked"
+}
+
+_mbx_comp_install_accept() {
+    [[ ${_MBX_COMP_ACCEPT_INSTALLED:-0} != 1 ]] || return 0
+    if [[ $- != *i* ]]; then
+        _MBX_COMP_ACCEPT_INSTALLED=1
+        return 0
+    fi
+    local keyseq=${MBX_COMP_ACCEPT_KEYSEQ:-$_MBX_COMP_ACCEPT_DEFAULT_KEYSEQ}
+    _MBX_COMP_ACCEPT_BOUND=0
+    _MBX_COMP_ACCEPT_VI_INSERT_BOUND=0
+    _MBX_COMP_ACCEPT_KEYSEQ_ACTIVE=$keyseq
+    if _mbx_comp_install_accept_keymap emacs "$keyseq"; then
+        _MBX_COMP_ACCEPT_BOUND=1
+    fi
+    if _mbx_comp_install_accept_keymap vi-insert "$keyseq"; then
+        _MBX_COMP_ACCEPT_VI_INSERT_BOUND=1
+    fi
+    _MBX_COMP_ACCEPT_INSTALLED=1
+}
+
+_mbx_comp_rank_backend() {
+    local cur=${COMP_WORDS[COMP_CWORD]}
+    if [[ $cur == aa* ]]; then
+        COMPREPLY=(zzflag aaflag)
+    fi
+}
+
+_mbx_comp_rank_adapter() {
+    _mbx_comp_wrap_backend _mbx_comp_rank_backend "$@"
+}
+
 _mbx_comp_install_probe() {
     [[ ${_MBX_COMP_PROBE_INSTALLED:-0} == 1 ]] || {
         if ! declare -F mbx_comp_probe >/dev/null 2>&1; then
@@ -270,6 +334,16 @@ _mbx_comp_install_flag() {
     }
 }
 
+_mbx_comp_install_rank() {
+    [[ ${_MBX_COMP_RANK_INSTALLED:-0} == 1 ]] || {
+        if ! declare -F mbx_comp_rank >/dev/null 2>&1; then
+            mbx_comp_rank() { printf 'GOT:%s|\n' "$*"; }
+        fi
+        complete -o bashdefault -o default -F _mbx_comp_rank_adapter mbx_comp_rank
+        _MBX_COMP_RANK_INSTALLED=1
+    }
+}
+
 _mbx_comp_command_uses_adapter() {
     local command=$1
     complete -p "$command" 2>/dev/null | grep -Fq '_mbx_comp_probe_adapter'
@@ -282,9 +356,11 @@ _mbx_comp_command_uses_flag_adapter() {
 
 _mbx_completion_install() {
     [[ ${_MBX_COMPLETION_INSTALLED:-0} != 1 ]] || return 0
+    _mbx_comp_install_accept
     if [[ ${MBX_COMP_FIXTURES:-0} == 1 ]]; then
         _mbx_comp_install_probe
         _mbx_comp_install_flag
+        _mbx_comp_install_rank
     fi
     _MBX_COMPLETION_INSTALLED=1
 }
