@@ -142,6 +142,12 @@ _mbx_fallback_prompt 0 - /srv/app \
 assert_eq 'ssh: remote??host?name?tail  /srv/app\n> ' "$REPLY" \
     'the SSH-only fallback lost or failed to sanitize its context'
 
+HOSTNAME=box
+_mbx_fallback_prompt 1 - /tmp/project \
+    "$((_MBX_FLAG_NO_COLOR | _MBX_FLAG_NERD_ICONS | _MBX_FLAG_SSH))"
+assert_eq 'ssh: box  /tmp/project  exit 1\n> ' "$REPLY" \
+    'the nerd-flag fallback must stay font-safe ASCII'
+
 # Build one hostile corpus for every renderer: all representable C0 controls,
 # DEL, and the three characters that Bash expands while decoding PS1.
 hostile_controls=

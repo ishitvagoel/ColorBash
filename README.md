@@ -10,7 +10,7 @@ These slices have working code you can exercise in an interactive shell:
 
 | Feature | How it is enabled | Notes |
 | --- | --- | --- |
-| Adaptive prompt | `source bash/init.bash` | Path, Git, failure, SSH, production |
+| Adaptive prompt | `source bash/init.bash` | Path, Git, failure, SSH, production; `MBX_ICONS=nerd` for Nerd Font glyphs |
 | Command duration | `MBX_ENABLE_DURATION_TIMING=1` | Opt-in; prompt shows elapsed time at ≥ 2 s |
 | History sidecar | `MBX_HISTORY=1` | Local SQLite; never rewrites `.bash_history` |
 | Insert token (`bind -x`) | Default chord `Ctrl-X Ctrl-Y` | Inserts text; does not run it |

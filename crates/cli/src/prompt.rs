@@ -412,8 +412,8 @@ fn format_duration(duration_ms: u64) -> String {
 mod tests {
     use super::*;
     use mbx_protocol::{
-        FLAG_ASCII_ICONS, FLAG_COLOR_16, FLAG_DISABLE_GIT, FLAG_NO_COLOR, FLAG_PRODUCTION,
-        FLAG_SSH, FLAG_TRUECOLOR,
+        FLAG_ASCII_ICONS, FLAG_COLOR_16, FLAG_DISABLE_GIT, FLAG_NERD_ICONS, FLAG_NO_COLOR,
+        FLAG_PRODUCTION, FLAG_SSH, FLAG_TRUECOLOR,
     };
     use std::cell::Cell;
     use std::rc::Rc;
@@ -478,6 +478,83 @@ mod tests {
         assert_eq!(
             renderer.render_prompt(&prompt),
             "/tmp/project  exit 2  2.5s\\n> "
+        );
+    }
+
+    #[test]
+    fn ssh_context_renders_without_production() {
+        let renderer = PromptRenderer::standard(
+            RenderEnvironment {
+                home: None,
+                host: Some("box".to_owned()),
+                user: None,
+            },
+            Box::new(StaticRepository(None)),
+        );
+        let prompt = request(FLAG_NO_COLOR | FLAG_ASCII_ICONS | FLAG_DISABLE_GIT | FLAG_SSH);
+        assert_eq!(
+            renderer.render_prompt(&prompt),
+            "ssh: box  /tmp/project\\n> "
+        );
+    }
+
+    #[test]
+    fn nerd_icons_use_locked_glyphs_for_ssh_git_path_and_failed_exit() {
+        let renderer = PromptRenderer::standard(
+            RenderEnvironment {
+                home: None,
+                host: Some("box".to_owned()),
+                user: None,
+            },
+            Box::new(StaticRepository(Some(RepositoryStatus {
+                branch: "main".to_owned(),
+                ..RepositoryStatus::default()
+            }))),
+        );
+        let mut prompt = request(FLAG_NO_COLOR | FLAG_NERD_ICONS | FLAG_SSH);
+        prompt.status = 1;
+        assert_eq!(
+            renderer.render_prompt(&prompt),
+            "󰒍 box   /tmp/project  󰊢 main   1\\n❯ "
+        );
+    }
+
+    #[test]
+    fn nerd_icons_use_locked_production_glyph() {
+        let renderer = PromptRenderer::standard(
+            RenderEnvironment {
+                home: None,
+                host: Some("payments-api".to_owned()),
+                user: Some("root".to_owned()),
+            },
+            Box::new(StaticRepository(None)),
+        );
+        let prompt = request(
+            FLAG_NO_COLOR | FLAG_NERD_ICONS | FLAG_DISABLE_GIT | FLAG_PRODUCTION | FLAG_SSH,
+        );
+        assert_eq!(
+            renderer.render_prompt(&prompt),
+            "󰀪 PROD · payments-api · root  /tmp/project\\n❯ "
+        );
+    }
+
+    #[test]
+    fn ascii_icons_win_over_nerd_icons() {
+        let renderer = PromptRenderer::standard(
+            RenderEnvironment {
+                home: None,
+                host: Some("box".to_owned()),
+                user: None,
+            },
+            Box::new(StaticRepository(None)),
+        );
+        let mut prompt = request(
+            FLAG_NO_COLOR | FLAG_ASCII_ICONS | FLAG_NERD_ICONS | FLAG_DISABLE_GIT | FLAG_SSH,
+        );
+        prompt.status = 1;
+        assert_eq!(
+            renderer.render_prompt(&prompt),
+            "ssh: box  /tmp/project  exit 1\\n> "
         );
     }
 
