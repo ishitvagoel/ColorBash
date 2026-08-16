@@ -71,6 +71,6 @@ wait on CPR/DSR. Use sentinels `MBX_COMP_UNIQUE`, `MBX_COMP_A B`, `--mbx-comp-fl
 ## Remaining after this slice
 
 Leftover insertion matrix L-1–L-4 is specified in
-`docs/comp-002-leftover-matrix-plan.md`. After that: `--`, nested commands,
-slow/stateful fallthrough, and the provisional 5 ms adapter overhead budget.
-Popup stays blocked until `G4` passes.
+`docs/comp-002-leftover-matrix-plan.md` (`validation`). Next: `--`, nested
+commands, slow/stateful fallthrough, and the provisional 5 ms adapter
+overhead budget. Popup stays blocked until `G4` passes.

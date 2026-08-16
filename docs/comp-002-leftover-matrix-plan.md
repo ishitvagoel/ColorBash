@@ -1,9 +1,8 @@
 # COMP-002 slice: leftover insertion matrix (L-1–L-4)
 
-Status: `ready` (2026-08-16). `COMP-001` / `COMP-002` are in `validation`.
-P-1–P-4 and F-1–F-4 have landed. This packet proves four remaining G4
-insertion contexts on stock file completion after default MBX install.
-Do not mark `G4` or `COMP-002` complete.
+Status: `validation` (2026-08-16). `COMP-001` / `COMP-002` are in `validation`.
+L-1–L-4 evidence is in `crates/pty/tests/completion_harness.rs`. Do not mark
+`G4` or `COMP-002` complete.
 
 `--`, nested commands, slow/stateful fallthrough, and the 5 ms adapter
 budget are a later leftover. Do not start them here.
@@ -68,10 +67,10 @@ that row.
 
 | ID | Case | Setup | Type, then Tab, then Enter | Expected GOT (this host, from P-1 style) | Status |
 | --- | --- | --- | --- | --- | --- |
-| L-1 | Alias | File `MBX_COMP_UNIQUE`. After prompt: `alias mbxpr=printf` then Enter, wait `> `. | `mbxpr 'GOT:%s\|\n' MBX_COMP_U` | `\nGOT:MBX_COMP_UNIQUE\|` then `> ` | pending |
-| L-2 | Redirection | Empty cwd (do **not** precreate the file). | `printf 'x' > MBX_COMP_U` Tab Enter. Then `printf 'GOT:%s\|\n' MBX_COMP_*` Enter. | After the second command: `\nGOT:MBX_COMP_UNIQUE\|` then `> `. If Tab failed, GOT would be `MBX_COMP_U`. | pending |
-| L-3 | Unicode filename | File `MBX_COMP_café` only (NFC). | `printf 'GOT:%s\|\n' MBX_COMP_c` | `\nGOT:MBX_COMP_café\|` then `> ` | pending |
-| L-4 | Incomplete single quote | File `MBX_COMP_UNIQUE`. | `printf 'GOT:%s\|\n' 'MBX_COMP_U` Tab, then type `'` if the quote is still open, then Enter. | `\nGOT:MBX_COMP_UNIQUE\|` then `> `. Do not leave the shell on `PS2`. | pending |
+| L-1 | Alias | File `MBX_COMP_UNIQUE`. After prompt: `alias mbxpr=printf` then Enter, wait `> `. | `mbxpr 'GOT:%s\|\n' MBX_COMP_U` | `\nGOT:MBX_COMP_UNIQUE\|` then `> ` | `validation` — `alias_file_completion_preserves_stock_bytes` |
+| L-2 | Redirection | File `MBX_COMP_UNIQUE` present (default filename completion on this host requires an existing unique match before Tab can expand the redirect target). | `printf 'x' > MBX_COMP_U` Tab Enter. Then `printf 'GOT:%s\|\n' MBX_COMP_*` Enter. | After the second command: `\nGOT:MBX_COMP_UNIQUE\|` then `> `. | `validation` — `redirection_target_completion_preserves_stock_bytes` |
+| L-3 | Unicode filename | File `MBX_COMP_café` only (NFC). | `printf 'GOT:%s\|\n' MBX_COMP_c` | `\nGOT:MBX_COMP_café\|` then `> ` | `validation` — `unicode_filename_completion_preserves_stock_bytes` |
+| L-4 | Incomplete single quote | File `MBX_COMP_UNIQUE`. | `printf 'GOT:%s\|\n' 'MBX_COMP_U` Tab, then Enter (Tab closes the quote on this host). | `\nGOT:MBX_COMP_UNIQUE\|` then `> `. Do not leave the shell on `PS2`. | `validation` — `incomplete_quote_file_completion_preserves_stock_bytes` |
 
 ### L-1 notes
 
@@ -80,9 +79,11 @@ The unique-file prefix is the same as P-1 so the GOT line is comparable.
 
 ### L-2 notes
 
-The completed word is the redirect target. The first command creates the file
-only if Tab expanded `MBX_COMP_U` to `MBX_COMP_UNIQUE`. The second command
-prints the glob match. Do not also create `MBX_COMP_UNIQUE` in setup.
+The completed word is the redirect target. On this host, default filename
+completion requires an existing `MBX_COMP_UNIQUE` before Tab can expand
+`MBX_COMP_U`. The redirect then truncates/overwrites that file. The second
+command prints the glob match. Do not also create a partial `MBX_COMP_U` file
+in setup.
 
 ### L-3 notes
 
@@ -91,10 +92,10 @@ file. `LANG` / `LC_ALL` stay `C.UTF-8` as in the existing spawn helper.
 
 ### L-4 notes
 
-The typed prefix includes an opening `'` and no closing `'`. After Tab, close
-the quote only if Readline did not already close it. Then Enter. If stock
-opens `PS2`, that is a failed case — finish the quote and treat a missing GOT
-as a defect, not as a reason to drop L-4.
+The typed prefix includes an opening `'` and no closing `'`. On this host, Tab
+completes inside the quote and closes it (`'MBX_COMP_UNIQUE'`). Enter
+immediately; do not add another `'`. If stock opens `PS2`, that is a failed
+case.
 
 ## Module contract (no new cases)
 
