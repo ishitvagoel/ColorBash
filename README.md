@@ -27,7 +27,7 @@ Phase 3A history sidecar:
 The helper bundles SQLite (`rusqlite` with the `bundled` feature) for the history
 store. The protocol crate remains dependency-free. History capture stays off
 unless `MBX_HISTORY=1`. Ghost suggestions, completion UI, live highlighting, and
-enhanced Ctrl+R are not implemented; they wait on remaining `G0` and/or `G3`.
+enhanced Ctrl+R are not implemented; they wait on `G3`.
 
 The helper separates CLI parsing, environment capture, application dispatch,
 request handling, rendering, providers, history policy/storage, transports, and

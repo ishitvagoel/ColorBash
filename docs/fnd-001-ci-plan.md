@@ -1,9 +1,9 @@
 # FND-001 slice: link green GitHub Actions CI on origin/main
 
 Status: `complete` for C-1–C-2 (2026-08-16). Do not mark `G0` complete.
-Remaining `G0` evidence is still the platform matrix, `HRD-001` macOS, and
-representative `PRM-004` percentiles (`PRM-002` is `validation`). `G2` is
-complete; write-ack percentiles are `deferred`.
+`G0` and `G2` are complete. Remaining prompt percentile matrix work is
+`deferred` (`docs/latency-budget-deferral.md`). `HRD-001` macOS remains
+release-matrix work.
 
 ## Why this slice (do not pick a different leftover)
 

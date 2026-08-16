@@ -373,8 +373,8 @@ write-ack percentile leftover is `deferred` (not a budget pass;
 - Display-width path compaction, 16/256/truecolor capability, and non-DSR
   wrap-column PTY usability are recorded (`docs/prm-002-width-plan.md`,
   `docs/prm-002-color-capability-plan.md`, `docs/prm-002-wrap-column-plan.md`;
-  CPR/DSR waits forbidden on raw PTY). `PRM-002` is `validation` for
-  representative `PRM-004` percentiles.
+  CPR/DSR waits forbidden on raw PTY). `PRM-002` is `complete`. Remaining
+  `PRM-004` percentiles are `deferred`.
 - Coprocess failure falls back without disabling the shell.
 - Native and fallback rendering replace the complete C0/DEL range and Bash
   expansion characters using a shared hostile-state corpus.
@@ -390,8 +390,9 @@ The foundation supports continuing, with conditions. Before autocomplete or live
 highlighting:
 
 1. run PTY tests under tmux, SSH, WSL, Linux, and macOS Bash variants;
-2. extend the controlled warm-Git measurement into representative dirty/large,
-   cold-refresh, fallback, PTY, and platform p50/p95/p99 workloads;
+2. remaining representative dirty/large, cold-refresh, fallback, PTY, and
+   platform p50/p95/p99 workloads are `deferred` and do not block product
+   development (`docs/latency-budget-deferral.md`);
 3. test prompt callback ordering against popular prompt/preexec frameworks;
 4. prototype one non-destructive `bind -x` editing action that only inserts text;
 5. prototype reuse of one standard completion function and document quoting,

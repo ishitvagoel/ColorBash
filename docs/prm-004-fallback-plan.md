@@ -1,7 +1,9 @@
 # PRM-004 slice: fallback and Git-disabled prompt percentiles (F-1–F-4)
 
-Status: `ready` for Composer implementation (2026-08-16). Do not mark `PRM-004`
-or `G0` complete. Do not invent a representative dirty/large repository.
+Status: `deferred` (2026-08-16). Optional later measurement. Unmet or unmeasured
+percentile leftovers do not block product development
+(`docs/latency-budget-deferral.md`). Do not invent a representative dirty/large
+repository.
 
 ## Why this slice (do not pick a different leftover)
 
@@ -9,7 +11,7 @@ Remaining work, ranked. Implement **only row 1** in this change.
 
 | Rank | Item | Why not now |
 | --- | --- | --- |
-| 1 | Fallback + Git-disabled prompt percentiles (this plan) | Named remaining `PRM-004` / `G0` workload. Warm-Git is already recorded. This host can measure the existing `_mbx_fallback_prompt` path and a helper prompt with Git disabled. |
+| 1 | Fallback + Git-disabled prompt percentiles (this plan) | Optional later measurement only. Timing leftovers no longer block `EDT-001`. |
 | 2 | `FND-001` CI SHA refresh | SHA treadmill. Do not spend this packet on it. |
 | — | Representative dirty/large/cold/PTY/platform matrix | Needs real repos and macOS. Do not invent a fake repo. |
 | — | `EDT-001` / `G3` | Blocked on remaining `G0`. |

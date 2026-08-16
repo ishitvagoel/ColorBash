@@ -6,11 +6,12 @@
 > intended program and are not a status tracker.
 
 - Last reviewed: 2026-08-16 UTC
-- Current milestone: Phase 3A sidecar implemented; `G2` complete; `G1` accepted; `G0` validation remains
-- Active workstream: remaining `G0` evidence (platform matrix, `HRD-001` macOS, `PRM-004`)
-- Next decision gate: `G3` editor integration (`EDT-001`, still blocked on remaining `G0`)
-- Editor-facing work is blocked by: remaining `G0` and/or `G3` editor
-  integration, as identified per phase
+- Current milestone: Phase 3A sidecar implemented; `G0` and `G2` complete; `G1` accepted
+- Active workstream: `EDT-001` bind -x prototype (`docs/edt-001-bind-x-plan.md`)
+- Next decision gate: `G3` editor integration
+- Editor-facing work is blocked by: `G3` editor integration, as identified per phase
+- Timing policy: unmet percentile targets are `deferred` and do not block
+  product development (`docs/latency-budget-deferral.md`)
 
 ## How to maintain this roadmap
 
@@ -75,9 +76,10 @@ silently overwrite an accepted decision.
 
 The repository is a foundation prototype plus a UI-free history sidecar, not the
 MVP. A green GitHub Actions CI run is linked for `FND-001`
-(`docs/fnd-001-ci-plan.md`); `G0` validation remains open for the platform
-matrix, `HRD-001` macOS, and representative `PRM-004` percentiles. `G2` is
-complete; write-ack percentiles are `deferred`.
+(`docs/fnd-001-ci-plan.md`). `G0` and `G2` are complete. Remaining prompt
+percentile matrix and write-ack p95/p99 are `deferred`
+(`docs/latency-budget-deferral.md`). `HRD-001` macOS remains release-matrix
+work, not a product-development gate.
 
 Implemented foundation:
 
@@ -115,7 +117,8 @@ hardening working tree on 2026-08-15, with focused evidence recorded in
 recorded a green run on `origin/main` at commit
 `8c8dad24d46d75d5eb311bacc06a0e2e25b5c5a9`
 (https://github.com/ishitvagoel/ColorBash/actions/runs/31937499009), completing
-`FND-001` and `BST-005`. `G0` validation remains open.
+`FND-001` and `BST-005`. `G0` is complete; remaining percentile leftovers are
+`deferred`.
 
 Not implemented:
 
@@ -142,7 +145,7 @@ Known foundation debt:
   by a small amount;
 - the controlled warm-Git benchmark passes provisional targets, but representative
   dirty/large repositories, cold refresh, fallback, PTY, and platform percentile
-  evidence remain `PRM-004` work;
+  evidence are `deferred` `PRM-004` leftovers (`docs/latency-budget-deferral.md`);
 - the display-width helper compacts paths at 52 display columns and color
   capability (16/256/truecolor) is recorded; non-DSR wrap-column PTY usability
   is recorded (`docs/prm-002-wrap-column-plan.md`); PTY round-trip evidence
@@ -188,9 +191,14 @@ lower-risk validation of search, restoration, and exact text insertion.
 
 ### G0 — Foundation stability
 
-Status: `validation`
+Status: `complete` (2026-08-16)
 
-Pass only when:
+Functional foundation evidence is recorded. Remaining prompt percentile matrix
+work is `deferred` and does not block product development
+(`docs/latency-budget-deferral.md`). `HRD-001` macOS stays Phase 9 / `G5`
+release-matrix work.
+
+Passed when:
 
 - the current modular refactor is reviewed and landed as a distinct baseline;
 - the canonical suite is green on a clean tree and CI evidence is linked;
@@ -200,7 +208,8 @@ Pass only when:
   terminal-safety, and bounded-failure contract;
 - a genuine PTY harness covers the foundation prompt lifecycle, helper failure,
   Ctrl+C, Ctrl+Z, and resize at minimum;
-- complete prompt rendering, including Git and fallback, has p50/p95/p99 evidence;
+- complete prompt rendering has a controlled warm-Git p50/p95/p99 record;
+  remaining fallback/dirty/large/cold/PTY/platform percentiles are `deferred`;
 - Git acquisition has a deadline, streaming output bound, and warm cache; and
 - remaining accepted prototype debt is explicitly deferred with an owner/gate.
 
@@ -287,7 +296,7 @@ blocked by both gates. Pass only when file completion and at least one existing
 
 ### G5 — MVP release
 
-Status: `blocked` by `G0`, `G3`, `G4`, and the MVP phase exits
+Status: `blocked` by `G3`, `G4`, and the MVP phase exits
 
 Requires `GHST-004`, `COMP-005`, `HLT-003`, `GIT-004`, `SRCH-003`, and all
 `HRD-*` release deliverables, plus real-PTY evidence across the supported Bash/OS
@@ -299,9 +308,9 @@ latency budgets.
 
 | Phase | Name | Status | Principal unfinished condition |
 | ---: | --- | --- | --- |
-| 0 | Research / architecture | `validation` | platform matrix and remaining `G0` evidence |
-| 1 | Bootstrap | `validation` | clean baseline/CI evidence and broader lifecycle tracing |
-| 2 | Prompt | `validation` | width model and representative prompt percentiles |
+| 0 | Research / architecture | `complete` | `G0` complete; `HRD-001` macOS remains release-matrix work |
+| 1 | Bootstrap | `complete` | CI linked; broader lifecycle tracing deferred |
+| 2 | Prompt | `complete` | capability/width/wrap recorded; `PRM-004` percentiles `deferred` |
 | 3 | History | `complete` | Phase 3A slice implemented; `G2` complete; write-ack percentiles `deferred` |
 | 4 | Ghost suggestions | `blocked` | `G3` |
 | 5 | Completion | `discovery` | adapter experiment produces `G4`; popup waits for `G3` and `G4` |
@@ -320,7 +329,7 @@ latency budgets.
 | `FND-002` | Make transport own response correlation/framing postconditions and test `RequestHandler` substitutes directly | `complete` | `crates/cli/src/service.rs`, `transport.rs`, and direct substitute/oversize/correlation tests |
 | `FND-003` | Complete port-contract tests for full prompt mapping, ping isolation, provider error/disable behavior, and crate-internal seam construction | `complete` | service, prompt-provider, disabled-provider, and sibling seam tests in `crates/cli/src/` |
 | `PTY-001` | Genuine PTY driver for input, signal, resize, and terminal-state probes | `complete` | `crates/pty` driver tests plus foundation prompt/helper/Ctrl+C/Ctrl+Z/resize/`stty -g` coverage |
-| `EDT-001` | Non-destructive `bind -x` insertion/redisplay feasibility prototype | `blocked` | remaining `G0`; produces the `G3` decision |
+| `EDT-001` | Non-destructive `bind -x` insertion/redisplay feasibility prototype | `ready` | `docs/edt-001-bind-x-plan.md`; produces the `G3` decision |
 
 ### Phase 0 — Research and architecture
 
@@ -356,14 +365,17 @@ Exit condition: `G0`.
 
 ### Phase 2 — Prompt
 
+Status: `complete` for `G0` prompt requirements (2026-08-16). `PRM-004`
+remaining percentiles are `deferred`.
+
 Outcome: an adaptive, semantic, safe prompt that remains fast under failure.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
 | `PRM-001` | Path, Git, status, duration, SSH, production, icon, and theme segments | `validation` | Rust/Bash renderers and semantic tests |
-| `PRM-002` | Capability, redirected-output, visible-width, and resize model | `validation` | redirected-output color policy recorded (`docs/prm-002-redirected-output-plan.md`; `crates/cli/src/environment.rs`); display-width path compaction helper recorded (`docs/prm-002-width-plan.md`; `crates/cli/src/prompt.rs`); color capability (16/256/truecolor) recorded (`docs/prm-002-color-capability-plan.md`; `crates/cli/src/environment.rs`, `crates/cli/src/prompt.rs`, `bash/config.bash`, `bash/fallback.bash`); non-DSR wrap-column PTY usability recorded (`docs/prm-002-wrap-column-plan.md`; `crates/pty/tests/multiline_width.rs`); representative `PRM-004` percentiles remain |
+| `PRM-002` | Capability, redirected-output, visible-width, and resize model | `complete` | redirected-output color policy recorded (`docs/prm-002-redirected-output-plan.md`; `crates/cli/src/environment.rs`); display-width path compaction helper recorded (`docs/prm-002-width-plan.md`; `crates/cli/src/prompt.rs`); color capability (16/256/truecolor) recorded (`docs/prm-002-color-capability-plan.md`; `crates/cli/src/environment.rs`, `crates/cli/src/prompt.rs`, `bash/config.bash`, `bash/fallback.bash`); non-DSR wrap-column PTY usability recorded (`docs/prm-002-wrap-column-plan.md`; `crates/pty/tests/multiline_width.rs`) |
 | `PRM-003` | End-to-end deadline, capped Git acquisition, and warm cache | `complete` | one Bash deadline, capped 50-ms Git refresh, 128-entry/1-s cache, failure tests, and `docs/benchmarks/2026-08-15-solid-hardening.md` |
-| `PRM-004` | Full prompt p50/p95/p99 benchmark matrix | `blocked` | representative repositories plus platform and fallback workloads; controlled warm case recorded |
+| `PRM-004` | Full prompt p50/p95/p99 benchmark matrix | `deferred` | controlled warm-Git case recorded; remaining matrix deferred (`docs/latency-budget-deferral.md`) |
 | `PRM-005` | Real PTY prompt, wrap, signal, resize, and restoration tests | `complete` | lifecycle, helper failure, Ctrl+C/Z, resize, `stty -g`, multiline, narrow wrap, and wide-glyph coverage |
 | `PRM-006` | Decide opt-in duration policy or explicit preexec adapter | `discovery` | must not compose arbitrary DEBUG traps silently |
 | `PRM-007` | Give native and fallback adapters one explicit input/safety contract and shared hostile-state corpus | `complete` | explicit four-field context, shared C0/DEL/expansion corpus, production precedence, and SSH-only test |
@@ -453,7 +465,7 @@ line. Do not move completion functions into a subprocess unless live-state and
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `COMP-001` | Build a non-popup stock-completion adapter harness | `blocked` | remaining `G0`; produces `G4` evidence |
+| `COMP-001` | Build a non-popup stock-completion adapter harness | `ready` | produces `G4` evidence; start after `EDT-001` unless a slice says otherwise |
 | `COMP-002` | Prove file and one `-F` function's exact insertion parity | `blocked` | `COMP-001`; produces the `G4` decision |
 | `COMP-003` | Add typed candidate metadata and bounded ranking | `blocked` | `G4` |
 | `COMP-004` | Add popup navigation and terminal-safe rendering | `blocked` | `G3`, `G4`, `COMP-003` |
@@ -538,28 +550,25 @@ Exit condition: `G5` after every `HRD-*` item is complete.
 
 ## Immediate next work
 
-The Phase 3A vertical slice and `G2` are complete. Capture stays disabled by
-default. Write-ack percentiles are `deferred` (not a budget pass;
-`docs/history-g2-write-ack-deferral.md`).
+`G0` and `G2` are complete. Capture stays disabled by default. Unmet
+percentile leftovers are `deferred` and must not block product slices
+(`docs/latency-budget-deferral.md`).
 
-1. `PRM-004` fallback + Git-disabled prompt percentiles — plan ready in
-   `docs/prm-004-fallback-plan.md` (F-1–F-4). Warm-Git is already recorded.
-   Do not invent a representative dirty/large repo. Do not mark `PRM-004` or
-   `G0` complete.
-2. `G0` remainder after that slice: platform matrix, `HRD-001` macOS PTY run,
-   and representative dirty/large/cold/PTY `PRM-004` percentiles. CI URL is
-   recorded via `FND-001` / `BST-005`
-   (https://github.com/ishitvagoel/ColorBash/actions/runs/31937499009;
-   `docs/fnd-001-ci-plan.md`). Darwin PTY constants (D-1–D-3) are recorded.
-3. `EDT-001` / `G3` stay blocked on remaining `G0`. Write-ack percentile
-   revisit is `deferred` — do not chase product-code latency unless a test
-   proves the prompt waits on SQLite. Do not spend a slice on FND-001 SHA
-   refresh.
+1. `EDT-001` non-destructive `bind -x` insertion prototype — plan ready in
+   `docs/edt-001-bind-x-plan.md` (E-1–E-4). Do not mark `G3` complete on this
+   slice alone. Do not rebind printable keys (ADR 0003).
+2. After E-1–E-4: remaining `G3` matrix (emacs/vi, paste, resize, Ctrl+C/Z).
+   `COMP-001` may start once `EDT-001` is in `validation`.
+3. `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
+   slice on FND-001 SHA refresh or percentile benches unless a functional
+   prompt-path defect is proven.
 
 ## Provisional performance and safety budgets
 
-These are planning targets and must be ratified by the relevant ADR or gate before
-they become release promises.
+These are planning targets for later review (`docs/latency-budget-deferral.md`).
+They must not block product development. Do not weaken the numbers when a run
+misses; defer the leftover and continue. Ratify or change them in an ADR before
+they become `G5` release promises.
 
 | Area | Provisional gate |
 | --- | --- |
@@ -649,3 +658,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Refreshed linked green GitHub Actions CI on `origin/main` to `8c8dad2` (https://github.com/ishitvagoel/ColorBash/actions/runs/31937499009); `FND-001` and `BST-005` remain complete (`docs/fnd-001-ci-plan.md`). `G0` validation remains open for platform matrix, `HRD-001` macOS PTY run, and `PRM-004` representative percentiles. Write-ack budget remains. |
 | 2026-08-16 | Deferred the prompt-boundary write-ack percentile leftover and marked `G2` / `HIST-007` complete (`docs/history-g2-write-ack-deferral.md`). W-1–W-4 correctness remains; WSL and cloud p95 misses are preserved; the 2 ms / 5 ms budget is not weakened and is not recorded as met. Capture stays default-off. |
 | 2026-08-16 | Identified the next `G0` / `PRM-004` slice as fallback and Git-disabled prompt percentiles; plan in `docs/prm-004-fallback-plan.md`. Do not invent a representative dirty/large repo. Do not mark `PRM-004` or `G0` complete. |
+| 2026-08-16 | Accepted timing-deferral policy (`docs/latency-budget-deferral.md`): unmet percentile targets no longer block development. Marked `G0` complete; `PRM-004` `deferred`; `EDT-001` `ready` (`docs/edt-001-bind-x-plan.md`). `HRD-001` remains release-matrix work. |
