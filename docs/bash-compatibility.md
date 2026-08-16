@@ -36,12 +36,13 @@ subshell/function contexts, making generic trap composition unsafe. The prototyp
 therefore chooses no duration rather than overwriting unknown user behavior.
 
 `bind -x` exposes `READLINE_LINE`, `READLINE_POINT`, and related variables to a
-shell function. This supports text insertion and an opt-in ghost suffix after the
-cursor (ADR 0010). While that suffix is active, Enter is a Readline delete-char +
+shell function. This supports text insertion, an explicit history-search chord
+(default `\C-x\C-r`, ADR 0009), and an opt-in ghost suffix after the cursor
+(ADR 0010). While that suffix is active, Enter is a Readline delete-char +
 `accept-line` macro rather than bind -x (M-041). Left / `\C-b`, Home, Up, Down, and
 backward-word strip the suffix before their stock motion. Ctrl-X Ctrl-N / Ctrl-P cycle
-other prefix matches without accepting them. This is not continuous
-highlighting on every keypress.
+other prefix matches without accepting them. Stock reverse-i-search stays on
+`\C-r`. This is not continuous highlighting on every keypress.
 
 ## Smoke corpus
 

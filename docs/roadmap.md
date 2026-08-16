@@ -6,10 +6,10 @@
 > intended program and are not a status tracker.
 
 - Last reviewed: 2026-08-25 UTC
-- Current milestone: Phase 3 sidecar and Strategy A ghost are on main; `G0`–`G4` complete; ADR 0011 accepted; QUERY wire and ghost generation checks in `validation`
-- Active workstream: overlapping delayed-RESULT PTY for `GHST-001`; rebase Strategy A search (draft PR #37)
+- Current milestone: Phase 3 sidecar and Strategy A ghost are on main; `G0`–`G4` complete; ADR 0011 accepted; QUERY wire and ghost generation checks in `validation`; Strategy A search insert in `validation`
+- Active workstream: overlapping delayed-RESULT PTY for `GHST-001`; remaining `SRCH-001` result-view leftover and `SRCH-002` restore
 - Next decision gate: `GHST-001` overlapping stale-rejection PTY. Continuous decoration **defers** highlighting and GUI overlay only
-- Editor-facing work: opt-in ghost suffix is on main (ADR 0010). Async QUERY wire is in `validation`. Strategy A history search is `ready`. Highlighting, dim paint, and GUI overlays are `deferred` from this MVP (G5 revisit)
+- Editor-facing work: opt-in ghost suffix is on main (ADR 0010). Async QUERY wire is in `validation`. Explicit history-search insert is in `validation` (ADR 0009). Highlighting, dim paint, and GUI overlays are `deferred` from this MVP (G5 revisit)
 - Timing policy: unmet percentile targets are `deferred` and do not block
   product development (`docs/latency-budget-deferral.md`)
 
@@ -131,7 +131,8 @@ Not implemented:
 
 - live highlighting, dim after-every-key paint, or a GUI completion / Ctrl+R
   overlay (`deferred` from this Strategy A MVP; G5 revisit);
-- Strategy A history-search UI (explicit `bind -x`; draft PR #37, not on main);
+- Strategy A history-search result view and cancel restoration (`SRCH-001`
+  leftover / `SRCH-002`);
 - overlapping delayed-RESULT PTY for ghost stale rejection (`GHST-001`);
 - arbitrary key-injection coverage (Tab, arrows, stock Ctrl+R), the release
   platform matrix, or remaining `G0` platform-matrix evidence; or
@@ -339,11 +340,11 @@ pass unless an ADR ratifies them.
 | 1 | Bootstrap | `complete` | CI linked; broader lifecycle tracing deferred |
 | 2 | Prompt | `complete` | capability/width/wrap recorded; `PRM-004` percentiles `deferred` |
 | 3 | History | `complete` | Phase 3A / `G2` complete; `HIST-009` and `HIST-010` complete; write-ack percentiles `deferred` |
-| 4 | Ghost suggestions | `validation` | ADR 0010 suffix on main; ADR 0011 + QUERY wire; Bash stale rejection remains; dim paint `deferred`; do not mark `GHST-004` complete |
+| 4 | Ghost suggestions | `validation` | ADR 0010 suffix on main; ADR 0011 + QUERY wire; overlapping delayed-RESULT PTY remains; dim paint `deferred`; do not mark `GHST-004` complete |
 | 5 | Completion | `validation` | `G4` / `COMP-001`–`COMP-003` / `GIT-004` complete; `COMP-004` `discovery`; overlay `deferred`; ranked-cycle is PR #30 |
 | 6 | Syntax highlighting | `deferred` | no after-every-key paint hook (ADR 0003); G5 revisit; IDs kept |
 | 7 | Git/provider expansion | `validation` | prompt status plus history root/branch; upstream/remotes/tags unauthorized |
-| 8 | Enhanced Ctrl+R | `ready` | Strategy A explicit `bind -x` (G3 + ADR 0010); overlay `deferred`; draft PR #37 |
+| 8 | Enhanced Ctrl+R | `validation` | explicit `\C-x\C-r` insert recorded (ADR 0009); result view leftover; overlay `deferred` |
 | 9 | Release hardening | `not-started` | Strategy A feature exits and full compatibility matrix |
 
 ## Phase details
@@ -554,22 +555,22 @@ MVP Git/completion slice. `GIT-005` remains explicitly post-MVP.
 
 ### Phase 8 — Enhanced Ctrl+R
 
-Status: `ready` for Strategy A explicit `bind -x` search. A type-to-filter
+Status: `validation` for the explicit insert action (ADR 0009). A type-to-filter
 overlay remains `deferred` (no decoration hook). G3 already proved non-destructive
-insert; ADR 0010 is the ghost precedent. Draft PR #37 implements the chord path
-and needs rebase onto current main (conflicts; predates ghost and `HIST-010`).
+insert; ADR 0010 is the ghost precedent. Default chord is `\C-x\C-r` so stock
+reverse-i-search stays on `\C-r`.
 
 Build a configurable explicit search action with age, cwd, and useful status
 metadata; bounded filtering; safe cancellation; exact insertion without
 execution; and terminal restoration. CLI `search repo` / `search branch` /
 `search failed` already exist on main (`HIST-010`). Interactive filters wait on
-the search UI, not on decoration.
+the search UI leftover, not on decoration.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `SRCH-001` | Configurable bounded history-search action and result view | `ready` | G3 explicit `bind -x`; ADR 0010 precedent; draft PR #37. Overlay is not required |
-| `SRCH-002` | Cancel restoration and exact insertion without execution | `ready` | `SRCH-001`, `PTY-001`; included in draft PR #37 |
-| `SRCH-003` | Metadata filters, 100k-row latency, signal, and terminal-state evidence | `blocked` | landing Strategy A search UI (PR #37 / `SRCH-001`), not decoration; CLI `search failed` / `search repo` / `search branch` are on main |
+| `SRCH-001` | Configurable bounded history-search action and result view | `validation` | explicit insert S-1–S-6 in `bash/search.bash`, `crates/pty/tests/history_search.rs`, `tests/bash/modules.bash`; ADR 0009; result view leftover (`docs/srch-001-history-search-plan.md`). Overlay is not required |
+| `SRCH-002` | Cancel restoration and exact insertion without execution | `blocked` | `SRCH-001` result-view leftover, `PTY-001` |
+| `SRCH-003` | Metadata filters, 100k-row latency, signal, and terminal-state evidence | `blocked` | landing remaining Strategy A search leftovers (`SRCH-002`); CLI `search failed` / `search repo` / `search branch` are on main |
 
 Exit condition: `SRCH-003`. Do not mark `SRCH-*` complete in this taxonomy slice.
 
@@ -605,9 +606,10 @@ already on `main`; do not duplicate them.
    QUERY + generation check are recorded; `docs/ghst-001-ghost-query-plan.md`).
    Do not mark `GHST-001` or `GHST-004` complete unless their exit criteria
    are met.
-2. Rebase draft PR #37 (Strategy A history search) onto current `main`. It
-   conflicts and predates ghost plus `HIST-010`. Interactive repo/failed
-   filters follow after that UI lands. Do not mark `SRCH-*` complete here.
+2. `SRCH-001` explicit `\C-x\C-r` insert is in `validation` (ADR 0009). Do not
+   mark it complete until a result view exists. Remaining leftovers are cycle,
+   restore (`SRCH-002`), cwd preference, and interactive repo/failed filters.
+   Overlay is `deferred`. Do not mark `SRCH-002` or `SRCH-003` complete.
 3. Later: rebase PR #30 ranked-cycle with chords that do **not** collide with
    ghost `\C-x\C-n` / `\C-x\C-p`. `COMP-004` stays `discovery`. Overlay is
    `deferred`. Do not mark `COMP-004` or `COMP-005` complete.
@@ -757,6 +759,7 @@ an accepted decoration/ownership ADR.
 | 2026-08-16 | Ranked-accept replaces the current word when it is a prefix of `_MBX_COMP_RANKED_REPLY` (M-039). Stale unrelated words are refused. Snapshot clears at the next prompt. |
 | 2026-08-16 | Completed `GIT-004` Git completion kinds (`docs/git-004-kinds-plan.md`). `COMP-001` / `COMP-002` move to `complete` (G4 evidence; 5 ms `deferred`). |
 | 2026-08-16 | Completed `HIST-009` bounded fuzzy search (`docs/hist-009-fuzzy-plan.md`; `mbx history search fuzzy`). `HIST-010` remains. |
+| 2026-08-16 | Accepted ADR 0009: explicit history-search `bind -x` is Strategy A, not continuous decoration. Implemented `SRCH-001` insert (`bash/search.bash`, default `\C-x\C-r`; S-1–S-6). `SRCH-001` moves to `validation`; result view leftover remains. Do not steal stock `\C-r`. Overlay stays `deferred`. |
 | 2026-08-16 | Completed `HIST-010` / `GIT-003` repository root/branch on history rows (`docs/hist-010-git-003-plan.md`). Schema v3; MBX2 unchanged; writer enrich; `mbx history search repo`. Overlay stays unproven. |
 | 2026-08-16 | Completed HIST-010 CLI filter leftovers and `PRM-006` gate close (`docs/hist-010-cli-filters-plan.md`; `search branch`, `search failed`). `PRM-006` moves to `complete`. Overlay stays unproven. `SRCH-003` stays `blocked`. |
 | 2026-08-17 | Recorded opt-in inline ghost (`docs/ghst-002-inline-ghost-plan.md`; ADR 0010; G-1–G-6). Suffix after `READLINE_POINT`; Enter is a Readline kill-line + accept-line macro while a suffix is active (M-041). Do not mark `GHST-004` complete. Do not start highlighting or overlay. |
@@ -772,3 +775,4 @@ an accepted decoration/ownership ADR.
 | 2026-08-20 | Landed `HIST-010` / `GIT-003` + CLI filters onto main after ghost (`docs/hist-010-git-003-plan.md`; `docs/hist-010-cli-filters-plan.md`). Unblocks interactive repo/failed search consumers. |
 | 2026-08-25 | Reclassified blocker taxonomy: continuous decoration **defers** highlighting, dim paint, and GUI overlays (G5 revisit; IDs kept). Strategy A search (`SRCH-001`/`SRCH-002`) is `ready`; `SRCH-003` waits on landing search UI, not decoration. No deliverable marked complete. |
 | 2026-08-25 | Accepted ADR 0011 async feature IPC on MBX2 (`docs/adr/0011-async-feature-ipc.md`). Landed MBX2 QUERY/RESULT/CANCEL wire (`docs/ghst-001-query-wire-plan.md`) and ghost coprocess QUERY with generation checks (`docs/ghst-001-ghost-query-plan.md`). `GHST-001` stays `validation` (overlapping delayed-RESULT PTY remains). Do not mark `GHST-001` complete. |
+| 2026-08-25 | Rebased Strategy A history-search insert onto QUERY-wire (`bash/search.bash`, default `\C-x\C-r`; S-1–S-6; ADR 0009). `SRCH-001` moves to `validation`; result view leftover remains. Do not steal stock `\C-r`. Overlay stays `deferred`. |

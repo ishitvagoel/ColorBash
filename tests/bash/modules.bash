@@ -1088,4 +1088,54 @@ unset MBX_BIN MBX_GHOST MBX_HISTORY READLINE_LINE READLINE_POINT READLINE_KEYSEQ
     _MBX_GHOST_HAS _MBX_GHOST_POINT _MBX_GHOST_INDEX _MBX_GHOST_TYPED_LEN \
     _MBX_GHOST_CANDIDATES _MBX_GHOST_GENERATION
 
+# Explicit history-search bind -x (ADR 0009): no-op unless MBX_HISTORY=1,
+# replace the whole line with the first helper line, never enable errexit.
+source "$ROOT/bash/search.bash"
+[[ $(<"$ROOT/bash/search.bash") != *set\ -euo\ pipefail* ]] || \
+    fail 'search.bash must not enable errexit/nounset/pipefail in the sourced module'
+_mbx_search_install
+_mbx_search_install
+assert_eq 1 "${_MBX_SEARCH_INSTALLED:-missing}" \
+    'search install should be idempotent and leave the installed flag set'
+
+READLINE_LINE='keep-me'
+READLINE_POINT=7
+unset MBX_HISTORY || true
+_mbx_search_insert
+assert_eq 'keep-me' "$READLINE_LINE" \
+    'search must no-op when MBX_HISTORY is unset'
+
+search_stub_dir=$(mktemp -d)
+cat >"$search_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+printf '%s\n' "printf 'MBX_SRCH:hit'"
+EOF
+chmod +x "$search_stub_dir/mbx"
+MBX_HISTORY=1
+MBX_BIN=$search_stub_dir/mbx
+MBX_SEARCH_TIMEOUT=1.0
+READLINE_LINE='printf'
+READLINE_POINT=6
+_mbx_search_insert
+assert_eq "printf 'MBX_SRCH:hit'" "$READLINE_LINE" \
+    'search should replace the line with the helper match'
+assert_eq 21 "$READLINE_POINT" 'search should move the cursor to the end of the match'
+
+MBX_HISTORY=0
+READLINE_LINE='keep-me'
+READLINE_POINT=7
+_mbx_search_insert
+assert_eq 'keep-me' "$READLINE_LINE" \
+    'search must no-op when MBX_HISTORY is not 1'
+
+MBX_HISTORY=1
+MBX_BIN=/nonexistent/mbx-search-helper
+READLINE_LINE='keep-me'
+_mbx_search_insert
+assert_eq 'keep-me' "$READLINE_LINE" \
+    'search must no-op when the helper is missing'
+rm -rf "$search_stub_dir"
+unset MBX_BIN MBX_HISTORY MBX_SEARCH_TIMEOUT READLINE_LINE READLINE_POINT \
+    _MBX_SEARCH_INSTALLED
+
 printf 'PASS: focused Bash module contracts\n'
