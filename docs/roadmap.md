@@ -7,9 +7,9 @@
 
 - Last reviewed: 2026-08-16 UTC
 - Current milestone: Phase 3A sidecar implemented; `G0` and `G2` complete; `G1` accepted
-- Active workstream: `COMP-003` complete (`G3` in `validation`; popup blocked)
-- Next decision gate: `G3` editor integration
-- Editor-facing work is blocked by: `G3` editor integration, as identified per phase
+- Active workstream: `G3` complete (`COMP-004` unblocked for planning; ghost/highlighting blocked on unproven continuous decoration)
+- Next decision gate: continuous-decoration leftover (blocks ghost / highlighting)
+- Editor-facing work is blocked by: unproven after-every-key decoration, as identified per phase
 - Timing policy: unmet percentile targets are `deferred` and do not block
   product development (`docs/latency-budget-deferral.md`)
 
@@ -264,19 +264,19 @@ It requires `HIST-002` through `HIST-008` plus `HIST-011`, `HIST-012`, and
 
 ### G3 — Editor integration feasibility
 
-Status: `validation`
+Status: `complete` (2026-08-16)
 
-`EDT-001` produces this gate. It blocks ghost suggestions, completion popup
-ownership, highlighting, and enhanced Ctrl+R UI. Pass only when a configurable,
-non-destructive `bind -x` prototype:
+`EDT-001` produced this gate. A configurable, non-destructive `bind -x`
+prototype:
 
 - reads and updates `READLINE_LINE`/`READLINE_POINT` without executing text;
 - preserves exact bytes, cursor position, suffixes, quoting, and multiline input;
 - does not overwrite existing user bindings without explicit configuration;
 - works in emacs and vi modes with bracketed paste, resize, Ctrl+C, and Ctrl+Z;
 - restores terminal state and prompt output after cancellation/failure; and
-- demonstrates whether Readline augmentation can meet redraw needs. If it would
-  require rebinding printable keys, ADR 0003 or MVP scope must be revisited.
+- demonstrates insert-time Readline redraw without printable-key rebinds
+  (B-5). Continuous after-every-key decoration stays unproven and still
+  blocks ghost and highlighting (`docs/g3-gate-close-plan.md`; ADR 0003).
 
 ### G4 — Completion parity
 
@@ -284,7 +284,7 @@ Status: `complete` (2026-08-16)
 
 The non-popup `COMP-001`/`COMP-002` adapter experiment produced this gate. It may
 run alongside `G3`, using the shared PTY harness, but a custom completion menu is
-blocked by `G3`. Passed when file completion and at least one existing
+blocked until `COMP-004`. Passed when file completion and at least one existing
 `-F` completion function preserve stock Bash behavior for:
 
 - `COMP_*` inputs, `COMPREPLY`, and `compopt` effects;
@@ -301,7 +301,7 @@ close (same precedent as `G2` write-ack deferral).
 
 ### G5 — MVP release
 
-Status: `blocked` by `G3` and the MVP phase exits
+Status: `blocked` by unproven continuous decoration and the MVP phase exits
 
 Requires `GHST-004`, `COMP-005`, `HLT-003`, `GIT-004`, `SRCH-003`, and all
 `HRD-*` release deliverables, plus real-PTY evidence across the supported Bash/OS
@@ -317,11 +317,11 @@ latency budgets.
 | 1 | Bootstrap | `complete` | CI linked; broader lifecycle tracing deferred |
 | 2 | Prompt | `complete` | capability/width/wrap recorded; `PRM-004` percentiles `deferred` |
 | 3 | History | `complete` | Phase 3A slice implemented; `G2` complete; write-ack percentiles `deferred` |
-| 4 | Ghost suggestions | `blocked` | `G3` |
-| 5 | Completion | `validation` | `G4` complete; `COMP-003` complete; popup waits on `G3` |
-| 6 | Syntax highlighting | `blocked` | `G3`; intentionally after search/ghost/completion evidence |
+| 4 | Ghost suggestions | `blocked` | unproven continuous decoration |
+| 5 | Completion | `validation` | `G4` / `COMP-003` complete; `COMP-004` unblocked for planning |
+| 6 | Syntax highlighting | `blocked` | unproven continuous decoration; intentionally after search/ghost/completion evidence |
 | 7 | Git/provider expansion | `discovery` | bounded prompt subset exists; richer capabilities await a consumer |
-| 8 | Enhanced Ctrl+R | `blocked` | `G3` |
+| 8 | Enhanced Ctrl+R | `blocked` | unproven continuous decoration leftover |
 | 9 | Release hardening | `not-started` | feature gates and full compatibility matrix |
 
 ## Phase details
@@ -334,7 +334,7 @@ latency budgets.
 | `FND-002` | Make transport own response correlation/framing postconditions and test `RequestHandler` substitutes directly | `complete` | `crates/cli/src/service.rs`, `transport.rs`, and direct substitute/oversize/correlation tests |
 | `FND-003` | Complete port-contract tests for full prompt mapping, ping isolation, provider error/disable behavior, and crate-internal seam construction | `complete` | service, prompt-provider, disabled-provider, and sibling seam tests in `crates/cli/src/` |
 | `PTY-001` | Genuine PTY driver for input, signal, resize, and terminal-state probes | `complete` | `crates/pty` driver tests plus foundation prompt/helper/Ctrl+C/Ctrl+Z/resize/`stty -g` coverage |
-| `EDT-001` | Non-destructive `bind -x` insertion/redisplay feasibility prototype | `validation` | E-1–E-4, M-1–M-4, B-1–B-4 in `crates/pty/tests/editor_bind_x.rs` and `bash/editor.bash`; B-5 redraw note in `docs/edt-001-exact-bytes-plan.md`; `docs/g3-decision-plan.md`; continuous decoration unproven |
+| `EDT-001` | Non-destructive `bind -x` insertion/redisplay feasibility prototype | `complete` | E-1–E-4, M-1–M-4, B-1–B-4 in `crates/pty/tests/editor_bind_x.rs` and `bash/editor.bash`; B-5 redraw note; `docs/g3-gate-close-plan.md`; continuous decoration leftover unproven |
 
 ### Phase 0 — Research and architecture
 
@@ -441,7 +441,7 @@ the roadmap cannot make that scope change by itself.
 
 ### Phase 4 — Ghost suggestions
 
-Status: `blocked` by `G3`.
+Status: `blocked` by unproven continuous decoration.
 
 After the gates pass, implement asynchronous ranked-history lookup with generation
 IDs, stale-result rejection, inline rendering, full/word acceptance, cycling, and
@@ -452,7 +452,7 @@ keystroke.
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
 | `GHST-001` | Async ranked query with generation IDs and cancellation | `blocked` | async IPC ADR decision |
-| `GHST-002` | Inline ghost rendering with stale-result rejection | `blocked` | `G3`, `GHST-001` |
+| `GHST-002` | Inline ghost rendering with stale-result rejection | `blocked` | unproven continuous decoration, `GHST-001` |
 | `GHST-003` | Full/word acceptance and suggestion cycling | `blocked` | `GHST-002` |
 | `GHST-004` | Multiline, resize, exact-byte, no-execution, and latency evidence | `blocked` | `GHST-003`, `PTY-001` |
 
@@ -460,7 +460,7 @@ Exit condition: `GHST-004` meets the accepted editing and safety budgets.
 
 ### Phase 5 — Completion
 
-Status: `validation`; popup/enrichment work is blocked by `G3`.
+Status: `validation`; popup is unblocked for planning (`COMP-004`).
 
 First adapt stock Bash completion and prove exact insertion parity. Only then add
 typed candidate metadata, bounded ranking, popup navigation, and Git candidates.
@@ -473,7 +473,7 @@ line. Do not move completion functions into a subprocess unless live-state and
 | `COMP-001` | Build a non-popup stock-completion adapter harness | `validation` | `docs/comp-001-harness-plan.md`; H-1–H-4 in `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`; `G4` complete |
 | `COMP-002` | Prove file and one `-F` function's exact insertion parity | `validation` | `docs/comp-002-parity-plan.md`; P-1–P-4, F-1–F-4, L-1–L-4, N-1–N-2, S-1–S-4 landed; `docs/g4-gate-close-plan.md`; 5 ms leftover `deferred` |
 | `COMP-003` | Add typed candidate metadata and bounded ranking | `complete` | `docs/comp-003-metadata-plan.md` K-1–K-4; `docs/comp-003-ranking-plan.md` R-1–R-4 in `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs` |
-| `COMP-004` | Add popup navigation and terminal-safe rendering | `blocked` | `G3`, `COMP-003` |
+| `COMP-004` | Add popup navigation and terminal-safe rendering | `not-started` | `G3` / `COMP-003` complete; separate slice — do not bundle with gate close |
 | `COMP-005` | Insert/fall through exactly and pass the parity/PTY matrix | `blocked` | `COMP-004`, Git candidates when enabled |
 
 Exit condition: `G4` for the adapter slice; `COMP-005` for the MVP completion
@@ -481,7 +481,7 @@ feature.
 
 ### Phase 6 — Syntax highlighting
 
-Status: `blocked` by `G3` and intentionally last among editor experiments.
+Status: `blocked` by unproven continuous decoration and intentionally last among editor experiments.
 
 Define a tolerant token taxonomy only after Readline redraw feasibility is known.
 The highlighter must accept incomplete Bash, never execute or expand input, bound
@@ -490,7 +490,7 @@ and strip back to the exact original bytes.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `HLT-001` | Define token taxonomy and tolerant incomplete-input lexer | `blocked` | `G3` and ADR 0003 reassessment |
+| `HLT-001` | Define token taxonomy and tolerant incomplete-input lexer | `blocked` | unproven continuous decoration and ADR 0003 |
 | `HLT-002` | Integrate terminal-safe styling without taking execution ownership | `blocked` | `HLT-001`, accepted redraw strategy |
 | `HLT-003` | Pass exact-byte stripping, hostile-input, PTY, and latency gates | `blocked` | `HLT-002`, `PTY-001` |
 
@@ -516,8 +516,8 @@ MVP Git/completion slice. `GIT-005` remains explicitly post-MVP.
 
 ### Phase 8 — Enhanced Ctrl+R
 
-Status: `blocked` by `G3`, but first in the editor-feature sequence once
-that gate passes.
+Status: `blocked` by unproven continuous decoration, but first in the editor-feature sequence once
+that leftover is resolved.
 
 Build a configurable explicit search action with age, cwd, and useful status
 metadata; bounded filtering; safe cancellation; exact insertion without
@@ -526,7 +526,7 @@ only when their indexed fields are reliable.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `SRCH-001` | Configurable bounded history-search action and result view | `blocked` | `G3` |
+| `SRCH-001` | Configurable bounded history-search action and result view | `blocked` | unproven continuous decoration |
 | `SRCH-002` | Cancel restoration and exact insertion without execution | `blocked` | `SRCH-001`, `PTY-001` |
 | `SRCH-003` | Metadata filters, 100k-row latency, signal, and terminal-state evidence | `blocked` | `SRCH-002`; repository filters also need `HIST-010` |
 
@@ -559,10 +559,10 @@ Exit condition: `G5` after every `HRD-*` item is complete.
 percentile leftovers are `deferred` and must not block product slices
 (`docs/latency-budget-deferral.md`).
 
-1. `G3` stays `validation`. Continuous decoration stays unproven
-   (`docs/g3-decision-plan.md`). Do not start popup, ghost, or `COMP-004`.
-   `COMP-003` is `complete`. Do not mark `COMP-001`, `COMP-002`, `G3`, or
-   `PRM-006` complete.
+1. `G3` is `complete` (`docs/g3-gate-close-plan.md`). Continuous decoration
+   stays unproven and still blocks ghost and highlighting. Do not start
+   popup, ghost, or `COMP-004`. `EDT-001` is `complete`. Do not mark
+   `COMP-001` or `COMP-002` complete.
 2. `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
    slice on FND-001 SHA refresh or percentile benches unless a functional
    prompt-path defect is proven.
@@ -687,3 +687,5 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Completed `COMP-003` typed metadata K-1–K-4 (`docs/comp-003-metadata-plan.md`; `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`). `COMP-003` moves to `validation`; ranking leftover remains. Do not start popup or ghost. |
 | 2026-08-16 | Specified `COMP-003` bounded ranking slice in `docs/comp-003-ranking-plan.md`. R-1–R-4; no popup. |
 | 2026-08-16 | Completed `COMP-003` bounded ranking R-1–R-4 (`docs/comp-003-ranking-plan.md`; `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`). `COMP-003` moves to `complete`. Do not start popup or ghost. |
+| 2026-08-16 | Specified `G3` gate-close decision in `docs/g3-gate-close-plan.md`. Explicit `bind -x` evidence recorded; continuous decoration stays unproven. Do not start popup or ghost. |
+| 2026-08-16 | Completed `G3` gate close (`docs/g3-gate-close-plan.md`; `docs/g3-decision-plan.md`). `G3` and `EDT-001` move to `complete`. Continuous decoration leftover still blocks ghost / highlighting. `COMP-004` unblocked for planning. Do not start popup or ghost. |

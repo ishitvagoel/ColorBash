@@ -71,4 +71,4 @@ require `stty -g` here; foundation already covers that.
 
 ## Remaining after this slice
 
-Exact-byte / quoting / multiline insert is complete (`docs/edt-001-exact-bytes-plan.md` B-1–B-4). B-5 redraw note recorded. `G3` is in `validation`; `COMP-001` may start next.
+Exact-byte / quoting / multiline insert is complete (`docs/edt-001-exact-bytes-plan.md` B-1–B-4). B-5 redraw note recorded. `G3` is `complete` (`docs/g3-gate-close-plan.md`).

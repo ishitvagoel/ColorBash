@@ -1,8 +1,8 @@
 # EDT-001 slice: exact-byte / quoting / multiline insert (B-1–B-4)
 
-Status: `validation` (2026-08-16). B-1–B-4 PTY evidence in
-`crates/pty/tests/editor_bind_x.rs`. B-5 redraw note below. `G3` may move to
-`validation` but must not be marked `complete` (continuous decoration unproven).
+Status: `complete` (2026-08-16). B-1–B-4 PTY evidence in
+`crates/pty/tests/editor_bind_x.rs`. B-5 redraw note below. `G3` is
+`complete`; continuous decoration leftover still blocks ghost / highlighting.
 
 ## Why this slice
 
@@ -82,6 +82,5 @@ not claim ghost or highlighting feasibility.
 
 ## Remaining after this slice
 
-The `G3` decision is specified in `docs/g3-decision-plan.md`. `G3` stays
-`validation` until continuous-decoration strategy is decided. Do not start
-ghost, popup, or `COMP-003`.
+`G3` is `complete` (`docs/g3-gate-close-plan.md`). Continuous decoration stays
+unproven and still blocks ghost / highlighting. Do not start popup or ghost.
