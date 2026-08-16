@@ -63,8 +63,8 @@ Each case uses one isolated `TempHome` and only file `MBX_COMP_UNIQUE`.
 
 | ID | Case | Setup | Type, then Tab, then Enter | Expected GOT | Status |
 | --- | --- | --- | --- | --- | --- |
-| N-1 | Filename after `--` | File `MBX_COMP_UNIQUE`. | `printf 'GOT:%s\|\n' -- MBX_COMP_U` Tab Enter | `\nGOT:MBX_COMP_UNIQUE\|` then `> ` | pending |
-| N-2 | Filename inside `$(...)` | File `MBX_COMP_UNIQUE`. | `: $(printf 'GOT:%s\|\n' MBX_COMP_U` Tab, then `)` Enter | `\nGOT:MBX_COMP_UNIQUE\|` then `> `. Do not leave the shell on `PS2`. | pending |
+| N-1 | Filename after `--` | File `MBX_COMP_UNIQUE`. | `printf 'GOT:%s\|\n' -- MBX_COMP_U` Tab Enter | `\nGOT:MBX_COMP_UNIQUE\|` then `> ` | validation — `double_dash_file_completion_preserves_stock_bytes` |
+| N-2 | Filename inside `$(...)` | File `MBX_COMP_UNIQUE`. | `: $(printf 'GOT:%s\|\n' MBX_COMP_U` Tab, then `)` Enter | `\nGOT:MBX_COMP_UNIQUE\|` then `> `. Do not leave the shell on `PS2`. | validation — `nested_substitution_file_completion_preserves_stock_bytes`; observation uses `echo $(printf ...)` because `:` captures printf stdout in substitution |
 
 ### N-1 notes
 
