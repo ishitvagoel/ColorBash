@@ -82,5 +82,6 @@ not claim ghost or highlighting feasibility.
 
 ## Remaining after this slice
 
-`COMP-001` may start next. `G3` can be reassessed for `validation` status but
-must not be marked `complete` until continuous-decoration strategy is decided.
+The `G3` decision is specified in `docs/g3-decision-plan.md`. `G3` stays
+`validation` until continuous-decoration strategy is decided. Do not start
+ghost, popup, or `COMP-003`.
