@@ -119,6 +119,10 @@ fn execute_history(command: HistoryCommand) -> Result<(), String> {
                     .map_err(|error| error.to_string())?,
             )
         }
+        HistoryCommand::SearchFailed { limit } => {
+            let store = open_history_store()?;
+            print_entries(store.failed(limit).map_err(|error| error.to_string())?)
+        }
     }
 }
 

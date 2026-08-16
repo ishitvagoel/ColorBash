@@ -302,6 +302,18 @@ impl HistorySearch for QueuedHistoryStore {
         pool.truncate(limit);
         Ok(pool)
     }
+
+    fn failed(&self, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError> {
+        let connection = open_read_connection(&self.store_path)?;
+        query(
+            &connection,
+            "SELECT session_id, event_sequence, history_number, command_text, start_cwd, \
+             completed_at, status, duration_ms, host, user \
+             FROM history WHERE status != 0 \
+             ORDER BY completed_at DESC, event_sequence DESC LIMIT ?1",
+            &[limit.to_string()],
+        )
+    }
 }
 
 impl HistoryControl for QueuedHistoryStore {
@@ -915,6 +927,7 @@ mod tests {
                 let _ = store.recent(10);
                 let _ = store.exact_prefix("cmd", 5);
                 let _ = store.by_cwd("/w", 5);
+                let _ = store.failed(5);
                 thread::yield_now();
             }
         });
@@ -1122,6 +1135,40 @@ mod tests {
                 .iter()
                 .any(|row| row.command_text == "ls")
         );
+        drop(dir);
+    }
+
+    #[test]
+    fn failed_returns_nonzero_status_newest_first() {
+        let (dir, path) = temp_store("failed");
+        {
+            let store = QueuedHistoryStore::open(&path, 32).unwrap();
+            let mut first = entry("s1", 1, "false", "/w", "2026-08-15T10:00:00Z");
+            first.status = 1;
+            store.record(first).unwrap();
+            store
+                .record(entry("s1", 2, "true", "/w", "2026-08-15T10:00:01Z"))
+                .unwrap();
+            let mut third = entry("s1", 3, "exit 2", "/w", "2026-08-15T10:00:02Z");
+            third.status = 2;
+            store.record(third).unwrap();
+            let mut fourth = entry("s1", 4, "old-fail", "/w", "2026-08-15T09:59:00Z");
+            fourth.status = 127;
+            store.record(fourth).unwrap();
+        }
+        let store = QueuedHistoryStore::open(&path, 32).unwrap();
+        let rows = store.failed(10).unwrap();
+        assert_eq!(
+            rows.iter()
+                .map(|row| row.command_text.as_str())
+                .collect::<Vec<_>>(),
+            ["exit 2", "false", "old-fail"]
+        );
+        assert!(rows.iter().all(|row| row.status != 0));
+        let limited = store.failed(2).unwrap();
+        assert_eq!(limited.len(), 2);
+        assert_eq!(limited[0].command_text, "exit 2");
+        assert_eq!(limited[1].command_text, "false");
         drop(dir);
     }
 

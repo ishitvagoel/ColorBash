@@ -28,6 +28,7 @@ pub enum HistoryCommand {
     SearchPrefix { prefix: String, limit: usize },
     SearchCwd { cwd: String, limit: usize },
     SearchFuzzy { needle: String, limit: usize },
+    SearchFailed { limit: usize },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -75,7 +76,8 @@ pub fn help_text(version: &str) -> String {
          mbx history search recent [--limit N]\n  \
          mbx history search prefix TEXT [--limit N]\n  \
          mbx history search cwd PATH [--limit N]\n  \
-         mbx history search fuzzy TEXT [--limit N]\n\n\
+         mbx history search fuzzy TEXT [--limit N]\n  \
+         mbx history search failed [--limit N]\n\n\
          PROMPT OPTIONS:\n  --cwd PATH  --status N  --duration-ms N  --flags BITS\n  \
          --no-color  --ascii  --nerd-font  --ssh  --production  --disable-git"
     )
@@ -194,8 +196,12 @@ fn parse_history_search(args: &[String]) -> Result<HistoryCommand, String> {
             kind =
                 HistorySearchKind::Fuzzy(args.get(1).cloned().ok_or("search fuzzy requires TEXT")?);
         }
+        Some("failed") => {
+            kind = HistorySearchKind::Failed;
+            index = 1;
+        }
         Some(command) => return Err(format!("unknown search kind: {command}")),
-        None => return Err("history search requires (recent|prefix|cwd|fuzzy)".to_owned()),
+        None => return Err("history search requires (recent|prefix|cwd|fuzzy|failed)".to_owned()),
     }
     while index < args.len() {
         match args[index].as_str() {
@@ -222,6 +228,7 @@ fn parse_history_search(args: &[String]) -> Result<HistoryCommand, String> {
         HistorySearchKind::Prefix(prefix) => HistoryCommand::SearchPrefix { prefix, limit },
         HistorySearchKind::Cwd(cwd) => HistoryCommand::SearchCwd { cwd, limit },
         HistorySearchKind::Fuzzy(needle) => HistoryCommand::SearchFuzzy { needle, limit },
+        HistorySearchKind::Failed => HistoryCommand::SearchFailed { limit },
     })
 }
 
@@ -230,6 +237,7 @@ enum HistorySearchKind {
     Prefix(String),
     Cwd(String),
     Fuzzy(String),
+    Failed,
 }
 
 fn parse_benchmark(args: &[String]) -> Result<CliCommand, String> {
@@ -410,6 +418,22 @@ mod tests {
                 needle: "git".to_owned(),
                 limit: 3,
             })
+        );
+        let failed = parse(
+            &args(&["history", "search", "failed", "--limit", "3"]),
+            || panic!("history must not resolve prompt defaults"),
+        )
+        .unwrap();
+        assert_eq!(
+            failed,
+            CliCommand::History(HistoryCommand::SearchFailed { limit: 3 })
+        );
+        assert_eq!(
+            parse(&args(&["history", "search", "failed", "git"]), || panic!(
+                "history must not resolve prompt defaults"
+            ),)
+            .unwrap_err(),
+            "unknown search option: git"
         );
     }
 }
