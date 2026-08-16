@@ -121,6 +121,14 @@ fn execute_history(command: HistoryCommand) -> Result<(), String> {
                     .map_err(|error| error.to_string())?,
             )
         }
+        HistoryCommand::SearchBranch { repo_branch, limit } => {
+            let store = open_history_store()?;
+            print_entries(
+                store
+                    .by_branch(&repo_branch, limit)
+                    .map_err(|error| error.to_string())?,
+            )
+        }
         HistoryCommand::SearchFuzzy { needle, limit } => {
             let store = open_history_store()?;
             print_entries(
@@ -128,6 +136,10 @@ fn execute_history(command: HistoryCommand) -> Result<(), String> {
                     .fuzzy(&needle, limit)
                     .map_err(|error| error.to_string())?,
             )
+        }
+        HistoryCommand::SearchFailed { limit } => {
+            let store = open_history_store()?;
+            print_entries(store.failed(limit).map_err(|error| error.to_string())?)
         }
     }
 }

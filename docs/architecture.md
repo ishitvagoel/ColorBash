@@ -339,7 +339,7 @@ and shutdown, and treats `(session_id, event_sequence)` as the idempotency key.
 The writer may enrich `repo_root`/`repo_branch` from absolute `start_cwd` using
 the ADR 0007 Git adapter **before** `BEGIN IMMEDIATE`; timeout, disable, or
 absence leave NULLs and still insert the row. Search is a direct CLI operation
-(`mbx history search recent|prefix|cwd|repo|fuzzy`), not
+(`mbx history search recent|prefix|cwd|repo|branch|fuzzy|failed`), not
 an MBX2 query.
 `path`, `count`, `clear`, and `delete` are the privacy controls. Command text
 never enters traces.
@@ -410,7 +410,7 @@ highlighting:
    `docs/g4-gate-close-plan.md`, and COMP-003 K-1–K-4 typed metadata in
    `docs/comp-003-metadata-plan.md`);
 6. duration timing remains opt-in; do not compose unknown `DEBUG` traps
-   (`docs/prm-006-duration-plan.md`).
+   (`docs/prm-006-duration-plan.md`; `PRM-006` complete).
 
 The stock-completion adapter (`bash/completion.bash`, ADR 0006) keeps `COMPREPLY`
 insertion authoritative and records additive `_MBX_COMP_KINDS` / `_MBX_COMP_DESCS`

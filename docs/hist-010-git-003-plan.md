@@ -23,4 +23,5 @@ highlighting, and Ctrl+R stay blocked. Do not log command text (M-023).
 ## Remaining
 
 Overlay / ghost / highlighting / Ctrl+R stay blocked. `HRD-001` macOS remains
-Phase 9. Do not mark `COMP-004` complete.
+Phase 9. Do not mark `COMP-004` complete. CLI `search branch` / `search failed`
+leftovers are in `docs/hist-010-cli-filters-plan.md`.

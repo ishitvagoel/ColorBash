@@ -359,6 +359,23 @@ impl HistorySearch for QueuedHistoryStore {
         )
     }
 
+    fn by_branch(
+        &self,
+        repo_branch: &str,
+        limit: usize,
+    ) -> Result<Vec<HistoryEntry>, HistoryError> {
+        let connection = open_read_connection(&self.store_path)?;
+        query(
+            &connection,
+            &format!(
+                "SELECT {HISTORY_COLUMNS} \
+                 FROM history WHERE repo_branch = ?1 \
+                 ORDER BY completed_at DESC, event_sequence DESC LIMIT ?2"
+            ),
+            &[repo_branch.to_owned(), limit.to_string()],
+        )
+    }
+
     fn fuzzy(&self, needle: &str, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError> {
         let mut pool = self.recent(crate::history::FUZZY_CANDIDATE_LIMIT)?;
         pool.retain(|entry| crate::history::fuzzy_score(needle, &entry.command_text) > 0);
@@ -372,6 +389,19 @@ impl HistorySearch for QueuedHistoryStore {
         });
         pool.truncate(limit);
         Ok(pool)
+    }
+
+    fn failed(&self, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError> {
+        let connection = open_read_connection(&self.store_path)?;
+        query(
+            &connection,
+            &format!(
+                "SELECT {HISTORY_COLUMNS} \
+                 FROM history WHERE status != 0 \
+                 ORDER BY completed_at DESC, event_sequence DESC LIMIT ?1"
+            ),
+            &[limit.to_string()],
+        )
     }
 }
 
@@ -1067,6 +1097,9 @@ mod tests {
                 let _ = store.recent(10);
                 let _ = store.exact_prefix("cmd", 5);
                 let _ = store.by_cwd("/w", 5);
+                let _ = store.by_repo("/w", 5);
+                let _ = store.by_branch("main", 5);
+                let _ = store.failed(5);
                 thread::yield_now();
             }
         });
@@ -2071,6 +2104,78 @@ mod tests {
         assert_eq!(rows[1].repo_root.as_deref(), Some("/repo/root"));
         let by_repo = store.by_repo("/repo/root", 10).unwrap();
         assert_eq!(by_repo.len(), 2);
+        let by_branch = store.by_branch("hist-branch", 10).unwrap();
+        assert_eq!(by_branch.len(), 2);
+        drop(dir);
+    }
+
+    #[test]
+    fn by_branch_matches_exact_name_newest_first() {
+        let (dir, path) = temp_store("by-branch");
+        {
+            let store = QueuedHistoryStore::open(&path, 32).unwrap();
+            let mut main_old = entry("s1", 1, "echo main-old", "/w", "2026-08-16T16:00:00Z");
+            main_old.repo_root = Some("/repo/root".to_owned());
+            main_old.repo_branch = Some("main".to_owned());
+            store.record(main_old).unwrap();
+            let mut hist_old = entry("s1", 2, "echo hist-old", "/w", "2026-08-16T16:00:01Z");
+            hist_old.repo_root = Some("/repo/root".to_owned());
+            hist_old.repo_branch = Some("hist-branch".to_owned());
+            store.record(hist_old).unwrap();
+            let mut hist_new = entry("s1", 3, "echo hist-new", "/w", "2026-08-16T16:00:02Z");
+            hist_new.repo_root = Some("/other/root".to_owned());
+            hist_new.repo_branch = Some("hist-branch".to_owned());
+            store.record(hist_new).unwrap();
+            store
+                .record(entry("s1", 4, "echo none", "/w", "2026-08-16T16:00:03Z"))
+                .unwrap();
+        }
+        let store = QueuedHistoryStore::open(&path, 32).unwrap();
+        let rows = store.by_branch("hist-branch", 10).unwrap();
+        assert_eq!(
+            rows.iter()
+                .map(|row| row.command_text.as_str())
+                .collect::<Vec<_>>(),
+            ["echo hist-new", "echo hist-old"]
+        );
+        let limited = store.by_branch("hist-branch", 1).unwrap();
+        assert_eq!(limited.len(), 1);
+        assert_eq!(limited[0].command_text, "echo hist-new");
+        assert!(store.by_branch("missing", 10).unwrap().is_empty());
+        drop(dir);
+    }
+
+    #[test]
+    fn failed_returns_nonzero_status_newest_first() {
+        let (dir, path) = temp_store("failed");
+        {
+            let store = QueuedHistoryStore::open(&path, 32).unwrap();
+            let mut first = entry("s1", 1, "false", "/w", "2026-08-15T10:00:00Z");
+            first.status = 1;
+            store.record(first).unwrap();
+            store
+                .record(entry("s1", 2, "true", "/w", "2026-08-15T10:00:01Z"))
+                .unwrap();
+            let mut third = entry("s1", 3, "exit 2", "/w", "2026-08-15T10:00:02Z");
+            third.status = 2;
+            store.record(third).unwrap();
+            let mut fourth = entry("s1", 4, "old-fail", "/w", "2026-08-15T09:59:00Z");
+            fourth.status = 127;
+            store.record(fourth).unwrap();
+        }
+        let store = QueuedHistoryStore::open(&path, 32).unwrap();
+        let rows = store.failed(10).unwrap();
+        assert_eq!(
+            rows.iter()
+                .map(|row| row.command_text.as_str())
+                .collect::<Vec<_>>(),
+            ["exit 2", "false", "old-fail"]
+        );
+        assert!(rows.iter().all(|row| row.status != 0));
+        let limited = store.failed(2).unwrap();
+        assert_eq!(limited.len(), 2);
+        assert_eq!(limited[0].command_text, "exit 2");
+        assert_eq!(limited[1].command_text, "false");
         drop(dir);
     }
 

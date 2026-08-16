@@ -382,7 +382,7 @@ Outcome: an adaptive, semantic, safe prompt that remains fast under failure.
 | `PRM-003` | End-to-end deadline, capped Git acquisition, and warm cache | `complete` | one Bash deadline, capped 50-ms Git refresh, 128-entry/1-s cache, failure tests, and `docs/benchmarks/2026-08-15-solid-hardening.md` |
 | `PRM-004` | Full prompt p50/p95/p99 benchmark matrix | `deferred` | controlled warm-Git case recorded; remaining matrix deferred (`docs/latency-budget-deferral.md`) |
 | `PRM-005` | Real PTY prompt, wrap, signal, resize, and restoration tests | `complete` | lifecycle, helper failure, Ctrl+C/Z, resize, `stty -g`, multiline, narrow wrap, and wide-glyph coverage |
-| `PRM-006` | Decide opt-in duration policy or explicit preexec adapter | `validation` | `docs/prm-006-duration-plan.md`; D-1–D-4 in `tests/bash/smoke.bash`; remain opt-in; do not compose `DEBUG` |
+| `PRM-006` | Decide opt-in duration policy or explicit preexec adapter | `complete` | `docs/prm-006-duration-plan.md`; D-1–D-4 in `tests/bash/smoke.bash`; remain opt-in; do not compose `DEBUG`; `G3`/`G4` complete |
 | `PRM-007` | Give native and fallback adapters one explicit input/safety contract and shared hostile-state corpus | `complete` | explicit four-field context, shared C0/DEL/expansion corpus, production precedence, and SSH-only test |
 | `PRM-008` | Preserve raw additive prompt flags across coprocess, per-call, and fallback paths | `complete` | raw `--flags` CLI boundary plus coprocess/per-call/fallback unknown-bit tests |
 | `PRM-009` | Reassess semantic composition versus typed PS1 encoding and validated theme styles | `discovery` | wait for `PRM-002` or a second renderer; avoid a speculative abstraction |
@@ -429,9 +429,9 @@ accept or revise these details before implementation:
 | `HIST-006` | Implement SQLite schema, migrations, permissions, retention, and writer | `complete` | `crates/cli/src/storage.rs` schema v1, WAL, `0700`/`0600`, retention prune, batched writer |
 | `HIST-011` | Implement exclusions, no-log policy, disable/path/clear/delete controls | `complete` | `crates/cli/src/policy.rs` plus `mbx history path|count|clear|delete` and env controls |
 | `HIST-007` | Add opt-in Bash observation and bounded protocol ingestion | `complete` | `bash/history.bash`, MBX2 RECORD ingestion, PTY recording/invariance tests, seeded 100k corpus, hostile inertness, query p95, concurrent-writer contention, prompt-boundary write-ack correctness, WAL crash/corrupt recovery, WAL/SHM `0600` never-more-permissive, many-match prefix covering index, writer idle-flush for live readers, 100k-row v1→v2 migration (`crates/cli/src/corpus.rs`), and foreign-user open (`docs/history-g2-foreign-user-plan.md`; F-1–F-4 in `crates/cli/src/storage.rs`); write-ack percentile leftover `deferred` (`docs/history-g2-write-ack-deferral.md`) |
-| `HIST-008` | Add recent, exact-prefix, cwd queries and deterministic ranking | `complete` | `mbx history search recent|prefix|cwd` with bounded limits and NOCASE prefix index |
+| `HIST-008` | Add recent, exact-prefix, cwd queries and deterministic ranking | `complete` | `mbx history search recent|prefix|cwd|failed` with bounded limits and NOCASE prefix index; failed leftover in `docs/hist-010-cli-filters-plan.md` |
 | `HIST-009` | Add bounded fuzzy ranking | `complete` | `docs/hist-009-fuzzy-plan.md`; `mbx history search fuzzy`; scores over the most recent 256 rows; `crates/cli/src/history.rs`, `storage.rs` |
-| `HIST-010` | Add repository context | `complete` | `docs/hist-010-git-003-plan.md`; schema v3; writer enrich from `start_cwd`; `mbx history search repo`; PTY `admitted_commands_record_repository_root_and_are_searchable_by_repo` |
+| `HIST-010` | Add repository context | `complete` | `docs/hist-010-git-003-plan.md`; schema v3; writer enrich from `start_cwd`; `mbx history search repo` / `search branch`; PTY `admitted_commands_record_repository_root_and_are_searchable_by_repo`; CLI leftovers in `docs/hist-010-cli-filters-plan.md` |
 
 Exit conditions: `G1` before capture can be enabled; `G2` before history-driven
 editor UI; full Phase 3 completion additionally requires `HIST-009` and
@@ -530,7 +530,7 @@ only when their indexed fields are reliable.
 | --- | --- | --- | --- |
 | `SRCH-001` | Configurable bounded history-search action and result view | `blocked` | unproven continuous decoration |
 | `SRCH-002` | Cancel restoration and exact insertion without execution | `blocked` | `SRCH-001`, `PTY-001` |
-| `SRCH-003` | Metadata filters, 100k-row latency, signal, and terminal-state evidence | `blocked` | `SRCH-002`; repository filters also need `HIST-010` |
+| `SRCH-003` | Metadata filters, 100k-row latency, signal, and terminal-state evidence | `blocked` | `SRCH-002`; CLI `search failed` / `search repo` / `search branch` exist; interactive filters still need the Ctrl+R UI |
 
 Exit condition: `SRCH-003`.
 
@@ -563,7 +563,8 @@ percentile leftovers are `deferred` and must not block product slices
 
 1. Overlay, ghost, and highlighting stay blocked on unproven continuous
    decoration. `COMP-004` stays `discovery`. Do not mark `COMP-004` or
-   `COMP-005` complete.
+   `COMP-005` complete. Named UI-free leftovers (`HIST-010` CLI filters,
+   `PRM-006`) are complete.
 2. `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
    slice on FND-001 SHA refresh or percentile benches unless a functional
    prompt-path defect is proven.
@@ -697,3 +698,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Completed `GIT-004` Git completion kinds (`docs/git-004-kinds-plan.md`). `COMP-001` / `COMP-002` move to `complete` (G4 evidence; 5 ms `deferred`). |
 | 2026-08-16 | Completed `HIST-009` bounded fuzzy search (`docs/hist-009-fuzzy-plan.md`; `mbx history search fuzzy`). `HIST-010` remains. |
 | 2026-08-16 | Completed `HIST-010` / `GIT-003` repository root/branch on history rows (`docs/hist-010-git-003-plan.md`). Schema v3; MBX2 unchanged; writer enrich; `mbx history search repo`. Overlay stays unproven. |
+| 2026-08-16 | Completed HIST-010 CLI filter leftovers and `PRM-006` gate close (`docs/hist-010-cli-filters-plan.md`; `search branch`, `search failed`). `PRM-006` moves to `complete`. Overlay stays unproven. `SRCH-003` stays `blocked`. |

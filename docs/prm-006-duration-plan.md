@@ -1,11 +1,9 @@
 # PRM-006 slice: duration-timing policy decision
 
-Status: `validation` (2026-08-16). `G3` and `G4` are in `validation`. This packet
-records the duration-timing decision: remain opt-in; do not compose an
-unknown `DEBUG` trap; do not add a bash-preexec adapter. Do not mark
-`PRM-006`, `G3`, or `G4` complete.
-
-Do not start ghost, popup, highlighting, or `COMP-003`.
+Status: `complete` (2026-08-16). `G3` and `G4` are `complete`. Duration stays
+opt-in; do not compose an unknown `DEBUG` trap; do not add a bash-preexec
+adapter. D-1–D-4 remain the evidence. Do not start ghost, overlay, or
+highlighting.
 
 ## Why this slice
 
@@ -50,10 +48,10 @@ a **decision / inventory** slice, same size as `docs/g3-decision-plan.md`.
 
 | ID | Claim | Evidence | Status |
 | --- | --- | --- | --- |
-| D-1 | Default install does not install `DEBUG` | `tests/bash/smoke.bash`: after `source init.bash`, `trap -p DEBUG` matches the pre-source value; `_MBX_DURATION_TIMING=0` | validation — `tests/bash/smoke.bash` (`preserved:0`) |
-| D-2 | Existing `DEBUG` trap is preserved when timing is off | Same smoke case: `preserved:0` | validation — `tests/bash/smoke.bash` |
-| D-3 | Opt-in records duration | `MBX_ENABLE_DURATION_TIMING=1`; after `sleep 0.02`, `_MBX_LAST_DURATION_MS` is a number `>= 10` | validation — `tests/bash/smoke.bash` |
-| D-4 | Policy | Remain opt-in. Do not compose unknown `DEBUG`. Do not add a preexec adapter. History and ranking keep nullable duration. | validation — recorded in this plan |
+| D-1 | Default install does not install `DEBUG` | `tests/bash/smoke.bash`: after `source init.bash`, `trap -p DEBUG` matches the pre-source value; `_MBX_DURATION_TIMING=0` | complete — `tests/bash/smoke.bash` (`preserved:0`) |
+| D-2 | Existing `DEBUG` trap is preserved when timing is off | Same smoke case: `preserved:0` | complete — `tests/bash/smoke.bash` |
+| D-3 | Opt-in records duration | `MBX_ENABLE_DURATION_TIMING=1`; after `sleep 0.02`, `_MBX_LAST_DURATION_MS` is a number `>= 10` | complete — `tests/bash/smoke.bash` |
+| D-4 | Policy | Remain opt-in. Do not compose unknown `DEBUG`. Do not add a preexec adapter. History and ranking keep nullable duration. | complete — recorded in this plan; `G3`/`G4` complete |
 
 If a measured result differs, keep the host bytes and write them into that
 row's Status cell. Do not “fix” trap composition.
@@ -81,7 +79,7 @@ pointers.
 
 ## Remaining after this slice
 
-`PRM-006` is `validation`, not `complete`. A later adapter would need a
-proven way to inspect the caller's `DEBUG` trap from a sourced file
-without changing context. Ghost / popup / `COMP-003` stay blocked.
-`PRM-009` stays `discovery`. `HRD-001` still needs a macOS host.
+`PRM-006` is `complete`. A later adapter would still need a proven way to
+inspect the caller's `DEBUG` trap from a sourced file without changing
+context. Ghost / overlay stay blocked. `PRM-009` stays `discovery`.
+`HRD-001` still needs a macOS host.

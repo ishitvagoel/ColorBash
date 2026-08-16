@@ -19,7 +19,8 @@ These slices have working code you can exercise in an interactive shell:
 | Ranked-accept chord | Default `Ctrl-X Ctrl-A` after wrapped Tab | Replaces current word with ranked candidate; Tab stays stock |
 | Git completion kinds | Wrap `git` or `mbx_comp_git` fixture | Additive `ref`/`flag`/`file`; no Git subprocess |
 | Fuzzy history search | `MBX_HISTORY=1` then `mbx history search fuzzy TEXT` | Ranks a bounded recent pool |
-| Repository-context history | `MBX_HISTORY=1` in a Git worktree | Stores root/branch; `mbx history search repo ROOT` |
+| Failed history search | `MBX_HISTORY=1` then `mbx history search failed` | Rows with nonzero exit status |
+| Repository-context history | `MBX_HISTORY=1` in a Git worktree | Stores root/branch; `search repo ROOT` / `search branch NAME` |
 
 ## What remains
 
@@ -121,6 +122,9 @@ echo hello-mbx
 "$MBX_BIN" history search prefix echo --limit 5
 "$MBX_BIN" history search cwd "$PWD" --limit 5
 "$MBX_BIN" history search fuzzy git --limit 5
+"$MBX_BIN" history search failed --limit 5
+"$MBX_BIN" history search repo "$PWD" --limit 5
+"$MBX_BIN" history search branch "$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" --limit 5
 "$MBX_BIN" history path
 ```
 
