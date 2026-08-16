@@ -92,6 +92,6 @@ product change** beyond tests and this plan's status column.
 
 ## Remaining after this slice
 
-Slow/stateful fallthrough through `_mbx_comp_wrap_existing_f`, and the
-provisional 5 ms adapter overhead budget. Popup stays blocked until `G4`
-passes.
+Slow/stateful wrap fallthrough S-1–S-4 is specified in
+`docs/comp-002-fallthrough-plan.md`. After that: the provisional 5 ms
+adapter overhead budget. Popup stays blocked until `G4` passes.
