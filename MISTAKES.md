@@ -694,3 +694,20 @@ to prevent recurrence, not to assign blame.
   `crates/cli/src/transport.rs`; CI run failure on
   https://github.com/ishitvagoel/ColorBash/actions/runs/31934877398.
 
+## M-037 — Completion test fixtures installed in every interactive session
+
+- Discovered: 2026-08-16
+- Status: Fixed
+- Failed assumption: obscure `mbx_comp_*` names were safe to define and bind
+  from `_mbx_completion_install` because only tests would invoke them.
+- Impact: every interactive MBX session defined `mbx_comp_probe`,
+  `mbx_comp_flag`, and `mbx_comp_flag_nospace`, and installed `complete -F`
+  wrappers for those names. Invoking a flag fixture printed `GOT:` output.
+- Correction: fixtures install only when `MBX_COMP_FIXTURES=1`. Default
+  `_mbx_completion_install` and `bash/init.bash` define none of those names.
+- Prevention: every opt-in test seam must test absent, explicit-off, and
+  explicit-on configuration. Composition roots must not define test commands
+  until the positive enablement value has been established.
+- Evidence: `bash/completion.bash`, `default_install_does_not_define_fixtures`
+  in `crates/pty/tests/completion_harness.rs`, and `tests/bash/modules.bash`.
+

@@ -1,9 +1,10 @@
 # COMP-002 slice: core exact-insertion parity (P-1–P-4)
 
 Status: `validation` (2026-08-16). `COMP-001` is in `validation`. P-1–P-4
-evidence is in `bash/completion.bash`, `tests/bash/modules.bash`, and
-`crates/pty/tests/completion_harness.rs`. Do not mark `G4` or `COMP-002`
-complete. Leftover matrix cases stay out of scope.
+and leftover-prep F-1–F-4 evidence is in `bash/completion.bash`,
+`tests/bash/modules.bash`, and `crates/pty/tests/completion_harness.rs`.
+Do not mark `G4` or `COMP-002` complete. Leftover matrix cases stay out of
+scope.
 
 ## Why this slice
 
@@ -45,10 +46,10 @@ ranking, or Git candidates.
 
 ## Method
 
-Keep stock completion authoritative (ADR 0006). File completion stays unwrapped;
-only named fixture commands (`mbx_comp_flag`, `mbx_comp_flag_nospace`) use
-`complete -F` through `_mbx_comp_wrap_backend`. Inspect `complete -p` before
-wrapping; skip unknown specs.
+Keep stock completion authoritative (ADR 0006). File completion stays unwrapped.
+Named fixture commands (`mbx_comp_flag`, `mbx_comp_flag_nospace`) install only
+when `MBX_COMP_FIXTURES=1`. `_mbx_comp_wrap_existing_f` inspects `complete -p`
+before wrapping and skips unknown or non `-F` specs.
 
 Observe insertion through `printf 'GOT:%s|\n' …` so assertions never depend on
 history dumps or debug logs (M-023). Reuse `crates/pty/tests/completion_harness.rs`
@@ -63,6 +64,9 @@ wait on CPR/DSR. Use sentinels `MBX_COMP_UNIQUE`, `MBX_COMP_A B`, `--mbx-comp-fl
 | P-2 | Space-in-name quoting | File `MBX_COMP_A B`. Type `printf 'GOT:%s|\n' MBX_COMP_A`, Tab, Enter. GOT line matches stock quoting/escaping for that name. | `validation` — `spaced_filename_completion_preserves_stock_quoting` (`GOT:MBX_COMP_A B|`) |
 | P-3 | Wrapped `-F` + `compopt -o nospace` | `mbx_comp_flag_nospace --mbx-co`, Tab, `X`, Enter. `\nGOT:--mbx-comp-flagX|` then `> `. | `validation` — `wrapped_flag_nospace_concatenates_suffix` |
 | P-4 | Wrapped `-F` default suffix | `mbx_comp_flag --mbx-co`, Tab, `X`, Enter. `\nGOT:--mbx-comp-flag X|` then `> `. | `validation` — `wrapped_flag_default_suffix_separates_next_word` |
+| F-1 | Default install has no fixtures | Unset `MBX_COMP_FIXTURES`: no `mbx_comp_*` commands and no `complete -F` on those names. Tests set `MBX_COMP_FIXTURES=1`. | `validation` — `default_install_does_not_define_fixtures` |
+| F-2 | Inspect-before-wrap | `_mbx_comp_wrap_existing_f` wraps a caller-defined `-F`, skips absent specs, skips `-W`. | `validation` — `tests/bash/modules.bash` |
+| F-4 | H-2 asserts POINT/CWORD | PTY dump is `MBX_COMP:mbx_comp_probe mbx_co:21:1:mbx_comp_candidate` (this host). Module test asserts `COMP_WORDS` count. | `validation` — `probe_snapshot_captures_comp_state` |
 
 ## Remaining after this slice
 

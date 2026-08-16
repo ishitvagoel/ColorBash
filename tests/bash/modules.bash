@@ -587,12 +587,59 @@ done
 [[ $(<"$ROOT/bash/completion.bash") != *set\ -euo\ pipefail* ]] || \
     fail 'completion.bash must not enable errexit/nounset/pipefail in the sourced module'
 
-# Completion harness: idempotent install and COMP_* snapshot contract.
+# Completion harness: default install defines no test fixtures (F-1).
 source "$ROOT/bash/completion.bash"
 _mbx_completion_install
 _mbx_completion_install
 assert_eq 1 "${_MBX_COMPLETION_INSTALLED:-missing}" \
     'completion install should be idempotent and leave the installed flag set'
+declare -F mbx_comp_flag >/dev/null 2>&1 && \
+    fail 'default completion install must not define mbx_comp_flag'
+complete -p mbx_comp_flag >/dev/null 2>&1 && \
+    fail 'default completion install must not bind complete -F on mbx_comp_flag'
+declare -F mbx_comp_probe >/dev/null 2>&1 && \
+    fail 'default completion install must not define mbx_comp_probe'
+
+# Inspect-before-wrap: wrap a caller-defined -F; skip absent and non -F specs.
+mbx_comp_wrap_src() { :; }
+_mbx_comp_wrap_src_backend() {
+    COMPREPLY=(mbx_wrap_candidate)
+}
+complete -F _mbx_comp_wrap_src_backend mbx_comp_wrap_src
+_mbx_comp_wrap_existing_f mbx_comp_wrap_src || \
+    fail 'wrap_existing_f should wrap a caller-defined -F spec'
+complete -p mbx_comp_wrap_src | grep -Fq _mbx_comp_existing_adapter || \
+    fail 'wrapped -F spec should use _mbx_comp_existing_adapter'
+COMP_LINE='mbx_comp_wrap_src mbx_w'
+COMP_POINT=${#COMP_LINE}
+COMP_WORDS=(mbx_comp_wrap_src mbx_w)
+COMP_CWORD=1
+COMP_TYPE=9
+COMP_KEY=$'\t'
+_mbx_comp_existing_adapter
+assert_eq mbx_wrap_candidate "${_MBX_COMP_LAST_REPLY:-}" \
+    'existing -F wrap should preserve the original backend COMPREPLY'
+mbx_comp_no_spec() { :; }
+_mbx_comp_wrap_existing_f mbx_comp_no_spec && \
+    fail 'wrap_existing_f should skip a command with no complete spec'
+complete -p mbx_comp_no_spec >/dev/null 2>&1 && \
+    fail 'skip of an unbound command must not install a complete spec'
+mbx_comp_words() { :; }
+complete -W 'alpha' mbx_comp_words
+_mbx_comp_word_spec=$(complete -p mbx_comp_words)
+_mbx_comp_wrap_existing_f mbx_comp_words && \
+    fail 'wrap_existing_f should skip a non -F complete spec'
+assert_eq "$_mbx_comp_word_spec" "$(complete -p mbx_comp_words)" \
+    'non -F complete spec must be left unchanged'
+unset -v _mbx_comp_word_spec
+
+# Fixture opt-in for the existing probe/flag snapshot contract.
+MBX_COMP_FIXTURES=1
+_MBX_COMPLETION_INSTALLED=0
+_mbx_completion_install
+_mbx_completion_install
+assert_eq 1 "${_MBX_COMPLETION_INSTALLED:-missing}" \
+    'fixture opt-in install should be idempotent'
 COMP_LINE='mbx_comp_probe mbx_co'
 COMP_POINT=${#COMP_LINE}
 COMP_WORDS=(mbx_comp_probe mbx_co)
@@ -604,6 +651,7 @@ assert_eq 1 "${_MBX_COMP_SNAPPED:-missing}" 'adapter did not snapshot COMP_* sta
 assert_eq "$COMP_LINE" "${_MBX_COMP_LINE:-}" 'snapshot COMP_LINE mismatch'
 assert_eq "$COMP_POINT" "${_MBX_COMP_POINT:-missing}" 'snapshot COMP_POINT mismatch'
 assert_eq 1 "${_MBX_COMP_CWORD:-missing}" 'snapshot COMP_CWORD mismatch'
+assert_eq 2 "${#_MBX_COMP_WORDS[@]}" 'snapshot COMP_WORDS count mismatch'
 assert_eq mbx_comp_candidate "${_MBX_COMP_LAST_REPLY:-}" \
     'adapter should preserve the backend COMPREPLY candidate'
 COMP_LINE='mbx_comp_flag --mbx-co'

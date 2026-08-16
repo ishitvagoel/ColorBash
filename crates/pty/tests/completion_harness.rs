@@ -7,6 +7,10 @@ use std::path::Path;
 
 const TAB: u8 = 0x09;
 
+fn spawn_fixture_shell(home: &Path) -> PtySession {
+    spawn_mbx_shell(home, &[("MBX_COMP_FIXTURES", "1")], "")
+}
+
 fn spawn_mbx_shell(home: &Path, extra_env: &[(&str, &str)], rc_prelude: &str) -> PtySession {
     fs::write(
         home.join("rc.bash"),
@@ -50,7 +54,7 @@ fn send_tab(session: &mut PtySession) {
 #[test]
 fn probe_snapshot_captures_comp_state() {
     let home = TempHome::new("comp-h2");
-    let mut session = spawn_mbx_shell(home.path(), &[], "");
+    let mut session = spawn_fixture_shell(home.path());
     wait_prompt(&mut session);
     session
         .write_str("mbx_comp_probe mbx_co", deadline(2))
@@ -69,8 +73,7 @@ fn probe_snapshot_captures_comp_state() {
     wait_all(
         &mut session,
         &[
-            "\nMBX_COMP:mbx_comp_probe mbx_co",
-            ":mbx_comp_candidate",
+            "\nMBX_COMP:mbx_comp_probe mbx_co:21:1:mbx_comp_candidate",
             "> ",
         ],
     );
@@ -79,7 +82,7 @@ fn probe_snapshot_captures_comp_state() {
 #[test]
 fn stock_ls_completion_is_not_wrapped() {
     let home = TempHome::new("comp-h3");
-    let mut session = spawn_mbx_shell(home.path(), &[], "");
+    let mut session = spawn_fixture_shell(home.path());
     wait_prompt(&mut session);
     session
         .write_str(
@@ -103,7 +106,7 @@ printf 'MBX_COMP:probe_wrapped\\n' || printf 'MBX_COMP:probe_missing\\n'\n",
 fn unique_filename_tab_completes_like_stock() {
     let home = TempHome::new("comp-h4");
     fs::write(home.path().join("MBX_COMP_UNIQUE"), "probe\n").expect("unique file");
-    let mut session = spawn_mbx_shell(home.path(), &[], "");
+    let mut session = spawn_fixture_shell(home.path());
     wait_prompt(&mut session);
     session
         .write_str("ls MBX_COMP_U", deadline(2))
@@ -117,7 +120,7 @@ fn unique_filename_tab_completes_like_stock() {
 fn unique_file_completion_preserves_stock_bytes() {
     let home = TempHome::new("comp-p1");
     fs::write(home.path().join("MBX_COMP_UNIQUE"), "probe\n").expect("unique file");
-    let mut session = spawn_mbx_shell(home.path(), &[], "");
+    let mut session = spawn_fixture_shell(home.path());
     wait_prompt(&mut session);
     session
         .write_str("printf 'GOT:%s|\\n' MBX_COMP_U", deadline(2))
@@ -131,7 +134,7 @@ fn unique_file_completion_preserves_stock_bytes() {
 fn spaced_filename_completion_preserves_stock_quoting() {
     let home = TempHome::new("comp-p2");
     fs::write(home.path().join("MBX_COMP_A B"), "probe\n").expect("spaced file");
-    let mut session = spawn_mbx_shell(home.path(), &[], "");
+    let mut session = spawn_fixture_shell(home.path());
     wait_prompt(&mut session);
     session
         .write_str("printf 'GOT:%s|\\n' MBX_COMP_A", deadline(2))
@@ -144,7 +147,7 @@ fn spaced_filename_completion_preserves_stock_quoting() {
 #[test]
 fn wrapped_flag_nospace_concatenates_suffix() {
     let home = TempHome::new("comp-p3");
-    let mut session = spawn_mbx_shell(home.path(), &[], "");
+    let mut session = spawn_fixture_shell(home.path());
     wait_prompt(&mut session);
     session
         .write_str("mbx_comp_flag_nospace --mbx-co", deadline(2))
@@ -159,7 +162,7 @@ fn wrapped_flag_nospace_concatenates_suffix() {
 #[test]
 fn wrapped_flag_default_suffix_separates_next_word() {
     let home = TempHome::new("comp-p4");
-    let mut session = spawn_mbx_shell(home.path(), &[], "");
+    let mut session = spawn_fixture_shell(home.path());
     wait_prompt(&mut session);
     session
         .write_str("mbx_comp_flag --mbx-co", deadline(2))
@@ -174,7 +177,7 @@ fn wrapped_flag_default_suffix_separates_next_word() {
 #[test]
 fn stock_printf_completion_is_not_wrapped() {
     let home = TempHome::new("comp-wrap-check");
-    let mut session = spawn_mbx_shell(home.path(), &[], "");
+    let mut session = spawn_fixture_shell(home.path());
     wait_prompt(&mut session);
     session
         .write_str(
@@ -192,4 +195,20 @@ printf 'MBX_COMP:flag_wrapped\\n' || printf 'MBX_COMP:flag_missing\\n'\n",
         )
         .expect("query flag wrap");
     wait_all(&mut session, &["\nMBX_COMP:flag_wrapped", "> "]);
+}
+
+#[test]
+fn default_install_does_not_define_fixtures() {
+    let home = TempHome::new("comp-f1");
+    let mut session = spawn_mbx_shell(home.path(), &[], "");
+    wait_prompt(&mut session);
+    session
+        .write_str(
+            "if declare -F mbx_comp_flag >/dev/null 2>&1 || \
+complete -p mbx_comp_flag >/dev/null 2>&1; then \
+printf 'MBX_COMP:fixture_present\\n'; else printf 'MBX_COMP:fixture_absent\\n'; fi\n",
+            deadline(2),
+        )
+        .expect("query default fixtures");
+    wait_all(&mut session, &["\nMBX_COMP:fixture_absent", "> "]);
 }

@@ -74,6 +74,6 @@ sentinel filenames such as `MBX_COMP_UNIQUE`.
 
 ## Remaining after this slice
 
-`COMP-002`: file completion and one real `-F` function's exact insertion
-parity (quoting, spaces, Unicode, aliases, redirections). Then `G4` can be
-reassessed. Popup stays blocked.
+`COMP-002` P-1–P-4 and leftover-prep F-1–F-4 have landed. Next is the leftover
+`G4` matrix (aliases, redirections, Unicode, incomplete quotes, `--`, nested
+commands, slow/stateful fallthrough, adapter latency). Popup stays blocked.

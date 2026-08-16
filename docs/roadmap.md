@@ -466,7 +466,7 @@ line. Do not move completion functions into a subprocess unless live-state and
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
 | `COMP-001` | Build a non-popup stock-completion adapter harness | `validation` | `docs/comp-001-harness-plan.md`; H-1–H-4 in `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`; `G4` stays `discovery` |
-| `COMP-002` | Prove file and one `-F` function's exact insertion parity | `validation` | `docs/comp-002-parity-plan.md`; P-1–P-4 in `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`; leftover matrix + `G4` decision remain |
+| `COMP-002` | Prove file and one `-F` function's exact insertion parity | `validation` | `docs/comp-002-parity-plan.md`; P-1–P-4 and F-1–F-4 in `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`; leftover matrix + `G4` decision remain |
 | `COMP-003` | Add typed candidate metadata and bounded ranking | `blocked` | `G4` |
 | `COMP-004` | Add popup navigation and terminal-safe rendering | `blocked` | `G3`, `G4`, `COMP-003` |
 | `COMP-005` | Insert/fall through exactly and pass the parity/PTY matrix | `blocked` | `COMP-004`, Git candidates when enabled |
@@ -663,3 +663,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Completed `EDT-001` exact-byte / quoting / multiline insert B-1–B-4 (`docs/edt-001-exact-bytes-plan.md`, `crates/pty/tests/editor_bind_x.rs`). B-5 insert-time redraw note recorded; `G3` moves to `validation`; continuous decoration remains unproven. Do not mark `G3` or `EDT-001` complete. |
 | 2026-08-16 | Completed `COMP-001` non-popup stock-completion adapter harness H-1–H-4 (`docs/comp-001-harness-plan.md`; `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`). `COMP-001` moves to `validation`; `G4` stays `discovery`. Do not mark `G4` or `COMP-001` complete. |
 | 2026-08-16 | Completed `COMP-002` core exact-insertion parity P-1–P-4 (`docs/comp-002-parity-plan.md`; `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`). `COMP-002` moves to `validation`; `G4` stays `discovery`. Leftover matrix and latency budget remain. |
+| 2026-08-16 | Gated completion test fixtures behind `MBX_COMP_FIXTURES=1` and added inspect-before-wrap (`_mbx_comp_wrap_existing_f`; F-1–F-4). `COMP-002` stays `validation`; `G4` stays `discovery`. Leftover matrix remains. |
