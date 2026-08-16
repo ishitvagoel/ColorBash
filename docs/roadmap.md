@@ -7,7 +7,7 @@
 
 - Last reviewed: 2026-08-16 UTC
 - Current milestone: Phase 3A sidecar implemented; `G0` and `G2` complete; `G1` accepted
-- Active workstream: `EDT-001` bind -x prototype (`docs/edt-001-bind-x-plan.md`)
+- Active workstream: `G3` editor matrix after `EDT-001` E-1–E-4 (`docs/edt-001-bind-x-plan.md`)
 - Next decision gate: `G3` editor integration
 - Editor-facing work is blocked by: `G3` editor integration, as identified per phase
 - Timing policy: unmet percentile targets are `deferred` and do not block
@@ -329,7 +329,7 @@ latency budgets.
 | `FND-002` | Make transport own response correlation/framing postconditions and test `RequestHandler` substitutes directly | `complete` | `crates/cli/src/service.rs`, `transport.rs`, and direct substitute/oversize/correlation tests |
 | `FND-003` | Complete port-contract tests for full prompt mapping, ping isolation, provider error/disable behavior, and crate-internal seam construction | `complete` | service, prompt-provider, disabled-provider, and sibling seam tests in `crates/cli/src/` |
 | `PTY-001` | Genuine PTY driver for input, signal, resize, and terminal-state probes | `complete` | `crates/pty` driver tests plus foundation prompt/helper/Ctrl+C/Ctrl+Z/resize/`stty -g` coverage |
-| `EDT-001` | Non-destructive `bind -x` insertion/redisplay feasibility prototype | `ready` | `docs/edt-001-bind-x-plan.md`; produces the `G3` decision |
+| `EDT-001` | Non-destructive `bind -x` insertion/redisplay feasibility prototype | `validation` | E-1–E-4 in `crates/pty/tests/editor_bind_x.rs` and `bash/editor.bash`; `G3` stays `discovery` |
 
 ### Phase 0 — Research and architecture
 
@@ -554,11 +554,10 @@ Exit condition: `G5` after every `HRD-*` item is complete.
 percentile leftovers are `deferred` and must not block product slices
 (`docs/latency-budget-deferral.md`).
 
-1. `EDT-001` non-destructive `bind -x` insertion prototype — plan ready in
-   `docs/edt-001-bind-x-plan.md` (E-1–E-4). Do not mark `G3` complete on this
-   slice alone. Do not rebind printable keys (ADR 0003).
-2. After E-1–E-4: remaining `G3` matrix (emacs/vi, paste, resize, Ctrl+C/Z).
-   `COMP-001` may start once `EDT-001` is in `validation`.
+1. Remaining `G3` matrix (emacs/vi, paste, resize, Ctrl+C/Z) after `EDT-001`
+   E-1–E-4 (`docs/edt-001-bind-x-plan.md`). `G3` stays `discovery`; do not mark
+   complete on insertion evidence alone.
+2. `COMP-001` may start now that `EDT-001` is in `validation`.
 3. `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
    slice on FND-001 SHA refresh or percentile benches unless a functional
    prompt-path defect is proven.
@@ -659,3 +658,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Deferred the prompt-boundary write-ack percentile leftover and marked `G2` / `HIST-007` complete (`docs/history-g2-write-ack-deferral.md`). W-1–W-4 correctness remains; WSL and cloud p95 misses are preserved; the 2 ms / 5 ms budget is not weakened and is not recorded as met. Capture stays default-off. |
 | 2026-08-16 | Identified the next `G0` / `PRM-004` slice as fallback and Git-disabled prompt percentiles; plan in `docs/prm-004-fallback-plan.md`. Do not invent a representative dirty/large repo. Do not mark `PRM-004` or `G0` complete. |
 | 2026-08-16 | Accepted timing-deferral policy (`docs/latency-budget-deferral.md`): unmet percentile targets no longer block development. Marked `G0` complete; `PRM-004` `deferred`; `EDT-001` `ready` (`docs/edt-001-bind-x-plan.md`). `HRD-001` remains release-matrix work. |
+| 2026-08-16 | Completed `EDT-001` E-1–E-4 non-destructive `bind -x` insertion prototype (`bash/editor.bash`, `crates/pty/tests/editor_bind_x.rs`). `EDT-001` moves to `validation`; `G3` stays `discovery` until the remaining matrix bullets have evidence. Default chord `\C-x\C-y`; `MBX_EDITOR_OVERRIDE=1` opts into overwrite. |

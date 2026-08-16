@@ -394,7 +394,8 @@ highlighting:
    platform p50/p95/p99 workloads are `deferred` and do not block product
    development (`docs/latency-budget-deferral.md`);
 3. test prompt callback ordering against popular prompt/preexec frameworks;
-4. prototype one non-destructive `bind -x` editing action that only inserts text;
+4. prototype one non-destructive `bind -x` editing action that only inserts text
+   (`bash/editor.bash`, `crates/pty/tests/editor_bind_x.rs`; `EDT-001` E-1–E-4);
 5. prototype reuse of one standard completion function and document quoting,
    `compopt`, and dynamic-completion failures;
 6. decide whether duration timing remains opt-in or integrates with an existing

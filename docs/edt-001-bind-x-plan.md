@@ -1,8 +1,8 @@
 # EDT-001 slice: non-destructive bind -x insertion prototype (E-1–E-4)
 
-Status: `ready` (2026-08-16). `G0` no longer blocks this slice. Do not mark
-`G3` or `EDT-001` complete unless the roadmap G3 exit criteria are fully met.
-This packet is the first insertion prototype only.
+Status: `validation` (2026-08-16). E-1–E-4 PTY evidence in
+`crates/pty/tests/editor_bind_x.rs`; implementation in `bash/editor.bash`. Do not
+mark `G3` or `EDT-001` complete unless the roadmap G3 exit criteria are fully met.
 
 ## Why this slice
 
@@ -56,12 +56,12 @@ Reuse `crates/pty` helpers. Do not wait on CPR/DSR.
 
 ## Test cases
 
-| ID | Case | Assert |
-| --- | --- | --- |
-| E-1 | Insert without execute | PTY: trigger inserts a sentinel token into the line; the token is not executed until Enter; output of the sentinel command appears only after Enter |
-| E-2 | Unknown binding preserved | If the chosen chord is already bound, MBX does not overwrite it unless an explicit override env/flag is set; test both “occupied → refuse” and “free → install” |
-| E-3 | Empty / no-op safety | Trigger on an empty line still only inserts; does not submit the line |
-| E-4 | Usable next prompt | After insert+Enter (or insert+Ctrl+C cancel of the line), the next `> ` is usable; `stty` not required in this slice if foundation tests already cover it |
+| ID | Case | Assert | Status |
+| --- | --- | --- | --- |
+| E-1 | Insert without execute | PTY: trigger inserts a sentinel token into the line; the token is not executed until Enter; output of the sentinel command appears only after Enter | `complete` |
+| E-2 | Unknown binding preserved | If the chosen chord is already bound, MBX does not overwrite it unless an explicit override env/flag is set; test both “occupied → refuse” and “free → install” | `complete` |
+| E-3 | Empty / no-op safety | Trigger on an empty line still only inserts; does not submit the line | `complete` |
+| E-4 | Usable next prompt | After insert+Enter (or insert+Ctrl+C cancel of the line), the next `> ` is usable; `stty` not required in this slice if foundation tests already cover it | `complete` |
 
 ## Remaining after this slice
 

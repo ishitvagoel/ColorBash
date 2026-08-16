@@ -18,6 +18,7 @@ source "$_MBX_ROOT/bash/fallback.bash" || return 0
 source "$_MBX_ROOT/bash/engine.bash" || return 0
 source "$_MBX_ROOT/bash/prompt.bash" || return 0
 source "$_MBX_ROOT/bash/hooks.bash" || return 0
+source "$_MBX_ROOT/bash/editor.bash" || return 0
 source "$_MBX_ROOT/bash/history.bash" || return 0
 
 if [[ -z ${MBX_BIN:-} ]]; then
@@ -30,6 +31,7 @@ fi
 
 _mbx_engine_start || true
 _mbx_install_hooks
+_mbx_editor_install || true
 _mbx_history_install_hooks
 _MBX_INITIALIZED=1
 
