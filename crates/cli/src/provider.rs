@@ -27,6 +27,24 @@ pub struct RepositoryStatus {
     pub untracked: usize,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RepositoryContext {
+    pub root: String,
+    pub branch: Option<String>,
+}
+
+pub trait RepositoryContextProvider: Send + 'static {
+    fn context(&self, cwd: &Path) -> Result<Option<RepositoryContext>, ProviderError>;
+}
+
+pub struct NullRepositoryContextProvider;
+
+impl RepositoryContextProvider for NullRepositoryContextProvider {
+    fn context(&self, _cwd: &Path) -> Result<Option<RepositoryContext>, ProviderError> {
+        Ok(None)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProviderErrorKind {
     Resolve,
@@ -129,6 +147,41 @@ impl GitCommandSpec {
                 OsString::from("--porcelain=v1"),
                 OsString::from("--branch"),
                 OsString::from("--untracked-files=normal"),
+            ],
+        )
+    }
+
+    fn show_toplevel(program: &Path, cwd: &Path) -> Self {
+        Self::fixed(
+            program,
+            cwd,
+            [
+                OsString::from("rev-parse"),
+                OsString::from("--show-toplevel"),
+            ],
+        )
+    }
+
+    fn symbolic_ref(program: &Path, cwd: &Path) -> Self {
+        Self::fixed(
+            program,
+            cwd,
+            [
+                OsString::from("symbolic-ref"),
+                OsString::from("--short"),
+                OsString::from("HEAD"),
+            ],
+        )
+    }
+
+    fn abbrev_ref(program: &Path, cwd: &Path) -> Self {
+        Self::fixed(
+            program,
+            cwd,
+            [
+                OsString::from("rev-parse"),
+                OsString::from("--abbrev-ref"),
+                OsString::from("HEAD"),
             ],
         )
     }
@@ -239,7 +292,7 @@ struct GitCommandOutput {
     stdout: Vec<u8>,
 }
 
-trait GitCommandRunner {
+trait GitCommandRunner: Send {
     fn run(
         &self,
         spec: &GitCommandSpec,
@@ -420,7 +473,7 @@ fn terminate_and_reap(child: &mut std::process::Child) -> Result<(), ProviderErr
 
 pub struct GitRepositoryStatusProvider {
     executable: Result<PathBuf, ProviderError>,
-    runner: Box<dyn GitCommandRunner>,
+    runner: Box<dyn GitCommandRunner + Send>,
     policy: AcquisitionPolicy,
 }
 
@@ -437,7 +490,7 @@ impl GitRepositoryStatusProvider {
     fn with_resolution(
         deadline: Duration,
         executable: Result<PathBuf, ProviderError>,
-        runner: Box<dyn GitCommandRunner>,
+        runner: Box<dyn GitCommandRunner + Send>,
     ) -> Self {
         Self {
             executable,
@@ -450,7 +503,7 @@ impl GitRepositoryStatusProvider {
     fn with_runner(
         deadline: Duration,
         executable: impl Into<PathBuf>,
-        runner: Box<dyn GitCommandRunner>,
+        runner: Box<dyn GitCommandRunner + Send>,
     ) -> Self {
         let executable = executable.into();
         assert!(executable.is_absolute());
@@ -534,6 +587,70 @@ impl RepositoryStatusProvider for GitRepositoryStatusProvider {
                 "Git inspection output had no branch header",
             )
         })
+    }
+}
+
+impl RepositoryContextProvider for GitRepositoryStatusProvider {
+    fn context(&self, cwd: &Path) -> Result<Option<RepositoryContext>, ProviderError> {
+        if !cwd.is_absolute() {
+            return Ok(None);
+        }
+        let executable = self.executable.as_ref().map_err(Clone::clone)?;
+        let started = Instant::now();
+        let toplevel = self.runner.run(
+            &GitCommandSpec::show_toplevel(executable, cwd),
+            self.remaining_policy(started)?,
+        )?;
+        if !toplevel.success {
+            return Ok(None);
+        }
+        let stdout = String::from_utf8(toplevel.stdout).map_err(|_| {
+            ProviderError::typed(
+                ProviderErrorKind::InvalidUtf8,
+                "Git toplevel output was not valid UTF-8",
+            )
+        })?;
+        let root = parse_show_toplevel(&stdout).ok_or_else(|| {
+            ProviderError::typed(
+                ProviderErrorKind::MalformedOutput,
+                "Git toplevel output was not an absolute path",
+            )
+        })?;
+
+        let branch = self
+            .remaining_policy(started)
+            .ok()
+            .and_then(|policy| {
+                self.runner
+                    .run(&GitCommandSpec::symbolic_ref(executable, cwd), policy)
+                    .ok()
+            })
+            .and_then(|output| {
+                if output.success {
+                    String::from_utf8(output.stdout)
+                        .ok()
+                        .and_then(|text| parse_ref_name(&text))
+                } else {
+                    self.remaining_policy(started)
+                        .ok()
+                        .and_then(|policy| {
+                            self.runner
+                                .run(&GitCommandSpec::abbrev_ref(executable, cwd), policy)
+                                .ok()
+                        })
+                        .and_then(|abbrev| {
+                            if abbrev.success {
+                                String::from_utf8(abbrev.stdout)
+                                    .ok()
+                                    .and_then(|text| parse_ref_name(&text))
+                            } else {
+                                None
+                            }
+                        })
+                }
+            });
+
+        Ok(Some(RepositoryContext { root, branch }))
     }
 }
 
@@ -696,6 +813,24 @@ fn parse_git_status(stdout: &str) -> Option<RepositoryStatus> {
     Some(status)
 }
 
+fn parse_show_toplevel(stdout: &str) -> Option<String> {
+    let line = stdout.lines().next()?.trim();
+    if line.starts_with('/') && !line.bytes().any(|byte| byte < 0x20 || byte == 0x7f) {
+        Some(line.to_owned())
+    } else {
+        None
+    }
+}
+
+fn parse_ref_name(stdout: &str) -> Option<String> {
+    let line = stdout.lines().next()?.trim();
+    if line.is_empty() || line.bytes().any(|byte| byte < 0x20 || byte == 0x7f) {
+        None
+    } else {
+        Some(line.to_owned())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -703,14 +838,15 @@ mod tests {
     use std::collections::VecDeque;
     use std::io::Cursor;
     use std::rc::Rc;
-    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+    use std::sync::{Arc, Mutex};
 
     #[derive(Clone)]
     struct StubRunner {
-        calls: Rc<Cell<usize>>,
-        specs: Rc<RefCell<Vec<GitCommandSpec>>>,
-        policies: Rc<RefCell<Vec<AcquisitionPolicy>>>,
-        results: Rc<RefCell<VecDeque<Result<GitCommandOutput, ProviderError>>>>,
+        calls: Arc<AtomicUsize>,
+        specs: Arc<Mutex<Vec<GitCommandSpec>>>,
+        policies: Arc<Mutex<Vec<AcquisitionPolicy>>>,
+        results: Arc<Mutex<VecDeque<Result<GitCommandOutput, ProviderError>>>>,
     }
 
     impl GitCommandRunner for StubRunner {
@@ -719,11 +855,12 @@ mod tests {
             spec: &GitCommandSpec,
             policy: AcquisitionPolicy,
         ) -> Result<GitCommandOutput, ProviderError> {
-            self.calls.set(self.calls.get() + 1);
-            self.specs.borrow_mut().push(spec.clone());
-            self.policies.borrow_mut().push(policy);
+            self.calls.fetch_add(1, Ordering::Relaxed);
+            self.specs.lock().expect("stub specs").push(spec.clone());
+            self.policies.lock().expect("stub policies").push(policy);
             self.results
-                .borrow_mut()
+                .lock()
+                .expect("stub results")
                 .pop_front()
                 .expect("stub runner needs one result per expected call")
         }
@@ -743,22 +880,22 @@ mod tests {
 
     struct StubProviderFixture {
         provider: GitRepositoryStatusProvider,
-        calls: Rc<Cell<usize>>,
-        specs: Rc<RefCell<Vec<GitCommandSpec>>>,
-        policies: Rc<RefCell<Vec<AcquisitionPolicy>>>,
+        calls: Arc<AtomicUsize>,
+        specs: Arc<Mutex<Vec<GitCommandSpec>>>,
+        policies: Arc<Mutex<Vec<AcquisitionPolicy>>>,
     }
 
     fn stub_provider(
         results: impl IntoIterator<Item = Result<GitCommandOutput, ProviderError>>,
     ) -> StubProviderFixture {
-        let calls = Rc::new(Cell::new(0));
-        let specs = Rc::new(RefCell::new(Vec::new()));
-        let policies = Rc::new(RefCell::new(Vec::new()));
+        let calls = Arc::new(AtomicUsize::new(0));
+        let specs = Arc::new(Mutex::new(Vec::new()));
+        let policies = Arc::new(Mutex::new(Vec::new()));
         let runner = StubRunner {
-            calls: Rc::clone(&calls),
-            specs: Rc::clone(&specs),
-            policies: Rc::clone(&policies),
-            results: Rc::new(RefCell::new(results.into_iter().collect())),
+            calls: Arc::clone(&calls),
+            specs: Arc::clone(&specs),
+            policies: Arc::clone(&policies),
+            results: Arc::new(Mutex::new(results.into_iter().collect())),
         };
         StubProviderFixture {
             provider: GitRepositoryStatusProvider::with_runner(
@@ -939,6 +1076,96 @@ mod tests {
     }
 
     #[test]
+    fn context_spec_uses_show_toplevel_and_symbolic_ref() {
+        let executable = fake_git_executable();
+        let cwd = Path::new("/tmp/repository");
+        let fixture = stub_provider([
+            successful_output(b"/tmp/repository\n".to_vec()),
+            successful_output(b"hist-branch\n".to_vec()),
+        ]);
+        let context = fixture.provider.context(cwd).unwrap().unwrap();
+        assert_eq!(context.root, "/tmp/repository");
+        assert_eq!(context.branch.as_deref(), Some("hist-branch"));
+        assert_eq!(
+            fixture.specs.lock().expect("specs").as_slice(),
+            &[
+                GitCommandSpec::show_toplevel(&executable, cwd),
+                GitCommandSpec::symbolic_ref(&executable, cwd),
+            ]
+        );
+    }
+
+    #[test]
+    fn context_falls_back_to_abbrev_ref_when_symbolic_ref_fails() {
+        let cwd = Path::new("/tmp/repository");
+        let fixture = stub_provider([
+            successful_output(b"/tmp/repository\n".to_vec()),
+            Ok(GitCommandOutput {
+                success: false,
+                stdout: Vec::new(),
+            }),
+            successful_output(b"HEAD\n".to_vec()),
+        ]);
+        let context = fixture.provider.context(cwd).unwrap().unwrap();
+        assert_eq!(context.branch.as_deref(), Some("HEAD"));
+        assert_eq!(fixture.calls.load(Ordering::Relaxed), 3);
+    }
+
+    #[test]
+    fn context_skips_relative_cwd_without_running_git() {
+        let fixture = stub_provider([]);
+        assert_eq!(
+            fixture.provider.context(Path::new("relative")).unwrap(),
+            None
+        );
+        assert_eq!(fixture.calls.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn context_treats_failed_toplevel_as_absence() {
+        let fixture = stub_provider([Ok(GitCommandOutput {
+            success: false,
+            stdout: Vec::new(),
+        })]);
+        assert_eq!(
+            fixture
+                .provider
+                .context(Path::new("/tmp/not-a-repo"))
+                .unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn context_returns_root_and_branch_for_a_worktree() {
+        let directory = TestDirectory::new();
+        let git = test_executable("git");
+        assert!(
+            Command::new(&git)
+                .args(["init", "--quiet"])
+                .current_dir(directory.path())
+                .status()
+                .unwrap()
+                .success()
+        );
+        assert!(
+            Command::new(&git)
+                .args(["symbolic-ref", "HEAD", "refs/heads/hist-branch"])
+                .current_dir(directory.path())
+                .status()
+                .unwrap()
+                .success()
+        );
+        let context = GitRepositoryStatusProvider::default()
+            .context(directory.path())
+            .unwrap()
+            .expect("the temporary repository should be detected");
+        let expected = directory.path().canonicalize().unwrap();
+        assert_eq!(Path::new(&context.root), expected.as_path());
+        assert_eq!(context.branch.as_deref(), Some("hist-branch"));
+    }
+
+    #[test]
     fn bounded_reader_accepts_max_and_rejects_max_plus_one() {
         let exact = vec![b'x'; MAX_GIT_OUTPUT_BYTES];
         assert_eq!(
@@ -1054,7 +1281,7 @@ mod tests {
             stdout: Vec::new(),
         })]);
         assert_eq!(absent.provider.status(Path::new(".")).unwrap(), None);
-        assert_eq!(absent.calls.get(), 1);
+        assert_eq!(absent.calls.load(Ordering::Relaxed), 1);
 
         let invalid_utf8 = stub_provider([
             successful_output(b"true\n".to_vec()),
@@ -1110,13 +1337,13 @@ mod tests {
         assert_eq!(status.branch, hostile_branch);
         assert_eq!(status.modified, 1);
         assert_eq!(
-            fixture.specs.borrow().as_slice(),
+            fixture.specs.lock().expect("specs").as_slice(),
             &[
                 GitCommandSpec::preflight(&fake_git_executable(), Path::new(".")),
                 GitCommandSpec::status(&fake_git_executable(), Path::new(".")),
             ]
         );
-        let policies = fixture.policies.borrow();
+        let policies = fixture.policies.lock().expect("policies");
         assert_eq!(policies.len(), 2);
         assert!(policies[0].deadline <= MAX_GIT_DEADLINE);
         assert!(policies[1].deadline <= policies[0].deadline);

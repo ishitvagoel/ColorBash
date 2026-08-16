@@ -132,6 +132,8 @@ mod tests {
             duration_ms: None,
             host: "h".to_owned(),
             user: "u".to_owned(),
+            repo_root: None,
+            repo_branch: None,
         }
     }
 

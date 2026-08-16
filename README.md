@@ -19,6 +19,7 @@ These slices have working code you can exercise in an interactive shell:
 | Ranked-accept chord | Default `Ctrl-X Ctrl-A` after wrapped Tab | Replaces current word with ranked candidate; Tab stays stock |
 | Git completion kinds | Wrap `git` or `mbx_comp_git` fixture | Additive `ref`/`flag`/`file`; no Git subprocess |
 | Fuzzy history search | `MBX_HISTORY=1` then `mbx history search fuzzy TEXT` | Ranks a bounded recent pool |
+| Repository-context history | `MBX_HISTORY=1` in a Git worktree | Stores root/branch; `mbx history search repo ROOT` |
 
 ## What remains
 
@@ -30,7 +31,6 @@ These MVP features are **not** implemented for interactive use:
 | Completion popup | Overlay unproven; ranked-accept chord exists |
 | Syntax highlighting | Same continuous-decoration leftover |
 | Enhanced Ctrl+R | Same leftover; explicit search UI not built |
-| Repository-context history | `HIST-010` |
 | macOS PTY matrix | `HRD-001` needs a macOS host |
 
 Canonical status lives in [`docs/roadmap.md`](docs/roadmap.md). `G0`, `G2`,

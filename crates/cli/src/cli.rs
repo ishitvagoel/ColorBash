@@ -27,6 +27,7 @@ pub enum HistoryCommand {
     SearchRecent { limit: usize },
     SearchPrefix { prefix: String, limit: usize },
     SearchCwd { cwd: String, limit: usize },
+    SearchRepo { repo_root: String, limit: usize },
     SearchFuzzy { needle: String, limit: usize },
 }
 
@@ -75,6 +76,7 @@ pub fn help_text(version: &str) -> String {
          mbx history search recent [--limit N]\n  \
          mbx history search prefix TEXT [--limit N]\n  \
          mbx history search cwd PATH [--limit N]\n  \
+         mbx history search repo ROOT [--limit N]\n  \
          mbx history search fuzzy TEXT [--limit N]\n\n\
          PROMPT OPTIONS:\n  --cwd PATH  --status N  --duration-ms N  --flags BITS\n  \
          --no-color  --ascii  --nerd-font  --ssh  --production  --disable-git"
@@ -189,13 +191,18 @@ fn parse_history_search(args: &[String]) -> Result<HistoryCommand, String> {
             index = 2;
             kind = HistorySearchKind::Cwd(args.get(1).cloned().ok_or("search cwd requires PATH")?);
         }
+        Some("repo") => {
+            index = 2;
+            kind =
+                HistorySearchKind::Repo(args.get(1).cloned().ok_or("search repo requires ROOT")?);
+        }
         Some("fuzzy") => {
             index = 2;
             kind =
                 HistorySearchKind::Fuzzy(args.get(1).cloned().ok_or("search fuzzy requires TEXT")?);
         }
         Some(command) => return Err(format!("unknown search kind: {command}")),
-        None => return Err("history search requires (recent|prefix|cwd|fuzzy)".to_owned()),
+        None => return Err("history search requires (recent|prefix|cwd|repo|fuzzy)".to_owned()),
     }
     while index < args.len() {
         match args[index].as_str() {
@@ -221,6 +228,7 @@ fn parse_history_search(args: &[String]) -> Result<HistoryCommand, String> {
         HistorySearchKind::Recent => HistoryCommand::SearchRecent { limit },
         HistorySearchKind::Prefix(prefix) => HistoryCommand::SearchPrefix { prefix, limit },
         HistorySearchKind::Cwd(cwd) => HistoryCommand::SearchCwd { cwd, limit },
+        HistorySearchKind::Repo(repo_root) => HistoryCommand::SearchRepo { repo_root, limit },
         HistorySearchKind::Fuzzy(needle) => HistoryCommand::SearchFuzzy { needle, limit },
     })
 }
@@ -229,6 +237,7 @@ enum HistorySearchKind {
     Recent,
     Prefix(String),
     Cwd(String),
+    Repo(String),
     Fuzzy(String),
 }
 
@@ -409,6 +418,18 @@ mod tests {
             CliCommand::History(HistoryCommand::SearchFuzzy {
                 needle: "git".to_owned(),
                 limit: 3,
+            })
+        );
+        let repo = parse(
+            &args(&["history", "search", "repo", "/workspace", "--limit", "2"]),
+            || panic!("history must not resolve prompt defaults"),
+        )
+        .unwrap();
+        assert_eq!(
+            repo,
+            CliCommand::History(HistoryCommand::SearchRepo {
+                repo_root: "/workspace".to_owned(),
+                limit: 2,
             })
         );
     }

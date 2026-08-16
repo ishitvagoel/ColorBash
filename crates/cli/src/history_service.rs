@@ -114,6 +114,8 @@ fn decode_record(fields: &[String]) -> Result<HistoryEntry, String> {
         duration_ms,
         host,
         user,
+        repo_root: None,
+        repo_branch: None,
     })
 }
 

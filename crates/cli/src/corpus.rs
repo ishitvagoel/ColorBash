@@ -66,6 +66,8 @@ pub fn entry_at(seed: u64, index: u64) -> HistoryEntry {
         duration_ms: (index % 5 == 0).then_some((index % 2500) + 1),
         host: "bench-host".to_owned(),
         user: "bench-user".to_owned(),
+        repo_root: None,
+        repo_branch: None,
     }
 }
 
@@ -107,7 +109,8 @@ pub fn to_jsonl(entry: &HistoryEntry) -> String {
     format!(
         "{{\"session_id\":{},\"event_sequence\":{},\"history_number\":{},\
          \"command_text\":{},\"start_cwd\":{},\"completed_at\":{},\
-         \"status\":{},\"duration_ms\":{},\"host\":{},\"user\":{}}}",
+         \"status\":{},\"duration_ms\":{},\"host\":{},\"user\":{},\
+         \"repo_root\":{},\"repo_branch\":{}}}",
         json_string(&entry.session_id),
         entry.event_sequence,
         history_number,
@@ -118,7 +121,16 @@ pub fn to_jsonl(entry: &HistoryEntry) -> String {
         duration,
         json_string(&entry.host),
         json_string(&entry.user),
+        json_optional_string(entry.repo_root.as_deref()),
+        json_optional_string(entry.repo_branch.as_deref()),
     )
+}
+
+fn json_optional_string(value: Option<&str>) -> String {
+    match value {
+        Some(value) => json_string(value),
+        None => "null".to_owned(),
+    }
 }
 
 pub fn from_jsonl(line: &str) -> Result<HistoryEntry, String> {
@@ -134,6 +146,8 @@ pub fn from_jsonl(line: &str) -> Result<HistoryEntry, String> {
         duration_ms: optional_u64(&object, "duration_ms")?,
         host: required_string(&object, "host")?,
         user: required_string(&object, "user")?,
+        repo_root: optional_string(&object, "repo_root")?,
+        repo_branch: optional_string(&object, "repo_branch")?,
     })
 }
 
@@ -298,6 +312,15 @@ fn optional_u64(fields: &[(String, JsonValue)], key: &str) -> Result<Option<u64>
     }
 }
 
+fn optional_string(fields: &[(String, JsonValue)], key: &str) -> Result<Option<String>, String> {
+    match fields.iter().find(|(name, _)| name == key) {
+        None => Ok(None),
+        Some((_, JsonValue::Null)) => Ok(None),
+        Some((_, JsonValue::String(value))) => Ok(Some(value.clone())),
+        Some(_) => Err(format!("JSONL field {key} must be a string or null")),
+    }
+}
+
 fn field<'a>(fields: &'a [(String, JsonValue)], key: &str) -> Result<&'a JsonValue, String> {
     fields
         .iter()
@@ -331,7 +354,9 @@ fn civil_from_days(days: i64) -> (i64, i64, i64) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::history::{HistoryControl, HistoryErrorKind, HistoryRecorder, HistorySearch};
+    use crate::history::{
+        HistoryControl, HistoryErrorKind, HistoryRecorder, HistorySearch, SCHEMA_VERSION,
+    };
     use crate::storage::{QueuedHistoryStore, apply_schema_v1};
     use std::path::PathBuf;
     use std::thread;
@@ -460,6 +485,8 @@ mod tests {
                     duration_ms: None,
                     host: "host".to_owned(),
                     user: "user".to_owned(),
+                    repo_root: None,
+                    repo_branch: None,
                 },
             );
             enqueue(
@@ -475,6 +502,8 @@ mod tests {
                     duration_ms: None,
                     host: "host".to_owned(),
                     user: "user".to_owned(),
+                    repo_root: None,
+                    repo_branch: None,
                 },
             );
             enqueue(
@@ -490,6 +519,8 @@ mod tests {
                     duration_ms: None,
                     host: "host".to_owned(),
                     user: "user".to_owned(),
+                    repo_root: None,
+                    repo_branch: None,
                 },
             );
             enqueue(
@@ -505,6 +536,8 @@ mod tests {
                     duration_ms: None,
                     host: "host".to_owned(),
                     user: "user".to_owned(),
+                    repo_root: None,
+                    repo_branch: None,
                 },
             );
             enqueue(
@@ -520,6 +553,8 @@ mod tests {
                     duration_ms: None,
                     host: "host".to_owned(),
                     user: "user".to_owned(),
+                    repo_root: None,
+                    repo_branch: None,
                 },
             );
         }
@@ -607,9 +642,10 @@ mod tests {
             let version: i64 = connection
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(version, 2);
+            assert_eq!(version, SCHEMA_VERSION);
             assert_eq!(index_count(&connection, "history_prefix"), 1);
             assert_eq!(index_count(&connection, "history_prefix_completed"), 1);
+            assert_eq!(index_count(&connection, "history_repo_root"), 1);
         }
         let store = QueuedHistoryStore::open_with_limits(&path, 8_192, 1_000_000, 36_500).unwrap();
         assert_eq!(store.count().unwrap(), CORPUS_SIZE as u64);

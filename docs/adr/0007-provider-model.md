@@ -42,7 +42,15 @@ Implement the narrow provider boundary required by the current prompt:
   `PATH` directories are explicit caller-trusted configuration.
 
 Defer the broader provider model until completion or another consumer establishes
-its requirements. The deferred work includes:
+its requirements. `HIST-010` is the first scoped consumer of repository
+**root/branch** context: the same Git adapter implements
+`RepositoryContextProvider` (`rev-parse --show-toplevel` plus
+`symbolic-ref --short HEAD`, with `rev-parse --abbrev-ref HEAD` as a detached
+fallback). History enrichment uses that port from the writer thread, never from
+the prompt path, and never extends MBX2. Upstream, remotes, tags, and a generic
+SDK remain unauthorized until a later consumer (`GIT-005`).
+
+The deferred work includes:
 
 - generic detection, completion, description, prompt-segment, and diagnostic
   capabilities;
