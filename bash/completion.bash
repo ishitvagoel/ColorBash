@@ -85,6 +85,58 @@ _mbx_comp_fill_metadata() {
     _MBX_COMP_DESCS=("${descs[@]}")
 }
 
+_mbx_comp_score_reply() {
+    local reply=$1
+    local word=$2
+
+    if [[ $reply == "$word" ]]; then
+        REPLY=300
+    elif [[ $reply == "$word"* ]]; then
+        REPLY=200
+    elif [[ -n $word && $reply == *"$word"* ]]; then
+        REPLY=100
+    else
+        REPLY=0
+    fi
+}
+
+_mbx_comp_fill_ranking() {
+    local cur=${COMP_WORDS[COMP_CWORD]:-}
+    local i j n oi oj si sj swap
+    local -a scores=() order=()
+
+    n=${#COMPREPLY[@]}
+    for ((i = 0; i < n; i++)); do
+        if ((i < 64)); then
+            _mbx_comp_score_reply "${COMPREPLY[i]}" "$cur"
+            scores+=("$REPLY")
+        else
+            scores+=(0)
+        fi
+        order+=("$i")
+    done
+    for ((i = 0; i < n - 1; i++)); do
+        for ((j = i + 1; j < n; j++)); do
+            oi=${order[i]}
+            oj=${order[j]}
+            si=${scores[oi]}
+            sj=${scores[oj]}
+            swap=0
+            if ((sj > si)); then
+                swap=1
+            elif ((sj == si && oj < oi)); then
+                swap=1
+            fi
+            if ((swap)); then
+                order[i]=$oj
+                order[j]=$oi
+            fi
+        done
+    done
+    _MBX_COMP_SCORES=("${scores[@]}")
+    _MBX_COMP_ORDER=("${order[@]}")
+}
+
 _mbx_comp_wrap_backend() {
     local backend=$1
     shift
@@ -95,6 +147,7 @@ _mbx_comp_wrap_backend() {
     _MBX_COMP_REPLY_COUNT=${#COMPREPLY[@]}
     _MBX_COMP_LAST_REPLY=${COMPREPLY[0]:-}
     _mbx_comp_fill_metadata
+    _mbx_comp_fill_ranking
 }
 
 _mbx_comp_identifier_ok() {
