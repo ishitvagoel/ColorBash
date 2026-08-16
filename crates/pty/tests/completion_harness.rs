@@ -212,3 +212,69 @@ printf 'MBX_COMP:fixture_present\\n'; else printf 'MBX_COMP:fixture_absent\\n'; 
         .expect("query default fixtures");
     wait_all(&mut session, &["\nMBX_COMP:fixture_absent", "> "]);
 }
+
+#[test]
+fn alias_file_completion_preserves_stock_bytes() {
+    let home = TempHome::new("comp-l1");
+    fs::write(home.path().join("MBX_COMP_UNIQUE"), "probe\n").expect("unique file");
+    let mut session = spawn_mbx_shell(home.path(), &[], "");
+    wait_prompt(&mut session);
+    session
+        .write_str("alias mbxpr=printf\n", deadline(2))
+        .expect("define alias");
+    wait_prompt(&mut session);
+    session
+        .write_str("mbxpr 'GOT:%s|\\n' MBX_COMP_U", deadline(2))
+        .expect("type alias prefix");
+    send_tab(&mut session);
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["\nGOT:MBX_COMP_UNIQUE|", "> "]);
+}
+
+#[test]
+fn redirection_target_completion_preserves_stock_bytes() {
+    let home = TempHome::new("comp-l2");
+    fs::write(home.path().join("MBX_COMP_UNIQUE"), "probe\n").expect("unique file");
+    let mut session = spawn_mbx_shell(home.path(), &[], "");
+    wait_prompt(&mut session);
+    session
+        .write_str("printf 'x' > MBX_COMP_U", deadline(2))
+        .expect("type redirect prefix");
+    send_tab(&mut session);
+    session
+        .write_str("\n", deadline(2))
+        .expect("create via redirect");
+    wait_prompt(&mut session);
+    session
+        .write_str("printf 'GOT:%s|\\n' MBX_COMP_*\n", deadline(2))
+        .expect("glob completed file");
+    wait_all(&mut session, &["\nGOT:MBX_COMP_UNIQUE|", "> "]);
+}
+
+#[test]
+fn unicode_filename_completion_preserves_stock_bytes() {
+    let home = TempHome::new("comp-l3");
+    fs::write(home.path().join("MBX_COMP_café"), "probe\n").expect("unicode file");
+    let mut session = spawn_mbx_shell(home.path(), &[], "");
+    wait_prompt(&mut session);
+    session
+        .write_str("printf 'GOT:%s|\\n' MBX_COMP_c", deadline(2))
+        .expect("type unicode prefix");
+    send_tab(&mut session);
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["\nGOT:MBX_COMP_café|", "> "]);
+}
+
+#[test]
+fn incomplete_quote_file_completion_preserves_stock_bytes() {
+    let home = TempHome::new("comp-l4");
+    fs::write(home.path().join("MBX_COMP_UNIQUE"), "probe\n").expect("unique file");
+    let mut session = spawn_mbx_shell(home.path(), &[], "");
+    wait_prompt(&mut session);
+    session
+        .write_str("printf 'GOT:%s|\\n' 'MBX_COMP_U", deadline(2))
+        .expect("type incomplete quote prefix");
+    send_tab(&mut session);
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["\nGOT:MBX_COMP_UNIQUE|", "> "]);
+}
