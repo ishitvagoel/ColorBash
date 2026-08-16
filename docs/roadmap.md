@@ -7,7 +7,7 @@
 
 - Last reviewed: 2026-08-16 UTC
 - Current milestone: Phase 3A sidecar implemented; `G0` and `G2` complete; `G1` accepted
-- Active workstream: unblocked leftovers (`GIT-004` / `HIST-009`); overlay/ghost/highlighting blocked on unproven continuous decoration
+- Active workstream: unblocked leftovers (`HIST-010` / `GIT-003`); overlay/ghost/highlighting blocked on unproven continuous decoration
 - Next decision gate: continuous-decoration leftover (blocks ghost / highlighting)
 - Editor-facing work is blocked by: unproven after-every-key decoration, as identified per phase
 - Timing policy: unmet percentile targets are `deferred` and do not block
@@ -385,7 +385,7 @@ Outcome: an adaptive, semantic, safe prompt that remains fast under failure.
 | `PRM-006` | Decide opt-in duration policy or explicit preexec adapter | `validation` | `docs/prm-006-duration-plan.md`; D-1–D-4 in `tests/bash/smoke.bash`; remain opt-in; do not compose `DEBUG` |
 | `PRM-007` | Give native and fallback adapters one explicit input/safety contract and shared hostile-state corpus | `complete` | explicit four-field context, shared C0/DEL/expansion corpus, production precedence, and SSH-only test |
 | `PRM-008` | Preserve raw additive prompt flags across coprocess, per-call, and fallback paths | `complete` | raw `--flags` CLI boundary plus coprocess/per-call/fallback unknown-bit tests |
-| `PRM-009` | Reassess semantic composition versus typed PS1 encoding and validated theme styles | `discovery` | wait for `PRM-002` or a second renderer; avoid a speculative abstraction |
+| `PRM-009` | Reassess semantic composition versus typed PS1 encoding and validated theme styles | `complete` | keep `PromptSegmentProvider` + `Theme`; no typed PS1; no second native renderer (`docs/prm-009-reassess-plan.md`) |
 
 Exit condition: prompt requirements of `G0`.
 
@@ -563,7 +563,8 @@ percentile leftovers are `deferred` and must not block product slices
 1. Next unblocked leftover is the `HIST-010` / `GIT-003` pair (repo context on
    history rows). Do not start overlay, ghost, or highlighting. `COMP-004`
    stays `discovery`. Do not mark `COMP-004` or `COMP-005` complete.
-2. `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
+2. `PRM-009` is `complete` (keep current composition; no typed PS1 encoding).
+3. `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
    slice on FND-001 SHA refresh or percentile benches unless a functional
    prompt-path defect is proven.
 
@@ -695,3 +696,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Ranked-accept replaces the current word when it is a prefix of `_MBX_COMP_RANKED_REPLY` (M-039). Stale unrelated words are refused. Snapshot clears at the next prompt. |
 | 2026-08-16 | Completed `GIT-004` Git completion kinds (`docs/git-004-kinds-plan.md`). `COMP-001` / `COMP-002` move to `complete` (G4 evidence; 5 ms `deferred`). |
 | 2026-08-16 | Completed `HIST-009` bounded fuzzy search (`docs/hist-009-fuzzy-plan.md`; `mbx history search fuzzy`). `HIST-010` remains. |
+| 2026-08-16 | Completed `PRM-009` composition reassessment (`docs/prm-009-reassess-plan.md`). Keep `PromptSegmentProvider` + `Theme`; no typed PS1 encoding; no second native renderer. `HIST-010` remains. Do not start overlay or ghost. |

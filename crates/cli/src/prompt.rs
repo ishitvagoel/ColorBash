@@ -584,6 +584,72 @@ mod tests {
     }
 
     #[test]
+    fn default_theme_locks_256_sgr_table() {
+        let theme = Theme::default();
+        assert_eq!(theme.primary, "1;38;5;81");
+        assert_eq!(theme.path, "1;38;5;117");
+        assert_eq!(theme.repository_clean, "38;5;114");
+        assert_eq!(theme.repository_dirty, "38;5;215");
+        assert_eq!(theme.warning, "1;38;5;215");
+        assert_eq!(theme.danger, "1;38;5;196");
+        assert_eq!(theme.error, "1;38;5;203");
+        assert_eq!(theme.muted, "38;5;245");
+    }
+
+    #[test]
+    fn role_sgr_16_and_truecolor_match_locked_tables() {
+        let theme = Theme::default();
+        assert_eq!(
+            role_sgr(SemanticRole::Path, ColorDepth::Ansi16, theme),
+            "1;36"
+        );
+        assert_eq!(
+            role_sgr(SemanticRole::RepositoryClean, ColorDepth::Ansi16, theme),
+            "1;32"
+        );
+        assert_eq!(
+            role_sgr(SemanticRole::Warning, ColorDepth::Ansi16, theme),
+            "1;33"
+        );
+        assert_eq!(
+            role_sgr(SemanticRole::Error, ColorDepth::Ansi16, theme),
+            "1;31"
+        );
+        assert_eq!(
+            role_sgr(SemanticRole::Muted, ColorDepth::Ansi16, theme),
+            "1;30"
+        );
+        assert_eq!(
+            role_sgr(SemanticRole::Primary, ColorDepth::TrueColor, theme),
+            "1;38;2;135;175;215"
+        );
+        assert_eq!(
+            role_sgr(SemanticRole::Path, ColorDepth::TrueColor, theme),
+            "1;38;2;135;215;255"
+        );
+        assert_eq!(
+            role_sgr(SemanticRole::RepositoryClean, ColorDepth::TrueColor, theme),
+            "38;2;135;215;135"
+        );
+        assert_eq!(
+            role_sgr(SemanticRole::Warning, ColorDepth::TrueColor, theme),
+            "1;38;2;255;215;135"
+        );
+        assert_eq!(
+            role_sgr(SemanticRole::Danger, ColorDepth::TrueColor, theme),
+            "1;38;2;255;0;0"
+        );
+        assert_eq!(
+            role_sgr(SemanticRole::Error, ColorDepth::TrueColor, theme),
+            "1;38;2;255;135;135"
+        );
+        assert_eq!(
+            role_sgr(SemanticRole::Muted, ColorDepth::TrueColor, theme),
+            "38;2;138;138;138"
+        );
+    }
+
+    #[test]
     fn native_prompt_uses_256_color_when_no_depth_flags_are_set() {
         let renderer = plain_renderer(None);
         let prompt = request(FLAG_ASCII_ICONS | FLAG_DISABLE_GIT);
