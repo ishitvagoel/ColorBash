@@ -110,7 +110,8 @@ change** beyond tests and this plan's status column.
 
 ## Remaining after this slice
 
-`--` and nested insertion N-1–N-2 are specified in
-`docs/comp-002-dash-nested-plan.md`. After that: slow/stateful fallthrough
-and the provisional 5 ms adapter overhead budget. Popup stays blocked until
+`--` and nested insertion N-1–N-2 are in `validation`
+(`docs/comp-002-dash-nested-plan.md`). Slow/stateful wrap fallthrough
+S-1–S-4 is specified in `docs/comp-002-fallthrough-plan.md`. After that:
+the provisional 5 ms adapter overhead budget. Popup stays blocked until
 `G4` passes.

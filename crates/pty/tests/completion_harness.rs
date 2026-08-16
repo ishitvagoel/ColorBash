@@ -311,3 +311,117 @@ fn nested_substitution_file_completion_preserves_stock_bytes() {
         .expect("close substitution and submit");
     wait_all(&mut session, &["\nGOT:MBX_COMP_UNIQUE|", "> "]);
 }
+
+#[test]
+fn unsupported_wordlist_completion_skips_wrap() {
+    let home = TempHome::new("comp-s1");
+    let prelude = "\
+mbx_comp_words() { printf 'GOT:%s|\\n' \"$*\"; }
+complete -W 'mbx_word_alpha' mbx_comp_words
+";
+    let mut session = spawn_mbx_shell(home.path(), &[], prelude);
+    wait_prompt(&mut session);
+    session
+        .write_str("_mbx_comp_wrap_existing_f mbx_comp_words\n", deadline(2))
+        .expect("attempt wrap on -W spec");
+    wait_prompt(&mut session);
+    session
+        .write_str(
+            "complete -p mbx_comp_words 2>/dev/null | grep -Fq '_mbx_comp_existing_adapter' && \
+printf 'MBX_COMP:wrapped\\n' || printf 'MBX_COMP:unwrapped\\n'\n",
+            deadline(2),
+        )
+        .expect("query wrap state");
+    wait_all(&mut session, &["\nMBX_COMP:unwrapped", "> "]);
+    session
+        .write_str(
+            "complete -p mbx_comp_words 2>/dev/null | grep -Fq ' -W ' && \
+printf 'MBX_COMP:has_w\\n' || printf 'MBX_COMP:no_w\\n'\n",
+            deadline(2),
+        )
+        .expect("query -W spec");
+    wait_all(&mut session, &["\nMBX_COMP:has_w", "> "]);
+    session
+        .write_str("mbx_comp_words mbx_w", deadline(2))
+        .expect("type wordlist prefix");
+    send_tab(&mut session);
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["\nGOT:mbx_word_alpha|", "> "]);
+}
+
+#[test]
+fn slow_wrapped_function_completion_preserves_stock_bytes() {
+    let home = TempHome::new("comp-s2");
+    let prelude = "\
+mbx_comp_slow() { printf 'GOT:%s|\\n' \"$*\"; }
+_mbx_comp_slow_backend() {
+    sleep 0.2
+    COMPREPLY=(--mbx-comp-slow)
+}
+complete -F _mbx_comp_slow_backend mbx_comp_slow
+";
+    let mut session = spawn_mbx_shell(home.path(), &[], prelude);
+    wait_prompt(&mut session);
+    session
+        .write_str("_mbx_comp_wrap_existing_f mbx_comp_slow\n", deadline(2))
+        .expect("wrap slow backend");
+    wait_prompt(&mut session);
+    session
+        .write_str("mbx_comp_slow --mbx-sl", deadline(2))
+        .expect("type slow prefix");
+    send_tab(&mut session);
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["\nGOT:--mbx-comp-slow|", "> "]);
+}
+
+#[test]
+fn stateful_wrapped_function_reads_live_shell_state() {
+    let home = TempHome::new("comp-s3");
+    let prelude = "\
+mbx_comp_state() { printf 'GOT:%s|\\n' \"$*\"; }
+_mbx_comp_state_backend() {
+    COMPREPLY=(\"${MBX_COMP_STATE_TOKEN:-missing}\")
+}
+complete -F _mbx_comp_state_backend mbx_comp_state
+";
+    let mut session = spawn_mbx_shell(home.path(), &[], prelude);
+    wait_prompt(&mut session);
+    session
+        .write_str("_mbx_comp_wrap_existing_f mbx_comp_state\n", deadline(2))
+        .expect("wrap state backend");
+    wait_prompt(&mut session);
+    session
+        .write_str("MBX_COMP_STATE_TOKEN=live-alpha\n", deadline(2))
+        .expect("set live state token");
+    wait_prompt(&mut session);
+    session
+        .write_str("mbx_comp_state liv", deadline(2))
+        .expect("type state prefix");
+    send_tab(&mut session);
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["\nGOT:live-alpha|", "> "]);
+}
+
+#[test]
+fn empty_compreply_wrapped_function_inserts_nothing() {
+    let home = TempHome::new("comp-s4");
+    let prelude = "\
+mbx_comp_empty() { printf 'GOT:%s|\\n' \"$*\"; }
+_mbx_comp_empty_backend() {
+    COMPREPLY=()
+}
+complete -F _mbx_comp_empty_backend mbx_comp_empty
+";
+    let mut session = spawn_mbx_shell(home.path(), &[], prelude);
+    wait_prompt(&mut session);
+    session
+        .write_str("_mbx_comp_wrap_existing_f mbx_comp_empty\n", deadline(2))
+        .expect("wrap empty backend");
+    wait_prompt(&mut session);
+    session
+        .write_str("mbx_comp_empty nosuch", deadline(2))
+        .expect("type empty prefix");
+    send_tab(&mut session);
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["\nGOT:nosuch|", "> "]);
+}
