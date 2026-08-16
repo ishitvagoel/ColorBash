@@ -1,6 +1,6 @@
 # G4 decision: completion-parity evidence inventory
 
-Status: `ready` (2026-08-16). COMP-001 / COMP-002 functional slices are in
+Status: `validation` (2026-08-16). COMP-001 / COMP-002 functional slices are in
 `validation`. This packet records which G4 bullets have PTY evidence and
 defers the 5 ms adapter leftover. Do not mark `G4`, `COMP-001`, or
 `COMP-002` complete.
