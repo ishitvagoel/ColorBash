@@ -352,8 +352,9 @@ is in `crates/cli/src/storage.rs` (Q-A–Q-C) and
 `count`/`search` evidence is in `crates/cli/src/storage.rs` (V-1–V-2) and
 `crates/pty/tests/history_invariance.rs` (V-3). 100k-row v1→v2 migration
 evidence is in `crates/cli/src/corpus.rs` (M-2) and
-`docs/benchmarks/2026-08-16-history-migrate.md`. `G2` still requires
-prompt-boundary write-ack budget pass and foreign-user open.
+`docs/benchmarks/2026-08-16-history-migrate.md`. Foreign-user open is recorded in
+`docs/history-g2-foreign-user-plan.md` (F-1–F-4). `G2` still requires the
+prompt-boundary write-ack budget pass.
 
 ## Compatibility and degradation
 

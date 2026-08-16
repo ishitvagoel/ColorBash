@@ -705,6 +705,7 @@ mod tests {
     };
     use std::os::unix::fs::PermissionsExt;
     use std::path::Path;
+    use std::process::Command;
     use std::sync::{Arc, Mutex, mpsc};
     use std::thread;
 
@@ -1472,6 +1473,119 @@ mod tests {
             format!("event=history_storage_error kind={}", error.kind().as_str())
         );
         assert!(!diagnostic.contains(PERM_SENTINEL), "{diagnostic}");
+    }
+
+    fn assert_foreign_probe_is_nobody() {
+        let output = Command::new("sudo")
+            .args(["-n", "-u", "nobody", "id", "-u"])
+            .output()
+            .expect("sudo must spawn for foreign-user evidence");
+        assert!(
+            output.status.success(),
+            "sudo -n -u nobody must work on this host: status={:?} stderr={}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let uid = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        assert_eq!(
+            uid, "65534",
+            "foreign probe must use uid 65534(nobody), not the owner uid"
+        );
+    }
+
+    fn foreign_probe_output(args: &[&str]) -> std::process::Output {
+        let mut command = Command::new("sudo");
+        command.arg("-n").arg("-u").arg("nobody").arg("--");
+        command.args(args);
+        command.output().expect("foreign probe must spawn")
+    }
+
+    fn assert_foreign_read_denied(path: &Path) {
+        let input = format!("if={}", path.display());
+        let output = foreign_probe_output(&["dd", &input, "of=/dev/null", "bs=1", "count=1"]);
+        assert!(
+            !output.status.success(),
+            "foreign user must not read {}",
+            path.display()
+        );
+        let combined = format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            !combined.contains(PERM_SENTINEL),
+            "foreign read must not expose store payload: {combined}"
+        );
+    }
+
+    fn assert_foreign_directory_denied(path: &Path) {
+        let path_arg = path.to_string_lossy();
+        let output = foreign_probe_output(&["ls", &path_arg]);
+        assert!(
+            !output.status.success(),
+            "foreign user must not list {}",
+            path.display()
+        );
+        let combined = format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            !combined.contains(PERM_SENTINEL),
+            "foreign directory probe must not expose store payload: {combined}"
+        );
+    }
+
+    fn wait_for_owner_count(store: &QueuedHistoryStore, expected: u64) {
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        loop {
+            if store.count().unwrap() == expected {
+                return;
+            }
+            if std::time::Instant::now() > deadline {
+                panic!("owner could not read count {expected} from the store");
+            }
+            thread::yield_now();
+        }
+    }
+
+    #[test]
+    fn foreign_user_cannot_open_store_paths() {
+        assert_foreign_probe_is_nobody();
+
+        let (dir, path) = temp_store("foreign");
+        let store = QueuedHistoryStore::open(&path, 8).unwrap();
+        enqueue(
+            &store,
+            entry("s1", 1, PERM_SENTINEL, "/w", "2026-08-16T12:00:00Z"),
+        );
+        wait_for_owner_count(&store, 1);
+
+        assert_eq!(mode_of(dir.path()), 0o700);
+        assert_eq!(mode_of(&path), 0o600);
+
+        assert_foreign_directory_denied(dir.path());
+        assert_foreign_read_denied(&path);
+
+        let wal = sidecar(&path, "-wal");
+        let shm = sidecar(&path, "-shm");
+        assert!(
+            wal.exists(),
+            "WAL sidecar must exist while the writer is live"
+        );
+        assert!(
+            shm.exists(),
+            "SHM sidecar must exist while the writer is live"
+        );
+        assert_eq!(mode_of(&wal), 0o600);
+        assert_eq!(mode_of(&shm), 0o600);
+        assert_foreign_read_denied(&wal);
+        assert_foreign_read_denied(&shm);
+
+        drop(store);
+        drop(dir);
     }
 
     #[test]
