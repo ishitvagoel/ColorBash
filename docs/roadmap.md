@@ -7,7 +7,7 @@
 
 - Last reviewed: 2026-08-16 UTC
 - Current milestone: Phase 3A sidecar implemented; `G0` and `G2` complete; `G1` accepted
-- Active workstream: `G3` decision (`G3` / `EDT-001` in `validation`; `G4` in `validation`; `COMP-003` blocked)
+- Active workstream: `G3` and `G4` in `validation` (`EDT-001` / `COMP-001` / `COMP-002` in `validation`; `COMP-003` blocked)
 - Next decision gate: `G3` editor integration
 - Editor-facing work is blocked by: `G3` editor integration, as identified per phase
 - Timing policy: unmet percentile targets are `deferred` and do not block
@@ -329,7 +329,7 @@ latency budgets.
 | `FND-002` | Make transport own response correlation/framing postconditions and test `RequestHandler` substitutes directly | `complete` | `crates/cli/src/service.rs`, `transport.rs`, and direct substitute/oversize/correlation tests |
 | `FND-003` | Complete port-contract tests for full prompt mapping, ping isolation, provider error/disable behavior, and crate-internal seam construction | `complete` | service, prompt-provider, disabled-provider, and sibling seam tests in `crates/cli/src/` |
 | `PTY-001` | Genuine PTY driver for input, signal, resize, and terminal-state probes | `complete` | `crates/pty` driver tests plus foundation prompt/helper/Ctrl+C/Ctrl+Z/resize/`stty -g` coverage |
-| `EDT-001` | Non-destructive `bind -x` insertion/redisplay feasibility prototype | `validation` | E-1–E-4, M-1–M-4, B-1–B-4 in `crates/pty/tests/editor_bind_x.rs` and `bash/editor.bash`; B-5 redraw note in `docs/edt-001-exact-bytes-plan.md`; `G3` decision specified in `docs/g3-decision-plan.md`; continuous decoration unproven |
+| `EDT-001` | Non-destructive `bind -x` insertion/redisplay feasibility prototype | `validation` | E-1–E-4, M-1–M-4, B-1–B-4 in `crates/pty/tests/editor_bind_x.rs` and `bash/editor.bash`; B-5 redraw note in `docs/edt-001-exact-bytes-plan.md`; `docs/g3-decision-plan.md`; continuous decoration unproven |
 
 ### Phase 0 — Research and architecture
 
@@ -554,10 +554,10 @@ Exit condition: `G5` after every `HRD-*` item is complete.
 percentile leftovers are `deferred` and must not block product slices
 (`docs/latency-budget-deferral.md`).
 
-1. `G3` decision — follow `docs/g3-decision-plan.md`. Record the functional
-   evidence inventory. Continuous decoration stays unproven. Do not start
-   ghost, popup, or `COMP-003`. Do not mark `G3`, `G4`, `EDT-001`,
-   `COMP-001`, or `COMP-002` complete.
+1. `G3` stays `validation`. Functional evidence is recorded in
+   `docs/g3-decision-plan.md`. Continuous decoration stays unproven. Do not
+   start ghost, popup, or `COMP-003`. `G4` stays `validation`. Do not mark
+   `G3`, `G4`, `EDT-001`, `COMP-001`, or `COMP-002` complete.
 2. `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
    slice on FND-001 SHA refresh or percentile benches unless a functional
    prompt-path defect is proven.
@@ -673,3 +673,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Specified `G4` decision inventory in `docs/g4-decision-plan.md`. Functional COMP-002 cases are recorded; 5 ms leftover stays `deferred`. Do not mark `G4` complete. |
 | 2026-08-16 | Completed `G4` decision inventory (`docs/g4-decision-plan.md`; `docs/latency-budget-deferral.md`). `G4` moves to `validation`; 5 ms leftover stays `deferred`. `COMP-001` / `COMP-002` stay `validation`. Do not start `COMP-003` or popup. |
 | 2026-08-16 | Specified `G3` decision inventory in `docs/g3-decision-plan.md`. Continuous decoration stays unproven. Do not mark `G3` complete. Do not start ghost, popup, or `COMP-003`. |
+| 2026-08-16 | Completed `G3` decision inventory (`docs/g3-decision-plan.md`). `G3` stays `validation`; continuous decoration stays unproven. Do not start ghost, popup, or `COMP-003`. |

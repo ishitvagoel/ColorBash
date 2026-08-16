@@ -1,6 +1,6 @@
 # G3 decision: editor-integration evidence inventory
 
-Status: `ready` (2026-08-16). `EDT-001` and `G3` are in `validation`. This
+Status: `validation` (2026-08-16). `EDT-001` and `G3` are in `validation`. This
 packet records which G3 bullets have PTY evidence and keeps continuous
 decoration unproven. Do not mark `G3` or `EDT-001` complete.
 
