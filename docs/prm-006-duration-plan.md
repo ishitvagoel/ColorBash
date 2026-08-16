@@ -84,4 +84,5 @@ pointers.
 `PRM-006` is `validation`, not `complete`. A later adapter would need a
 proven way to inspect the caller's `DEBUG` trap from a sourced file
 without changing context. Ghost / popup / `COMP-003` stay blocked.
-`PRM-009` stays `discovery`. `HRD-001` still needs a macOS host.
+`PRM-009` is `complete` (`docs/prm-009-reassess-plan.md`). `HRD-001` still
+needs a macOS host.

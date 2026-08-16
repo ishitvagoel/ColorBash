@@ -180,10 +180,11 @@ The bounded post-refactor SOLID audit is implemented and recorded in
 `docs/solid-hardening-checklist.md`: transport owns correlation/framing,
 `RequestHandler` returns content only, Git acquisition is capped and deadline-
 controlled beneath the pure parser, and all prompt adapters share one explicit
-context/flag/safety/liveness contract. Semantic prompt composition versus trusted
-PS1 encoding remains `PRM-009` discovery until capability/width work or a second
-renderer proves that change axis; a speculative extra abstraction is not required
-for the current slice.
+context/flag/safety/liveness contract. Semantic prompt composition stays
+ordered `PromptSegmentProvider` segments plus a crate-internal `Theme`. The
+MBX1 `PROMPT` payload remains one sanitized string; typed PS1 encoding and a
+second native renderer are out of scope (`docs/prm-009-reassess-plan.md`).
+`PRM-009` is `complete`.
 
 ## PromptFlags boundary
 
