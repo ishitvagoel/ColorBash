@@ -71,10 +71,11 @@ the buffer.
 1. The MBX prompt is compatible with multiline input, wrapping, resize, and
    wide/combining glyphs in the tested window sizes; no Readline augmentation is
    needed for these foundation cases.
-2. `PRM-002` should build a display-width model from this baseline: treat
-   East Asian wide glyphs and combining marks as display data, keep the
-   two-line anchor, and validate wrap math with PTY column probes rather than
-   byte counts.
+2. `PRM-002` now has a unit display-width model for path compaction in
+   `crates/cli/src/prompt.rs` (`docs/prm-002-width-plan.md`): East Asian wide
+   glyphs and combining marks count as display columns, the two-line anchor is
+   unchanged, and wrap math still needs PTY column probes rather than byte
+   counts.
 3. Any future ghost-text or popup feature (`G3` onward) must re-use this harness
    for exact-byte and resize evidence; the harness already proves the
    resize-mid-line and narrow-wrap topologies those features depend on.

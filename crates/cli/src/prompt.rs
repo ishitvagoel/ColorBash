@@ -2,6 +2,7 @@ use crate::provider::{ProviderError, RepositoryStatus, RepositoryStatusProvider}
 use crate::telemetry::trace_message;
 use mbx_protocol::PromptFlags;
 use std::path::Path;
+use unicode_width::UnicodeWidthChar;
 
 /// Transport-independent context required to construct one prompt.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -304,6 +305,13 @@ fn styled(text: &str, ansi_role: &str, enabled: bool) -> String {
     }
 }
 
+fn display_width(value: &str) -> usize {
+    value
+        .chars()
+        .map(|character| UnicodeWidthChar::width(character).unwrap_or(0))
+        .sum()
+}
+
 fn display_path(cwd: &str, home: Option<&str>) -> String {
     let compact = match home.filter(|home| !home.is_empty()) {
         Some(home) if cwd == home => "~".to_owned(),
@@ -312,7 +320,7 @@ fn display_path(cwd: &str, home: Option<&str>) -> String {
         }
         _ => cwd.to_owned(),
     };
-    if compact.chars().count() > 52 {
+    if display_width(&compact) > 52 {
         let parts: Vec<&str> = compact.rsplitn(3, '/').collect();
         if parts.len() == 3 {
             format!("…/{}/{}", parts[1], parts[0])
@@ -526,6 +534,43 @@ mod tests {
         assert_eq!(format_duration(59_999), "59s");
         assert_eq!(format_duration(60_000), "1m 0s");
         assert_eq!(format_duration(125_000), "2m 5s");
+    }
+
+    #[test]
+    fn display_width_counts_ascii_and_empty_strings() {
+        assert_eq!(display_width("abc"), 3);
+        assert_eq!(display_width(""), 0);
+    }
+
+    #[test]
+    fn display_width_counts_east_asian_wide_glyphs() {
+        assert_eq!(display_width("测"), 2);
+        assert_eq!(display_width("测 试目录"), 9);
+    }
+
+    #[test]
+    fn display_width_counts_combining_marks_with_their_base() {
+        assert_eq!(display_width("e\u{301}"), 1);
+        assert_eq!(display_width("e\u{301}tude"), 5);
+    }
+
+    #[test]
+    fn wide_glyph_paths_compact_on_display_columns_not_scalar_count() {
+        let wide_run = "测".repeat(23);
+        let path = format!("/测测/测测/{wide_run}");
+        assert!(
+            path.chars().count() <= 52,
+            "fixture must stay under the old scalar threshold"
+        );
+        assert!(display_width(&path) > 52);
+        assert_eq!(display_path(&path, None), format!("…/测测/{wide_run}"));
+    }
+
+    #[test]
+    fn ascii_path_at_display_width_threshold_is_not_compacted() {
+        let path = format!("/{}", "a".repeat(51));
+        assert_eq!(display_width(&path), 52);
+        assert_eq!(display_path(&path, None), path);
     }
 
     #[test]

@@ -281,12 +281,13 @@ segments, sanitizes all returned text centrally, then applies the theme. Its
 default hierarchy is:
 
 1. explicit production state, otherwise SSH state;
-2. compact working path;
+2. compact working path using display columns (not Unicode scalar counts) with
+   a 52-column compaction threshold;
 3. Git branch and staged/modified/untracked counts;
 4. non-zero exit status;
 5. duration when at least two seconds.
 
-Repository-controlled branch/path/host text is bounded to 256 characters and
+Repository-controlled branch/path/host text is bounded to 256 **characters** and
 strips control characters, `$`, backticks, and backslashes before entering PS1.
 The current `RepositoryStatusProvider` is the bounded prompt slice of ADR 0007.
 At composition time it resolves Git only from executable files in absolute
