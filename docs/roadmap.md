@@ -554,10 +554,11 @@ Exit condition: `G5` after every `HRD-*` item is complete.
 percentile leftovers are `deferred` and must not block product slices
 (`docs/latency-budget-deferral.md`).
 
-1. `COMP-002` leftover matrix (aliases, redirections, Unicode, incomplete
-   quotes, `--`, nested commands, slow/stateful fallthrough, adapter latency) —
-   core P-1–P-4 is in `validation`; `G4` stays `discovery`. Do not mark `G3`,
-   `EDT-001`, `COMP-001`, or `COMP-002` complete.
+1. `COMP-002` leftover insertion matrix L-1–L-4 — follow
+   `docs/comp-002-leftover-matrix-plan.md` (alias, redirection, Unicode,
+   incomplete quote). `--` / nested / slow fallthrough / adapter latency stay
+   for a later leftover. `G4` stays `discovery`. Do not mark `G3`, `EDT-001`,
+   `COMP-001`, or `COMP-002` complete.
 2. `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
    slice on FND-001 SHA refresh or percentile benches unless a functional
    prompt-path defect is proven.
@@ -664,3 +665,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Completed `COMP-001` non-popup stock-completion adapter harness H-1–H-4 (`docs/comp-001-harness-plan.md`; `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`). `COMP-001` moves to `validation`; `G4` stays `discovery`. Do not mark `G4` or `COMP-001` complete. |
 | 2026-08-16 | Completed `COMP-002` core exact-insertion parity P-1–P-4 (`docs/comp-002-parity-plan.md`; `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`). `COMP-002` moves to `validation`; `G4` stays `discovery`. Leftover matrix and latency budget remain. |
 | 2026-08-16 | Gated completion test fixtures behind `MBX_COMP_FIXTURES=1` and added inspect-before-wrap (`_mbx_comp_wrap_existing_f`; F-1–F-4). `COMP-002` stays `validation`; `G4` stays `discovery`. Leftover matrix remains. |
+| 2026-08-16 | Specified `COMP-002` leftover insertion matrix L-1–L-4 in `docs/comp-002-leftover-matrix-plan.md`. `--` / nested / slow fallthrough / latency remain a later leftover. `G4` stays `discovery`. |
