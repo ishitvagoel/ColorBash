@@ -92,6 +92,7 @@ product change** beyond tests and this plan's status column.
 
 ## Remaining after this slice
 
-Slow/stateful wrap fallthrough S-1–S-4 is specified in
-`docs/comp-002-fallthrough-plan.md`. After that: the provisional 5 ms
-adapter overhead budget. Popup stays blocked until `G4` passes.
+Slow/stateful wrap fallthrough S-1–S-4 is in `validation`
+(`docs/comp-002-fallthrough-plan.md`). The `G4` decision is specified in
+`docs/g4-decision-plan.md`. The 5 ms leftover stays `deferred`. Popup
+stays blocked until `G4` passes.

@@ -121,5 +121,6 @@ Do not add a timeout.
 
 ## Remaining after this slice
 
-The provisional 5 ms adapter overhead budget (`deferred`). Then a `G4`
-decision. Popup stays blocked until `G4` passes.
+The `G4` decision is specified in `docs/g4-decision-plan.md`. The
+provisional 5 ms adapter overhead budget stays `deferred`. Popup stays
+blocked until `G4` passes.

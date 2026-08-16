@@ -7,7 +7,7 @@
 
 - Last reviewed: 2026-08-16 UTC
 - Current milestone: Phase 3A sidecar implemented; `G0` and `G2` complete; `G1` accepted
-- Active workstream: `COMP-002` wrap fallthrough complete (`COMP-002` in `validation`; `G4` in `discovery`; `G3` / `EDT-001` in `validation`)
+- Active workstream: `G4` decision (`COMP-002` in `validation`; `G4` in `discovery` until `docs/g4-decision-plan.md`; `G3` / `EDT-001` in `validation`)
 - Next decision gate: `G3` editor integration
 - Editor-facing work is blocked by: `G3` editor integration, as identified per phase
 - Timing policy: unmet percentile targets are `deferred` and do not block
@@ -466,7 +466,7 @@ line. Do not move completion functions into a subprocess unless live-state and
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
 | `COMP-001` | Build a non-popup stock-completion adapter harness | `validation` | `docs/comp-001-harness-plan.md`; H-1–H-4 in `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`; `G4` stays `discovery` |
-| `COMP-002` | Prove file and one `-F` function's exact insertion parity | `validation` | `docs/comp-002-parity-plan.md`; P-1–P-4, F-1–F-4, L-1–L-4, N-1–N-2, S-1–S-4 landed; deferred 5 ms budget + `G4` decision remain |
+| `COMP-002` | Prove file and one `-F` function's exact insertion parity | `validation` | `docs/comp-002-parity-plan.md`; P-1–P-4, F-1–F-4, L-1–L-4, N-1–N-2, S-1–S-4 landed; `G4` decision specified in `docs/g4-decision-plan.md`; 5 ms leftover stays `deferred` |
 | `COMP-003` | Add typed candidate metadata and bounded ranking | `blocked` | `G4` |
 | `COMP-004` | Add popup navigation and terminal-safe rendering | `blocked` | `G3`, `G4`, `COMP-003` |
 | `COMP-005` | Insert/fall through exactly and pass the parity/PTY matrix | `blocked` | `COMP-004`, Git candidates when enabled |
@@ -554,10 +554,10 @@ Exit condition: `G5` after every `HRD-*` item is complete.
 percentile leftovers are `deferred` and must not block product slices
 (`docs/latency-budget-deferral.md`).
 
-1. `COMP-002` deferred 5 ms adapter overhead budget — no plan yet; do not
-   block on percentiles (`docs/latency-budget-deferral.md`). `G4` stays
-   `discovery` until a gate decision. Do not mark `G3`, `EDT-001`,
-   `COMP-001`, or `COMP-002` complete.
+1. `G4` decision — follow `docs/g4-decision-plan.md`. Record the functional
+   evidence inventory and defer the 5 ms adapter leftover. Do not bench.
+   Do not mark `G4`, `G3`, `EDT-001`, `COMP-001`, or `COMP-002` complete.
+   Do not start `COMP-003`.
 2. `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
    slice on FND-001 SHA refresh or percentile benches unless a functional
    prompt-path defect is proven.
@@ -670,3 +670,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Completed `COMP-002` `--` and nested insertion N-1–N-2 (`docs/comp-002-dash-nested-plan.md`; `crates/pty/tests/completion_harness.rs`). N-2 observation uses `echo $(printf ...)` because `:` captures printf stdout in substitution. `COMP-002` stays `validation`; `G4` stays `discovery`. Slow/stateful fallthrough remains. |
 | 2026-08-16 | Specified `COMP-002` slow/stateful wrap fallthrough S-1–S-4 in `docs/comp-002-fallthrough-plan.md`. Adapter latency stays `deferred`. `G4` stays `discovery`. |
 | 2026-08-16 | Completed `COMP-002` slow/stateful wrap fallthrough S-1–S-4 (`docs/comp-002-fallthrough-plan.md`; `crates/pty/tests/completion_harness.rs`). `COMP-002` stays `validation`; `G4` stays `discovery`. Deferred 5 ms budget remains. |
+| 2026-08-16 | Specified `G4` decision inventory in `docs/g4-decision-plan.md`. Functional COMP-002 cases are recorded; 5 ms leftover stays `deferred`. Do not mark `G4` complete. |
