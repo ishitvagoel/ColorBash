@@ -42,7 +42,9 @@ Foreign-user open (F-1–F-4) is recorded in `docs/history-g2-foreign-user-plan.
 Cloud remeasure on 2026-08-16 also misses the write-ack budget (p95=2546 µs);
 see `docs/benchmarks/2026-08-16-history-write-ack-cloud.md`.
 
-This does not complete `G2`. The write-ack budget remains.
+`G2` later closed with this leftover `deferred` (not a budget pass;
+`docs/history-g2-write-ack-deferral.md`). The documented 2 ms / 5 ms budget
+is unchanged.
 WAL crash/corrupt recovery, WAL/SHM `0600` never-more-permissive, and many-match
 prefix covering-index evidence are recorded in `crates/cli/src/storage.rs` and
 `docs/benchmarks/2026-08-16-history-prefix.md`.

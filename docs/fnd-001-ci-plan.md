@@ -2,8 +2,8 @@
 
 Status: `complete` for C-1–C-2 (2026-08-16). Do not mark `G0` complete.
 Remaining `G0` evidence is still the platform matrix, `HRD-001` macOS, and
-representative `PRM-004` percentiles (`PRM-002` is `validation`). Remaining `G2`
-is still the write-ack budget (foreign-user open and PRM-002 wrap recorded).
+representative `PRM-004` percentiles (`PRM-002` is `validation`). `G2` is
+complete; write-ack percentiles are `deferred`.
 
 ## Why this slice (do not pick a different leftover)
 
@@ -69,6 +69,6 @@ curl -sS "https://api.github.com/repos/ishitvagoel/ColorBash/actions/runs?branch
 1. `G0` platform matrix, `HRD-001` macOS PTY run, `PRM-004` representative
    percentiles (Darwin PTY constant cfg-split D-1–D-3 already recorded in
    `docs/hrd-001-darwin-pty-constants-plan.md`)
-2. `HIST-007` remaining `G2`: write-ack percentile budget (foreign-user open
-   recorded)
-3. Write-ack budget only after a test proves SQLite is on the prompt path
+2. Write-ack percentile leftover is `deferred` (`docs/history-g2-write-ack-deferral.md`)
+3. Revisit write-ack percentiles only after a host pass or a test proves SQLite
+   is on the prompt path

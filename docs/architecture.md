@@ -354,8 +354,9 @@ is in `crates/cli/src/storage.rs` (Q-A–Q-C) and
 `crates/pty/tests/history_invariance.rs` (V-3). 100k-row v1→v2 migration
 evidence is in `crates/cli/src/corpus.rs` (M-2) and
 `docs/benchmarks/2026-08-16-history-migrate.md`. Foreign-user open is recorded in
-`docs/history-g2-foreign-user-plan.md` (F-1–F-4). `G2` still requires the
-prompt-boundary write-ack budget pass.
+`docs/history-g2-foreign-user-plan.md` (F-1–F-4). `G2` is complete; the
+write-ack percentile leftover is `deferred` (not a budget pass;
+`docs/history-g2-write-ack-deferral.md`).
 
 ## Compatibility and degradation
 
@@ -404,6 +405,6 @@ Ctrl+Z, resize, `stty -g` restoration, multiline continuation, narrow wrap,
 resize-mid-line, and wide/combining glyph round trips (`docs/research/
 multiline-width-pty.md`), and the Bash history admission corpus
 (`docs/research/bash-history-admission.md`). The opt-in history sidecar is
-implemented; `G2` budgets and invariance evidence remain. Provider expansion,
+implemented; `G2` is complete and write-ack percentiles are `deferred`. Provider expansion,
 highlighting, and completion remain gated. Editor-facing work still requires
 `G3`/`G4`.

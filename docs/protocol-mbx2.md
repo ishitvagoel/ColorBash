@@ -1,7 +1,8 @@
 # MBX2 protocol — history record ingestion
 
-Status: implemented for the Phase 3A RECORD slice (`HIST-007`). Remaining `G2`
-evidence is prompt-boundary write-ack budget pass and foreign-user open.
+Status: implemented for the Phase 3A RECORD slice (`HIST-007`). `G2` is
+complete. Write-ack percentiles are `deferred`
+(`docs/history-g2-write-ack-deferral.md`). Foreign-user open is recorded.
 Invariance, admission-parity, hostile inertness, 100k query p95,
 concurrent-writer contention, write-ack correctness, WAL crash/corrupt recovery,
 WAL/SHM `0600` never-more-permissive, many-match prefix covering-index, writer

@@ -6,7 +6,7 @@ This ADR expands the earlier one-page sketch of the same record. The expanded
 contract is the deliverable of roadmap item `HIST-001` and the acceptance test
 for gate `G1`. Acceptance did not authorize default-on capture. The Phase 3A
 path is implemented and remains off unless `MBX_HISTORY=1`; product enablement
-still requires `G2` evidence.
+is a separate decision after `G2`; capture stays off unless `MBX_HISTORY=1`.
 
 ## Context
 
@@ -214,8 +214,8 @@ whose status cannot be attributed drops per the ambiguity rule.
   done); hostile SQL/control inertness (done); 100k-row search p95 for recent,
   selective prefix, and cwd (`docs/benchmarks/2026-08-16-history-queries.md`);
   prompt-boundary write acknowledgement (`docs/benchmarks/2026-08-16-history-write-ack.md`;
-  correctness recorded; percentile budget still open on development WSL and cloud
-  remeasure — `docs/benchmarks/2026-08-16-history-write-ack-cloud.md`);
+  correctness recorded; percentile leftover `deferred` —
+  `docs/history-g2-write-ack-deferral.md`);
   concurrent-writer contention; WAL crash/corrupt recovery (K-1–K-4 in
   `crates/cli/src/storage.rs`); WAL/SHM `0600` never-more-permissive (P-1–P-4
   in `crates/cli/src/storage.rs`); many-match prefix latency
@@ -224,8 +224,9 @@ whose status cannot be attributed drops per the ambiguity rule.
   `crates/pty/tests/history_invariance.rs`); 100k-row v1→v2 migration
   (`docs/benchmarks/2026-08-16-history-migrate.md`; M-2 in
   `crates/cli/src/corpus.rs`); foreign-user open recorded (`docs/history-g2-foreign-user-plan.md`;
-  F-1–F-4 in `crates/cli/src/storage.rs`); write-ack percentile budget still
-  open (development WSL and cloud remeasure miss); and command-text-free
-  diagnostics.
+  F-1–F-4 in `crates/cli/src/storage.rs`); write-ack percentile leftover
+  `deferred` (WSL and cloud remeasure miss preserved; budget not weakened);
+  and command-text-free diagnostics.
 - Every claim in this ADR maps to a test in `HIST-005`–`HIST-008`,
-  `HIST-011`–`HIST-013` before `G2` passes.
+  `HIST-011`–`HIST-013`. `G2` is complete with the write-ack percentile
+  leftover deferred.

@@ -45,4 +45,6 @@ Interpretation:
 - Development WSL miss history is preserved in
   `docs/benchmarks/2026-08-16-history-write-ack.md`.
 
-This does not complete `G2`. The write-ack budget remains open.
+`G2` later closed with this leftover `deferred` (not a budget pass;
+`docs/history-g2-write-ack-deferral.md`). The documented 2 ms / 5 ms budget
+is unchanged.
