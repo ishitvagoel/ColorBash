@@ -210,7 +210,8 @@ whose status cannot be attributed drops per the ambiguity rule.
   prompt-boundary write acknowledgement (`docs/benchmarks/2026-08-16-history-write-ack.md`;
   correctness recorded; percentile budget still open on development WSL);
   concurrent-writer contention; WAL crash/corrupt recovery (K-1–K-4 in
-  `crates/cli/src/storage.rs`); many-match prefix latency; permission tests;
-  and command-text-free diagnostics.
+  `crates/cli/src/storage.rs`); WAL/SHM `0600` never-more-permissive (P-1–P-4
+  in `crates/cli/src/storage.rs`); many-match prefix latency; foreign-user
+  open; and command-text-free diagnostics.
 - Every claim in this ADR maps to a test in `HIST-005`–`HIST-008`,
   `HIST-011`–`HIST-013` before `G2` passes.

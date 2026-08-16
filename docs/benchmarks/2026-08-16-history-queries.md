@@ -32,6 +32,7 @@ Interpretation:
 
 This does not complete `G2`. Prompt-boundary write-ack percentiles are recorded
 in `docs/benchmarks/2026-08-16-history-write-ack.md` (budget miss on the
-development WSL host). WAL crash/corrupt recovery is recorded in
-`crates/cli/src/storage.rs`. The write-ack budget gate, permission checks
-beyond mode bits, and many-match prefix latency remain.
+development WSL host). WAL crash/corrupt recovery and WAL/SHM `0600`
+never-more-permissive evidence are recorded in `crates/cli/src/storage.rs`.
+The write-ack budget gate, foreign-user open, and many-match prefix latency
+remain.

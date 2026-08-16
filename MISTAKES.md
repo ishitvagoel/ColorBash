@@ -610,3 +610,23 @@ to prevent recurrence, not to assign blame.
 - Evidence: `open_read_connection`, `try_migrate`, and `execute_batch_with_lock_retry`
   in `crates/cli/src/storage.rs`; concurrent-writer tests C-1–C-3 and C-6.
 
+## M-033 — Unconditional chmod widened restrictive store modes
+
+- Discovered: 2026-08-16
+- Status: Fixed
+- Failed assumption: `set_permissions(0700/0600)` on every open was equivalent to
+  ADR 0005's "never make existing files more permissive" rule and covered WAL/SHM
+  mode bits.
+- Impact: a store left at owner-read-only `0400` or `0000` was widened to `0600`
+  on reopen; `-wal`/`-shm` could remain at umask defaults because only the main
+  database path was chmod'd.
+- Correction: newly created directories and databases receive `0700`/`0600`;
+  existing paths use `tighten_mode` (`(current & 0o777) & max_mode`) so bits are
+  never added. `restrict_store_permissions` then tightens the directory,
+  database, `-wal`, and `-shm` after WAL setup and migration.
+- Prevention: permission tests must cover WAL/SHM sidecars, world-accessible
+  tightening, and restrictive modes that must not widen. Assign target modes
+  only on first create; never assign them unconditionally on every open.
+- Evidence: `tighten_mode`, `restrict_store_permissions`, and permission tests
+  P-1–P-4 in `crates/cli/src/storage.rs`; `docs/history-g2-permission-plan.md`.
+

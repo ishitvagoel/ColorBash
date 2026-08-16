@@ -38,6 +38,6 @@ Interpretation:
   sample-file mode, samples present at prompt return before SQLite drain, and
   empty Enter produces no sample.
 
-This does not complete `G2`. The write-ack budget, permission checks beyond
-mode bits, and many-match prefix latency remain. WAL crash/corrupt recovery
-is recorded in `crates/cli/src/storage.rs`.
+This does not complete `G2`. The write-ack budget, foreign-user open, and
+many-match prefix latency remain. WAL crash/corrupt recovery and WAL/SHM `0600`
+never-more-permissive evidence are recorded in `crates/cli/src/storage.rs`.

@@ -171,8 +171,8 @@ write-ack budget, permission beyond mode bits, many-match prefix:
   G2" sentences
 - This file: set Status to `complete` for K-1–K-4 once tests pass
 
-Immediate next work after this slice: permission-beyond-mode-bits **or**
-many-match prefix (separate plans). Not write-ack product optimization.
+Immediate next work after this slice: WAL/SHM `0600` plus never-more-permissive
+(`docs/history-g2-permission-plan.md`). Not write-ack product optimization.
 
 ## Implementation checklist (do in this order)
 
@@ -284,7 +284,7 @@ success.
 
 ## Follow-on `G2` slices (not this change)
 
-1. Permission checks beyond mode bits / foreign-user open (`HIST-004` case 7),
-   including WAL/SHM `0600` if still untested.
-2. Many-match prefix latency (schema/index ADR).
-3. Write-ack budget only after a test proves SQLite is on the prompt path.
+1. WAL/SHM `0600` plus never-more-permissive (`docs/history-g2-permission-plan.md`).
+2. Foreign-user open (`HIST-004` case 7 remainder) when a second uid exists.
+3. Many-match prefix latency (schema/index ADR).
+4. Write-ack budget only after a test proves SQLite is on the prompt path.

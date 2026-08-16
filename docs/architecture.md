@@ -340,9 +340,10 @@ and `crates/cli/src/corpus.rs`. Prompt-boundary write-ack PTY and release
 percentile evidence is in `crates/pty/tests/history_write_ack.rs` and
 `docs/benchmarks/2026-08-16-history-write-ack.md` (correctness recorded;
 percentile budget still open on development WSL). WAL crash/corrupt recovery
-evidence is in `crates/cli/src/storage.rs` (`docs/history-g2-wal-crash-plan.md`).
-`G2` still requires prompt-boundary write-ack budget pass, many-match prefix
-latency, and permission checks beyond mode bits.
+and WAL/SHM `0600` never-more-permissive evidence are in
+`crates/cli/src/storage.rs` (`docs/history-g2-wal-crash-plan.md`,
+`docs/history-g2-permission-plan.md`). `G2` still requires prompt-boundary
+write-ack budget pass, many-match prefix latency, and foreign-user open.
 
 ## Compatibility and degradation
 

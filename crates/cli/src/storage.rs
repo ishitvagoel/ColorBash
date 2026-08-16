@@ -249,14 +249,8 @@ impl HistoryControl for QueuedHistoryStore {
 
     fn delete(&self) -> Result<(), HistoryError> {
         let mut paths = vec![self.store_path.clone()];
-        paths.push(self.store_path.with_file_name(format!(
-            "{}-wal",
-            self.store_path.file_name().map(|name| name.to_string_lossy()).unwrap_or_default()
-        )));
-        paths.push(self.store_path.with_file_name(format!(
-            "{}-shm",
-            self.store_path.file_name().map(|name| name.to_string_lossy()).unwrap_or_default()
-        )));
+        paths.push(store_sidecar_path(&self.store_path, "-wal"));
+        paths.push(store_sidecar_path(&self.store_path, "-shm"));
         for path in paths {
             let _ = fs::remove_file(path);
         }
@@ -281,27 +275,72 @@ pub fn default_store_path() -> PathBuf {
     path
 }
 
+fn store_sidecar_path(store_path: &Path, suffix: &str) -> PathBuf {
+    store_path.with_file_name(format!(
+        "{}{suffix}",
+        store_path
+            .file_name()
+            .map(|name| name.to_string_lossy())
+            .unwrap_or_default()
+    ))
+}
+
+fn tighten_mode(path: &Path, max_mode: u32) -> Result<(), HistoryError> {
+    if !path.exists() {
+        return Ok(());
+    }
+    let current = fs::metadata(path)
+        .map_err(io_error(HistoryErrorKind::Open))?
+        .permissions()
+        .mode()
+        & 0o777;
+    let new_mode = current & max_mode;
+    if new_mode != current {
+        fs::set_permissions(path, fs::Permissions::from_mode(new_mode))
+            .map_err(io_error(HistoryErrorKind::Open))?;
+    }
+    Ok(())
+}
+
+fn apply_created_mode(path: &Path, mode: u32) -> Result<(), HistoryError> {
+    fs::set_permissions(path, fs::Permissions::from_mode(mode))
+        .map_err(io_error(HistoryErrorKind::Open))
+}
+
+fn restrict_store_permissions(store_path: &Path) -> Result<(), HistoryError> {
+    if let Some(dir) = store_path.parent() {
+        tighten_mode(dir, DIR_MODE)?;
+    }
+    tighten_mode(store_path, FILE_MODE)?;
+    tighten_mode(&store_sidecar_path(store_path, "-wal"), FILE_MODE)?;
+    tighten_mode(&store_sidecar_path(store_path, "-shm"), FILE_MODE)?;
+    Ok(())
+}
+
 fn create_store_dir(store_path: &Path) -> Result<(), HistoryError> {
     let dir = store_path
         .parent()
         .ok_or_else(|| HistoryError::new(HistoryErrorKind::Open, "store path has no parent"))?;
-    if !dir.exists() {
-        fs::create_dir_all(dir).map_err(io_error(HistoryErrorKind::Open))?;
+    if dir.exists() {
+        return tighten_mode(dir, DIR_MODE);
     }
-    fs::set_permissions(dir, fs::Permissions::from_mode(DIR_MODE))
-        .map_err(io_error(HistoryErrorKind::Open))
+    fs::create_dir_all(dir).map_err(io_error(HistoryErrorKind::Open))?;
+    apply_created_mode(dir, DIR_MODE)
 }
 
 fn open_connection(store_path: &Path) -> Result<rusqlite::Connection, HistoryError> {
+    let created = !store_path.exists();
     let connection =
         rusqlite::Connection::open(store_path).map_err(history_error(HistoryErrorKind::Open))?;
-    fs::set_permissions(store_path, fs::Permissions::from_mode(FILE_MODE))
-        .map_err(io_error(HistoryErrorKind::Open))?;
+    if created {
+        apply_created_mode(store_path, FILE_MODE)?;
+    }
     connection
         .busy_timeout(Duration::from_millis(BUSY_TIMEOUT_MS))
         .map_err(history_error(HistoryErrorKind::Open))?;
     ensure_wal_mode(&connection)?;
     migrate(&connection)?;
+    restrict_store_permissions(store_path)?;
     Ok(connection)
 }
 
@@ -1279,6 +1318,155 @@ mod tests {
             bytes.iter().all(|byte| *byte == 0xFF),
             "corrupt main db must not be replaced with a new sqlite file"
         );
+        drop(dir);
+    }
+
+    const PERM_SENTINEL: &str = "secret-perm-token";
+
+    fn mode_of(path: &Path) -> u32 {
+        std::fs::metadata(path).unwrap().permissions().mode() & 0o777
+    }
+
+    fn chmod(path: &Path, mode: u32) {
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap();
+    }
+
+    fn commit_perm_sentinel(path: &Path) {
+        let store = QueuedHistoryStore::open(path, 8).unwrap();
+        enqueue(
+            &store,
+            entry("s1", 1, PERM_SENTINEL, "/w", "2026-08-16T12:00:00Z"),
+        );
+        drop(store);
+    }
+
+    fn assert_closed_perm_error(error: &HistoryError) {
+        assert!(
+            matches!(
+                error.kind(),
+                HistoryErrorKind::Open
+                    | HistoryErrorKind::Migrate
+                    | HistoryErrorKind::StorageFailure
+            ),
+            "unexpected kind: {error}"
+        );
+        let shown = error.to_string();
+        assert!(!shown.contains(PERM_SENTINEL), "{shown}");
+        let diagnostic = history_failure_diagnostic(error);
+        assert_eq!(
+            diagnostic,
+            format!("event=history_storage_error kind={}", error.kind().as_str())
+        );
+        assert!(!diagnostic.contains(PERM_SENTINEL), "{diagnostic}");
+    }
+
+    #[test]
+    fn wal_and_shm_files_are_user_only() {
+        let (dir, path) = temp_store("p1");
+        let store = QueuedHistoryStore::open(&path, 8).unwrap();
+        enqueue(
+            &store,
+            entry("s1", 1, PERM_SENTINEL, "/w", "2026-08-16T12:00:00Z"),
+        );
+        assert_eq!(mode_of(dir.path()), 0o700);
+        assert_eq!(mode_of(&path), 0o600);
+        let wal = sidecar(&path, "-wal");
+        let shm = sidecar(&path, "-shm");
+        assert!(
+            wal.exists(),
+            "WAL sidecar must exist while the writer is live"
+        );
+        assert!(
+            shm.exists(),
+            "SHM sidecar must exist while the writer is live"
+        );
+        assert_eq!(mode_of(&wal), 0o600);
+        assert_eq!(mode_of(&shm), 0o600);
+        drop(store);
+        drop(dir);
+    }
+
+    #[test]
+    fn world_accessible_store_is_tightened() {
+        let (dir, path) = temp_store("p2");
+        {
+            let store = QueuedHistoryStore::open(&path, 8).unwrap();
+            enqueue(
+                &store,
+                entry("s1", 1, PERM_SENTINEL, "/w", "2026-08-16T12:00:00Z"),
+            );
+            let wal = sidecar(&path, "-wal");
+            let shm = sidecar(&path, "-shm");
+            assert!(
+                wal.exists(),
+                "WAL sidecar must exist while the writer is live"
+            );
+            assert!(
+                shm.exists(),
+                "SHM sidecar must exist while the writer is live"
+            );
+            chmod(dir.path(), 0o777);
+            chmod(&path, 0o644);
+            chmod(&wal, 0o666);
+            chmod(&shm, 0o666);
+            drop(store);
+        }
+        let store = QueuedHistoryStore::open(&path, 8).unwrap();
+        assert_eq!(mode_of(dir.path()), 0o700);
+        assert_eq!(mode_of(&path), 0o600);
+        let wal = sidecar(&path, "-wal");
+        let shm = sidecar(&path, "-shm");
+        assert!(
+            wal.exists(),
+            "WAL sidecar must exist while the writer is live"
+        );
+        assert!(
+            shm.exists(),
+            "SHM sidecar must exist while the writer is live"
+        );
+        assert_eq!(mode_of(&wal), 0o600);
+        assert_eq!(mode_of(&shm), 0o600);
+        assert_eq!(store.count().unwrap(), 1);
+        assert_eq!(store.recent(1).unwrap()[0].command_text, PERM_SENTINEL);
+        drop(store);
+        drop(dir);
+    }
+
+    #[test]
+    fn restrictive_file_is_not_made_more_permissive() {
+        let (dir, path) = temp_store("p3");
+        commit_perm_sentinel(&path);
+        chmod(&path, 0o400);
+        match QueuedHistoryStore::open(&path, 8) {
+            Ok(store) => {
+                assert_eq!(mode_of(&path), 0o400);
+                assert_eq!(store.count().unwrap(), 1);
+                drop(store);
+            }
+            Err(error) => {
+                assert_closed_perm_error(&error);
+                assert_eq!(mode_of(&path), 0o400);
+                assert!(path.exists());
+                assert_ne!(std::fs::metadata(&path).unwrap().len(), 0);
+            }
+        }
+        drop(dir);
+    }
+
+    #[test]
+    fn unreadable_store_fails_closed_without_widening() {
+        let (dir, path) = temp_store("p4");
+        commit_perm_sentinel(&path);
+        let original_len = std::fs::metadata(&path).unwrap().len();
+        chmod(&path, 0o000);
+        let error = match QueuedHistoryStore::open(&path, 8) {
+            Err(error) => error,
+            Ok(_) => panic!("mode 0000 store must not open"),
+        };
+        assert_closed_perm_error(&error);
+        assert_eq!(mode_of(&path), 0o000);
+        assert!(path.exists());
+        assert_eq!(std::fs::metadata(&path).unwrap().len(), original_len);
         drop(dir);
     }
 }
