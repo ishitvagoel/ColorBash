@@ -1,6 +1,6 @@
 # PRM-006 slice: duration-timing policy decision
 
-Status: `ready` (2026-08-16). `G3` and `G4` are in `validation`. This packet
+Status: `validation` (2026-08-16). `G3` and `G4` are in `validation`. This packet
 records the duration-timing decision: remain opt-in; do not compose an
 unknown `DEBUG` trap; do not add a bash-preexec adapter. Do not mark
 `PRM-006`, `G3`, or `G4` complete.
@@ -10,7 +10,7 @@ Do not start ghost, popup, highlighting, or `COMP-003`.
 ## Why this slice
 
 Immediate next work after the `G3` inventory. Architecture reassessment
-item 6 and `PRM-006` are still `discovery`. Existing smoke already proves
+item 6 and `PRM-006` were `discovery` until this slice. Existing smoke already proves
 default install leaves `DEBUG` alone and opt-in records duration. This is
 a **decision / inventory** slice, same size as `docs/g3-decision-plan.md`.
 
@@ -50,10 +50,10 @@ a **decision / inventory** slice, same size as `docs/g3-decision-plan.md`.
 
 | ID | Claim | Evidence | Status |
 | --- | --- | --- | --- |
-| D-1 | Default install does not install `DEBUG` | `tests/bash/smoke.bash`: after `source init.bash`, `trap -p DEBUG` matches the pre-source value; `_MBX_DURATION_TIMING=0` | pending |
-| D-2 | Existing `DEBUG` trap is preserved when timing is off | Same smoke case: `preserved:0` | pending |
-| D-3 | Opt-in records duration | `MBX_ENABLE_DURATION_TIMING=1`; after `sleep 0.02`, `_MBX_LAST_DURATION_MS` is a number `>= 10` | pending |
-| D-4 | Policy | Remain opt-in. Do not compose unknown `DEBUG`. Do not add a preexec adapter. History and ranking keep nullable duration. | pending |
+| D-1 | Default install does not install `DEBUG` | `tests/bash/smoke.bash`: after `source init.bash`, `trap -p DEBUG` matches the pre-source value; `_MBX_DURATION_TIMING=0` | validation — `tests/bash/smoke.bash` (`preserved:0`) |
+| D-2 | Existing `DEBUG` trap is preserved when timing is off | Same smoke case: `preserved:0` | validation — `tests/bash/smoke.bash` |
+| D-3 | Opt-in records duration | `MBX_ENABLE_DURATION_TIMING=1`; after `sleep 0.02`, `_MBX_LAST_DURATION_MS` is a number `>= 10` | validation — `tests/bash/smoke.bash` |
+| D-4 | Policy | Remain opt-in. Do not compose unknown `DEBUG`. Do not add a preexec adapter. History and ranking keep nullable duration. | validation — recorded in this plan |
 
 If a measured result differs, keep the host bytes and write them into that
 row's Status cell. Do not “fix” trap composition.

@@ -401,8 +401,7 @@ highlighting:
    COMP-001 H-1–H-4, COMP-002 P-1–P-4 and inspect-before-wrap F-1–F-4;
    leftover matrix, N-1–N-2, wrap fallthrough S-1–S-4, and `G4` decision
    in `docs/g4-decision-plan.md`);
-6. decide whether duration timing remains opt-in or integrates with an existing
-   preexec framework through an explicit adapter
+6. duration timing remains opt-in; do not compose unknown `DEBUG` traps
    (`docs/prm-006-duration-plan.md`).
 
 The roadmap, not this architecture description, selects the next slice. A genuine
