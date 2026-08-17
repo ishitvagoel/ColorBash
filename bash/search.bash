@@ -1,16 +1,26 @@
 # shellcheck shell=bash
 # Explicit history-search bind -x (ADR 0009). Replaces READLINE_LINE with one
 # sidecar match without executing it. Not after-every-key decoration.
+# Default insert `\C-xh` and restore `\C-xl` are unbound in stock emacs.
+# Do not use `\C-x\C-r` (re-read-init-file), `\C-x\C-s` (terminal XOFF / IXON),
+# `\C-g` / `\C-x\C-g` (abort), or `\C-r` (reverse-i-search).
 
 _MBX_SEARCH_DEFAULT_KEYSEQ='\C-xh'
+_MBX_SEARCH_RESTORE_DEFAULT_KEYSEQ='\C-xl'
 _MBX_SEARCH_DEFAULT_LIMIT=8
 _MBX_SEARCH_MAX_LIMIT=16
 _MBX_SEARCH_MATCHES=()
 _MBX_SEARCH_INDEX=0
+_MBX_SEARCH_ORIGINAL=
+_MBX_SEARCH_ORIGINAL_POINT=0
+_MBX_SEARCH_HAS_ORIGINAL=0
 
 _mbx_search_clear() {
     _MBX_SEARCH_MATCHES=()
     _MBX_SEARCH_INDEX=0
+    _MBX_SEARCH_ORIGINAL=
+    _MBX_SEARCH_ORIGINAL_POINT=0
+    _MBX_SEARCH_HAS_ORIGINAL=0
 }
 
 _mbx_search_limit() {
@@ -119,6 +129,8 @@ _mbx_search_apply() {
 _mbx_search_insert() {
     local query=${READLINE_LINE-}
     local current=$query
+    local original=$query
+    local original_point=${READLINE_POINT:-0}
     local count
 
     [[ ${MBX_HISTORY:-} == 1 ]] || return 0
@@ -129,10 +141,23 @@ _mbx_search_insert() {
         _mbx_search_apply
         return 0
     fi
-    _mbx_search_query "$query" || return 0
-    ((${#_MBX_SEARCH_MATCHES[@]} > 0)) || return 0
+    if ! _mbx_search_query "$query" || ((${#_MBX_SEARCH_MATCHES[@]} == 0)); then
+        _mbx_search_clear
+        return 0
+    fi
+    _MBX_SEARCH_ORIGINAL=$original
+    _MBX_SEARCH_ORIGINAL_POINT=$original_point
+    _MBX_SEARCH_HAS_ORIGINAL=1
     _MBX_SEARCH_INDEX=0
     _mbx_search_apply
+}
+
+_mbx_search_restore() {
+    [[ ${MBX_HISTORY:-} == 1 ]] || return 0
+    [[ ${_MBX_SEARCH_HAS_ORIGINAL:-0} == 1 ]] || return 0
+    READLINE_LINE=${_MBX_SEARCH_ORIGINAL-}
+    READLINE_POINT=${_MBX_SEARCH_ORIGINAL_POINT:-0}
+    _mbx_search_clear
 }
 
 _mbx_search_keyseq_occupied() {
@@ -146,11 +171,13 @@ _mbx_search_keyseq_occupied() {
 _mbx_search_install_keymap() {
     local keymap=$1
     local keyseq=$2
+    local fn=$3
+    local override=$4
     if _mbx_search_keyseq_occupied "$keyseq" "$keymap" && \
-        [[ ${MBX_SEARCH_OVERRIDE:-0} != 1 ]]; then
+        [[ $override != 1 ]]; then
         return 1
     fi
-    bind -m "$keymap" -x "\"$keyseq\": _mbx_search_insert"
+    bind -m "$keymap" -x "\"$keyseq\": $fn"
 }
 
 _mbx_search_install() {
@@ -160,14 +187,28 @@ _mbx_search_install() {
         return 0
     fi
     local keyseq=${MBX_SEARCH_KEYSEQ:-$_MBX_SEARCH_DEFAULT_KEYSEQ}
+    local restore_keyseq=${MBX_SEARCH_RESTORE_KEYSEQ:-$_MBX_SEARCH_RESTORE_DEFAULT_KEYSEQ}
+    local override=${MBX_SEARCH_OVERRIDE:-0}
+    local restore_override=${MBX_SEARCH_RESTORE_OVERRIDE:-0}
     _MBX_SEARCH_BOUND=0
     _MBX_SEARCH_VI_INSERT_BOUND=0
+    _MBX_SEARCH_RESTORE_BOUND=0
+    _MBX_SEARCH_RESTORE_VI_INSERT_BOUND=0
     _MBX_SEARCH_KEYSEQ_ACTIVE=$keyseq
-    if _mbx_search_install_keymap emacs "$keyseq"; then
+    _MBX_SEARCH_RESTORE_KEYSEQ_ACTIVE=$restore_keyseq
+    if _mbx_search_install_keymap emacs "$keyseq" _mbx_search_insert "$override"; then
         _MBX_SEARCH_BOUND=1
     fi
-    if _mbx_search_install_keymap vi-insert "$keyseq"; then
+    if _mbx_search_install_keymap vi-insert "$keyseq" _mbx_search_insert "$override"; then
         _MBX_SEARCH_VI_INSERT_BOUND=1
+    fi
+    if [[ $restore_keyseq != "$keyseq" ]]; then
+        if _mbx_search_install_keymap emacs "$restore_keyseq" _mbx_search_restore "$restore_override"; then
+            _MBX_SEARCH_RESTORE_BOUND=1
+        fi
+        if _mbx_search_install_keymap vi-insert "$restore_keyseq" _mbx_search_restore "$restore_override"; then
+            _MBX_SEARCH_RESTORE_VI_INSERT_BOUND=1
+        fi
     fi
     _MBX_SEARCH_INSTALLED=1
 }

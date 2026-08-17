@@ -7,6 +7,7 @@ use std::time::Duration;
 
 const CTRL_X: u8 = 0x18;
 const DEFAULT_KEYSEQ: &[u8] = &[CTRL_X, b'h'];
+const DEFAULT_RESTORE_KEYSEQ: &[u8] = &[CTRL_X, b'l'];
 
 fn send_keyseq(session: &mut mbx_pty::PtySession, keyseq: &[u8]) {
     session
@@ -263,5 +264,130 @@ fn snapshot_clears_at_next_prompt() {
         )
         .expect("query snapshot");
     wait_all(&mut session, &["\nMBX_SRCH:cleared", "> "]);
+    exit_and_wait(&mut session);
+}
+
+#[test]
+fn restore_puts_back_typed_prefix() {
+    let home = TempHome::new("srch-r1");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let mut session = spawn_history_shell(home.path(), &enabled_env(data_home_s, histfile_s, &[]));
+    wait_for(&mut session, "> ");
+    type_line(&mut session, "echo MBX_SRCH:alpha");
+    wait_all(&mut session, &["\nMBX_SRCH:alpha", "> "]);
+    wait_for_count(&mbx_bin(), &data_home, 1);
+
+    session
+        .write_str("echo MBX_SRCH:a", deadline(2))
+        .expect("type prefix");
+    wait_all(&mut session, &["echo MBX_SRCH:a"]);
+    send_keyseq(&mut session, DEFAULT_KEYSEQ);
+    send_keyseq(&mut session, DEFAULT_RESTORE_KEYSEQ);
+    assert_no_marker(&mut session, "\nMBX_SRCH:alpha");
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["MBX_SRCH:a\n", "> "]);
+    exit_and_wait(&mut session);
+}
+
+#[test]
+fn restore_after_cycle_puts_back_typed_prefix() {
+    let home = TempHome::new("srch-r1c");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let mut session = spawn_history_shell(home.path(), &enabled_env(data_home_s, histfile_s, &[]));
+    wait_for(&mut session, "> ");
+    type_line(&mut session, "echo MBX_SRCH:alpha1");
+    wait_all(&mut session, &["\nMBX_SRCH:alpha1", "> "]);
+    type_line(&mut session, "echo MBX_SRCH:alpha2");
+    wait_all(&mut session, &["\nMBX_SRCH:alpha2", "> "]);
+    wait_for_count(&mbx_bin(), &data_home, 2);
+
+    session
+        .write_str("echo MBX_SRCH:a", deadline(2))
+        .expect("type prefix");
+    wait_all(&mut session, &["echo MBX_SRCH:a"]);
+    send_keyseq(&mut session, DEFAULT_KEYSEQ);
+    send_keyseq(&mut session, DEFAULT_KEYSEQ);
+    send_keyseq(&mut session, DEFAULT_RESTORE_KEYSEQ);
+    assert_no_marker(&mut session, "\nMBX_SRCH:alpha");
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["MBX_SRCH:a\n", "> "]);
+    exit_and_wait(&mut session);
+}
+
+#[test]
+fn restore_without_snapshot_is_a_noop() {
+    let home = TempHome::new("srch-r2");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let mut session = spawn_history_shell(home.path(), &enabled_env(data_home_s, histfile_s, &[]));
+    wait_for(&mut session, "> ");
+    session
+        .write_str("echo MBX_SRCH:keep", deadline(2))
+        .expect("type line");
+    wait_all(&mut session, &["echo MBX_SRCH:keep"]);
+    send_keyseq(&mut session, DEFAULT_RESTORE_KEYSEQ);
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["\nMBX_SRCH:keep", "> "]);
+    exit_and_wait(&mut session);
+}
+
+#[test]
+fn occupied_restore_chord_is_not_overwritten() {
+    let home = TempHome::new("srch-r3");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let prelude = concat!(
+        "_mbx_user_search_restore() { :; }\n",
+        "bind -x '\"\\C-xl\": _mbx_user_search_restore'\n",
+    );
+    let mut session = spawn_history_shell_rc(
+        home.path(),
+        &enabled_env(data_home_s, histfile_s, &[]),
+        prelude,
+    );
+    wait_for(&mut session, "> ");
+    session
+        .write_str(
+            "bind -X | grep -F '_mbx_user_search_restore'\n",
+            deadline(2),
+        )
+        .expect("query binding");
+    wait_all(&mut session, &["_mbx_user_search_restore", "> "]);
+    session
+        .write_str(
+            "[[ ${_MBX_SEARCH_RESTORE_BOUND:-missing} == 0 ]] && printf 'MBX_SRCH:restore-refused\\n'\n",
+            deadline(2),
+        )
+        .expect("status");
+    wait_all(&mut session, &["\nMBX_SRCH:restore-refused", "> "]);
+    exit_and_wait(&mut session);
+}
+
+#[test]
+fn default_restore_chord_installs_on_stock_emacs() {
+    let home = TempHome::new("srch-r4");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let mut session = spawn_history_shell(home.path(), &enabled_env(data_home_s, histfile_s, &[]));
+    wait_for(&mut session, "> ");
+    session
+        .write_str(
+            "[[ ${_MBX_SEARCH_RESTORE_BOUND:-missing} == 1 ]] && printf 'MBX_SRCH:restore-bound\\n'\n",
+            deadline(2),
+        )
+        .expect("status");
+    wait_all(&mut session, &["\nMBX_SRCH:restore-bound", "> "]);
     exit_and_wait(&mut session);
 }

@@ -22,7 +22,7 @@ These slices have working code you can exercise in an interactive shell:
 | Failed history search | `MBX_HISTORY=1` then `mbx history search failed` | Rows with nonzero exit status |
 | Repository-context history | `MBX_HISTORY=1` in a Git worktree | Stores root/branch; `search repo ROOT` / `search branch NAME` |
 | History ghost suffix | `MBX_HISTORY=1` and `MBX_GHOST=1` | Suggestion after the cursor on ASCII printables in emacs and vi-insert; Enter runs the typed prefix; Right accepts all; Left / Home / Up / Down / Ctrl-Left dismiss; Alt-F / Ctrl-Right accept one word (emacs); Ctrl-Right in vi-insert; Ctrl-X Ctrl-N / Ctrl-P cycle matches |
-| History-search chord | `MBX_HISTORY=1` then `Ctrl-X` `h` | Replaces the line with a sidecar match; repeat to cycle; does not run it |
+| History-search chord | `MBX_HISTORY=1` then `Ctrl-X` `h` | Replaces the line with a sidecar match; repeat to cycle; `Ctrl-X` `l` restores the typed line; does not run it |
 
 ## What remains
 
@@ -33,7 +33,7 @@ These MVP features are **not** implemented for interactive use:
 | Ghost dim / live paint | Opt-in suffix ghost exists (ADR 0010); dim after-every-key styling does not |
 | Completion popup | Overlay unproven; ranked-accept chord exists |
 | Syntax highlighting | Same continuous-decoration leftover |
-| Enhanced Ctrl+R overlay | Type-to-filter list still needs a leftover; `\C-xh` insert and cycling exist |
+| Enhanced Ctrl+R overlay | Type-to-filter list still needs a leftover; `\C-xh` insert, cycling, and `\C-xl` restore exist |
 | macOS PTY matrix | `HRD-001` needs a macOS host |
 
 Canonical status lives in [`docs/roadmap.md`](docs/roadmap.md). `G0`, `G2`,
@@ -226,7 +226,8 @@ Requires `MBX_HISTORY=1`. Default chord is `Ctrl-X` then `h` so stock
 unchanged. The chord replaces the whole line with a sidecar match (exact
 prefix, then fuzzy; empty line uses newest rows) and does **not** run it
 until Enter. Press the chord again to cycle the bounded snapshot (default
-8 matches). The snapshot clears at the next prompt.
+8 matches). `Ctrl-X` then `l` restores the typed line without running the
+match. The snapshot clears at the next prompt.
 
 ```bash
 MBX_HISTORY=1 bash --noprofile --norc
@@ -237,8 +238,9 @@ printf 'MBX_SRCH:beta\n'
 
 At the next prompt type `printf 'MBX_SRCH:a` and press `Ctrl-X` then `h`, then
 Enter. Expect `MBX_SRCH:alpha`. An empty line plus the same chord inserts the
-newest row. Repeat the chord to cycle older matches. If that chord is already
-bound, MBX leaves it alone unless `MBX_SEARCH_OVERRIDE=1`.
+newest row. Repeat the chord to cycle older matches. `Ctrl-X` then `l` puts the
+typed prefix back. If that chord is already bound, MBX leaves it alone unless
+`MBX_SEARCH_OVERRIDE=1` (insert) or `MBX_SEARCH_RESTORE_OVERRIDE=1` (restore).
 
 ## Prototype controls
 
@@ -268,6 +270,8 @@ MBX_COMP_ACCEPT_KEYSEQ='\C-x\C-a'  # ranked-accept chord (default)
 MBX_COMP_ACCEPT_OVERRIDE=1      # overwrite an occupied ranked-accept chord
 MBX_SEARCH_KEYSEQ='\C-xh'       # history-search chord (default; does not steal Ctrl-R)
 MBX_SEARCH_OVERRIDE=1           # overwrite an occupied search chord
+MBX_SEARCH_RESTORE_KEYSEQ='\C-xl'  # restore typed line (default)
+MBX_SEARCH_RESTORE_OVERRIDE=1   # overwrite an occupied restore chord
 MBX_SEARCH_TIMEOUT=0.10         # helper budget for one search insert
 MBX_SEARCH_LIMIT=8              # bounded snapshot size for cycling (max 16)
 MBX_LOG=trace                   # helper timing/events; never logs command text

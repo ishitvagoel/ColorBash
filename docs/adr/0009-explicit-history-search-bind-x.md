@@ -38,7 +38,12 @@ user presses a dedicated chord does not.
    replaces the entire `READLINE_LINE`; `READLINE_POINT` moves to the end.
    Repeating the chord cycles the snapshot and wraps. The action never executes
    the inserted text. The snapshot clears at the next prompt.
-5. Ghost suggestions, live highlighting, and a GUI completion overlay remain
+5. A dedicated restore chord (default `\C-xl`; unbound in stock emacs; M-040)
+   writes the pre-search `READLINE_LINE` and `READLINE_POINT` back without
+   executing. Occupied restore keyseqs are skipped unless
+   `MBX_SEARCH_RESTORE_OVERRIDE=1`. `MBX_SEARCH_RESTORE_KEYSEQ` may select
+   another sequence. No snapshot, history off, or helper failure is a no-op.
+6. Ghost suggestions, live highlighting, and a GUI completion overlay remain
    blocked on after-every-key decoration / editor ownership. Do not rebind
    printable keys to simulate a search UI.
 
@@ -51,20 +56,20 @@ user presses a dedicated chord does not.
 
 ## Consequences
 
-Phase 8 can ship an explicit search insert and bounded cycling without
-reopening editor ownership. Stock Ctrl+R remains Bash reverse-i-search. A
-metadata overlay, cancel restoration, and 100k-row interactive latency stay
-later `SRCH-*` leftovers. Command text stays out of traces (`M-023`).
+Phase 8 can ship an explicit search insert, bounded cycling, and cancel
+restoration without reopening editor ownership. Stock Ctrl+R remains Bash
+reverse-i-search. A metadata overlay and 100k-row interactive latency stay
+later `SRCH-003` leftovers. Command text stays out of traces (`M-023`).
 
 Later status (2026-08-25): ADR 0010 landed opt-in suffix ghost as Strategy A
-(not dim after-every-key paint). Decision 5's live highlighting and GUI overlay
+(not dim after-every-key paint). Decision 6's live highlighting and GUI overlay
 leftovers remain `deferred` (G5 revisit). Do not treat this ADR as still
 blocking ghost. Default search chord is `\C-xh` after stock `\C-x\C-r`
 (`re-read-init-file`) was found occupied (same inspect-`bind -p` prevention as
-M-040).
+M-040). Restore is `\C-xl`.
 
 ## Validation
 
 PTY evidence in `crates/pty/tests/history_search.rs` and module contracts in
 `tests/bash/modules.bash`. Plans: `docs/srch-001-history-search-plan.md`,
-`docs/srch-001-result-view-plan.md`.
+`docs/srch-001-result-view-plan.md`, `docs/srch-002-cancel-restore-plan.md`.

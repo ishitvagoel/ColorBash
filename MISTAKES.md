@@ -774,7 +774,8 @@ to prevent recurrence, not to assign blame.
   `_MBX_GHOST_VI_BOUND`), and ADR 0010. Recurrence: `\C-x\C-r` was occupied by
   stock `re-read-init-file`, so history search defaults to `\C-xh` with
   `default_chord_installs_on_stock_emacs` in `crates/pty/tests/history_search.rs`
-  and ADR 0009. `\C-x\C-s` is terminal XOFF under IXON.
+  and ADR 0009. `\C-x\C-s` is terminal XOFF under IXON. Restore defaults to
+  `\C-xl` with `default_restore_chord_installs_on_stock_emacs`.
 
 ## M-041 — bind -x inside a keyseq macro drops remaining keys
 
