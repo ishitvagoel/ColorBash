@@ -458,7 +458,7 @@ Down / `\C-n` restores the remembered typed prefix after Up;
 generation IDs is accepted in ADR 0011; overlapping delayed-RESULT PTY remains
 (`GHST-001`). Explicit history search via `bind -x` is Strategy A (ADR 0009;
 `bash/search.bash`; default `\C-xh` insert and `\C-xl` restore; bounded
-cycling). `COMP-004` popup
+cycling; empty-line cwd preference). `COMP-004` popup
 policy records no GUI overlay; ranked-accept `bind -x` evidence is complete
 (`docs/comp-004-ranked-accept-plan.md`).
 `G3` explicit `bind -x` evidence is complete.

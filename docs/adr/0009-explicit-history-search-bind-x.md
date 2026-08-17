@@ -32,8 +32,9 @@ user presses a dedicated chord does not.
    startup, timeout, empty output, or failure must leave the line unchanged and
    keep the prompt usable.
 4. The query is `READLINE_LINE` unless the chord is repeating on the current
-   snapshot entry. An empty line requests newest sidecar rows (`history search
-   recent`). A non-empty line tries exact prefix, then fuzzy. Results are
+   snapshot entry. An empty line prefers cwd-scoped rows (`history search cwd
+   "$PWD"`) and falls back to newest sidecar rows (`history search recent`). A
+   non-empty line tries exact prefix, then fuzzy. Results are
    bounded (`MBX_SEARCH_LIMIT`, default 8, max 16). The selected command text
    replaces the entire `READLINE_LINE`; `READLINE_POINT` moves to the end.
    Repeating the chord cycles the snapshot and wraps. The action never executes
@@ -59,7 +60,8 @@ user presses a dedicated chord does not.
 Phase 8 can ship an explicit search insert, bounded cycling, and cancel
 restoration without reopening editor ownership. Stock Ctrl+R remains Bash
 reverse-i-search. A metadata overlay and 100k-row interactive latency stay
-later `SRCH-003` leftovers. Command text stays out of traces (`M-023`).
+later `SRCH-003` leftovers. Empty-line search prefers cwd (HIST-008) before
+recent. Command text stays out of traces (`M-023`).
 
 Later status (2026-08-25): ADR 0010 landed opt-in suffix ghost as Strategy A
 (not dim after-every-key paint). Decision 6's live highlighting and GUI overlay
@@ -72,4 +74,5 @@ M-040). Restore is `\C-xl`.
 
 PTY evidence in `crates/pty/tests/history_search.rs` and module contracts in
 `tests/bash/modules.bash`. Plans: `docs/srch-001-history-search-plan.md`,
-`docs/srch-001-result-view-plan.md`, `docs/srch-002-cancel-restore-plan.md`.
+`docs/srch-001-result-view-plan.md`, `docs/srch-002-cancel-restore-plan.md`,
+`docs/srch-003-cwd-filter-plan.md`.
