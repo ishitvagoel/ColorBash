@@ -10,8 +10,10 @@ The implemented prototype is the hybrid Bash/Rust prompt path plus the Phase 3A
 history sidecar. Interactive Bash calls a native helper, receives presentation
 data, and continues to execute commands with ordinary Bash semantics. When
 explicitly enabled, Bash also observes admitted history and enqueues records
-without modifying `.bash_history`. Ghost suggestions, completion UI, live
-highlighting, and enhanced Ctrl+R remain gated.
+without modifying `.bash_history`. An explicit history-search `bind -x` chord
+(default `\C-xh`, ADR 0009) can insert one sidecar match into the line
+buffer and cycle a bounded snapshot with the same chord. Ghost suggestions,
+completion UI, live highlighting, and a Ctrl+R overlay remain gated.
 
 ## System boundary
 
@@ -55,7 +57,10 @@ bash/
   prompt.bash        fallback orchestration; the only prompt-path PS1 writer
   fallback.bash      Bash-only prompt renderer
   hooks.bash         PROMPT_COMMAND and optional DEBUG integration
+  editor.bash        non-destructive bind -x insert prototype
+  completion.bash    stock completion adapter and ranked-accept chord
   history.bash       opt-in admitted-entry observation and MBX2 RECORD send
+  search.bash        explicit history-search bind -x, cycling, and restore (ADR 0009)
 
 crates/protocol/     dependency-free MBX1 wire model and PromptFlags value type
 crates/cli/src/
@@ -332,8 +337,9 @@ writer commits schema v2 in WAL mode (forward-only migration from v1; see ADR
 `WRITER_BATCH_SIZE=32` for busy ingest, applies retention after full batches
 and shutdown, and treats `(session_id, event_sequence)` as the idempotency key.
 `ACK` means the record was accepted by the queue, not that SQLite has committed.
-Search is a direct CLI operation (`mbx history search recent|prefix|cwd`), not
-an MBX2 query.
+Search is a direct CLI operation
+(`mbx history search recent|prefix|cwd|fuzzy`), not an MBX2 query. Prefix and
+fuzzy accept optional `--cwd`.
 `path`, `count`, `clear`, and `delete` are the privacy controls. Command text
 never enters traces.
 
@@ -427,6 +433,10 @@ multiline-width-pty.md`), and the Bash history admission corpus
 (`docs/research/bash-history-admission.md`). The opt-in history sidecar is
 implemented; `G2` is complete and write-ack percentiles are `deferred`. Provider expansion and
 highlighting remain gated by unproven continuous decoration
-(`docs/g3-gate-close-plan.md`). `COMP-004` popup policy records no GUI overlay;
-ranked-accept `bind -x` evidence is complete (`docs/comp-004-ranked-accept-plan.md`).
+(`docs/g3-gate-close-plan.md`). Explicit history search via `bind -x` is
+Strategy A (ADR 0009; `bash/search.bash`; default `\C-xh` insert and `\C-xl`
+restore; bounded cycling; cwd-scoped empty-line/prefix/fuzzy; Ctrl+C / Ctrl+Z /
+resize / `stty -g` PTY). `COMP-004` popup
+policy records no GUI overlay; ranked-accept `bind -x` evidence is complete
+(`docs/comp-004-ranked-accept-plan.md`).
 `G3` explicit `bind -x` evidence is complete.

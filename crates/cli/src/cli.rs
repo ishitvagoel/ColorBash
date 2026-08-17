@@ -24,10 +24,23 @@ pub enum HistoryCommand {
     Count,
     Clear,
     Delete,
-    SearchRecent { limit: usize },
-    SearchPrefix { prefix: String, limit: usize },
-    SearchCwd { cwd: String, limit: usize },
-    SearchFuzzy { needle: String, limit: usize },
+    SearchRecent {
+        limit: usize,
+    },
+    SearchPrefix {
+        prefix: String,
+        cwd: Option<String>,
+        limit: usize,
+    },
+    SearchCwd {
+        cwd: String,
+        limit: usize,
+    },
+    SearchFuzzy {
+        needle: String,
+        cwd: Option<String>,
+        limit: usize,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -73,9 +86,9 @@ pub fn help_text(version: &str) -> String {
          mbx benchmark-client --socket PATH [--iterations N]\n  \
          mbx history (path|count|clear|delete)\n  \
          mbx history search recent [--limit N]\n  \
-         mbx history search prefix TEXT [--limit N]\n  \
+         mbx history search prefix TEXT [--cwd PATH] [--limit N]\n  \
          mbx history search cwd PATH [--limit N]\n  \
-         mbx history search fuzzy TEXT [--limit N]\n\n\
+         mbx history search fuzzy TEXT [--cwd PATH] [--limit N]\n\n\
          PROMPT OPTIONS:\n  --cwd PATH  --status N  --duration-ms N  --flags BITS\n  \
          --no-color  --ascii  --nerd-font  --ssh  --production  --disable-git"
     )
@@ -172,6 +185,7 @@ fn expect_no_history_args(
 
 fn parse_history_search(args: &[String]) -> Result<HistoryCommand, String> {
     let mut limit = crate::history::DEFAULT_QUERY_LIMIT;
+    let mut cwd = None;
     let kind;
     let mut index;
     match args.first().map(String::as_str) {
@@ -213,15 +227,26 @@ fn parse_history_search(args: &[String]) -> Result<HistoryCommand, String> {
                     ));
                 }
             }
+            "--cwd" => {
+                if matches!(kind, HistorySearchKind::Recent | HistorySearchKind::Cwd(_)) {
+                    return Err("--cwd is only valid for prefix and fuzzy search".to_owned());
+                }
+                index += 1;
+                let value = args.get(index).ok_or("--cwd requires a value")?;
+                if value.is_empty() {
+                    return Err("--cwd requires a value".to_owned());
+                }
+                cwd = Some(value.clone());
+            }
             unknown => return Err(format!("unknown search option: {unknown}")),
         }
         index += 1;
     }
     Ok(match kind {
         HistorySearchKind::Recent => HistoryCommand::SearchRecent { limit },
-        HistorySearchKind::Prefix(prefix) => HistoryCommand::SearchPrefix { prefix, limit },
-        HistorySearchKind::Cwd(cwd) => HistoryCommand::SearchCwd { cwd, limit },
-        HistorySearchKind::Fuzzy(needle) => HistoryCommand::SearchFuzzy { needle, limit },
+        HistorySearchKind::Prefix(prefix) => HistoryCommand::SearchPrefix { prefix, cwd, limit },
+        HistorySearchKind::Cwd(path) => HistoryCommand::SearchCwd { cwd: path, limit },
+        HistorySearchKind::Fuzzy(needle) => HistoryCommand::SearchFuzzy { needle, cwd, limit },
     })
 }
 
@@ -408,8 +433,32 @@ mod tests {
             fuzzy,
             CliCommand::History(HistoryCommand::SearchFuzzy {
                 needle: "git".to_owned(),
+                cwd: None,
                 limit: 3,
             })
+        );
+        let prefix_cwd = parse(
+            &args(&[
+                "history", "search", "prefix", "echo", "--cwd", "/work", "--limit", "4",
+            ]),
+            || panic!("history must not resolve prompt defaults"),
+        )
+        .unwrap();
+        assert_eq!(
+            prefix_cwd,
+            CliCommand::History(HistoryCommand::SearchPrefix {
+                prefix: "echo".to_owned(),
+                cwd: Some("/work".to_owned()),
+                limit: 4,
+            })
+        );
+        assert_eq!(
+            parse(
+                &args(&["history", "search", "recent", "--cwd", "/work"]),
+                || panic!("history must not resolve prompt defaults"),
+            )
+            .unwrap_err(),
+            "--cwd is only valid for prefix and fuzzy search"
         );
     }
 }

@@ -54,6 +54,18 @@ const EXACT_PREFIX_ESCAPE_SQL: &str = "SELECT session_id, event_sequence, histor
      WHERE command_text COLLATE NOCASE LIKE ?1 ESCAPE '\\' \
      ORDER BY completed_at DESC, event_sequence DESC LIMIT ?2";
 
+const EXACT_PREFIX_CWD_SQL: &str = "SELECT session_id, event_sequence, history_number, \
+     command_text, start_cwd, completed_at, status, duration_ms, host, user \
+     FROM history \
+     WHERE command_text COLLATE NOCASE LIKE ?1 AND start_cwd = ?2 \
+     ORDER BY completed_at DESC, event_sequence DESC LIMIT ?3";
+
+const EXACT_PREFIX_CWD_ESCAPE_SQL: &str = "SELECT session_id, event_sequence, history_number, \
+     command_text, start_cwd, completed_at, status, duration_ms, host, user \
+     FROM history \
+     WHERE command_text COLLATE NOCASE LIKE ?1 ESCAPE '\\' AND start_cwd = ?2 \
+     ORDER BY completed_at DESC, event_sequence DESC LIMIT ?3";
+
 enum QueueMessage {
     Write(HistoryEntry),
     Shutdown,
@@ -276,6 +288,23 @@ impl HistorySearch for QueuedHistoryStore {
         }
     }
 
+    fn exact_prefix_in_cwd(
+        &self,
+        prefix: &str,
+        cwd: &str,
+        limit: usize,
+    ) -> Result<Vec<HistoryEntry>, HistoryError> {
+        let connection = open_read_connection(&self.store_path)?;
+        let escaped = escape_like(prefix);
+        let pattern = format!("{escaped}%");
+        let params = [pattern, cwd.to_owned(), limit.to_string()];
+        if escaped == prefix {
+            query(&connection, EXACT_PREFIX_CWD_SQL, &params)
+        } else {
+            query(&connection, EXACT_PREFIX_CWD_ESCAPE_SQL, &params)
+        }
+    }
+
     fn by_cwd(&self, cwd: &str, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError> {
         let connection = open_read_connection(&self.store_path)?;
         query(
@@ -289,18 +318,24 @@ impl HistorySearch for QueuedHistoryStore {
     }
 
     fn fuzzy(&self, needle: &str, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError> {
-        let mut pool = self.recent(crate::history::FUZZY_CANDIDATE_LIMIT)?;
-        pool.retain(|entry| crate::history::fuzzy_score(needle, &entry.command_text) > 0);
-        pool.sort_by(|left, right| {
-            let left_score = crate::history::fuzzy_score(needle, &left.command_text);
-            let right_score = crate::history::fuzzy_score(needle, &right.command_text);
-            right_score
-                .cmp(&left_score)
-                .then_with(|| right.completed_at.cmp(&left.completed_at))
-                .then_with(|| right.event_sequence.cmp(&left.event_sequence))
-        });
-        pool.truncate(limit);
-        Ok(pool)
+        Ok(rank_fuzzy(
+            self.recent(crate::history::FUZZY_CANDIDATE_LIMIT)?,
+            needle,
+            limit,
+        ))
+    }
+
+    fn fuzzy_in_cwd(
+        &self,
+        needle: &str,
+        cwd: &str,
+        limit: usize,
+    ) -> Result<Vec<HistoryEntry>, HistoryError> {
+        Ok(rank_fuzzy(
+            self.by_cwd(cwd, crate::history::FUZZY_CANDIDATE_LIMIT)?,
+            needle,
+            limit,
+        ))
     }
 }
 
@@ -620,6 +655,20 @@ fn env_u64(name: &str, default: u64) -> u64 {
         .ok()
         .and_then(|value| value.parse::<u64>().ok())
         .unwrap_or(default)
+}
+
+fn rank_fuzzy(mut pool: Vec<HistoryEntry>, needle: &str, limit: usize) -> Vec<HistoryEntry> {
+    pool.retain(|entry| crate::history::fuzzy_score(needle, &entry.command_text) > 0);
+    pool.sort_by(|left, right| {
+        let left_score = crate::history::fuzzy_score(needle, &left.command_text);
+        let right_score = crate::history::fuzzy_score(needle, &right.command_text);
+        right_score
+            .cmp(&left_score)
+            .then_with(|| right.completed_at.cmp(&left.completed_at))
+            .then_with(|| right.event_sequence.cmp(&left.event_sequence))
+    });
+    pool.truncate(limit);
+    pool
 }
 
 fn escape_like(value: &str) -> String {
@@ -1092,6 +1141,18 @@ mod tests {
         assert_eq!(prefix.len(), 2);
         let by_cwd = store.by_cwd("/repo", 10).unwrap();
         assert_eq!(by_cwd.len(), 2);
+        let prefix_cwd = store.exact_prefix_in_cwd("git", "/repo", 10).unwrap();
+        assert_eq!(prefix_cwd.len(), 2);
+        assert!(
+            store
+                .exact_prefix_in_cwd("git", "/home", 10)
+                .unwrap()
+                .is_empty()
+        );
+        let fuzzy_home = store.fuzzy_in_cwd("ls", "/home", 10).unwrap();
+        assert_eq!(fuzzy_home.len(), 1);
+        assert_eq!(fuzzy_home[0].command_text, "ls -la");
+        assert!(store.fuzzy_in_cwd("ls", "/repo", 10).unwrap().is_empty());
         drop(dir);
     }
 

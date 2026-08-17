@@ -95,13 +95,17 @@ fn execute_history(command: HistoryCommand) -> Result<(), String> {
             let store = open_history_store()?;
             print_entries(store.recent(limit).map_err(|error| error.to_string())?)
         }
-        HistoryCommand::SearchPrefix { prefix, limit } => {
+        HistoryCommand::SearchPrefix { prefix, cwd, limit } => {
             let store = open_history_store()?;
-            print_entries(
-                store
+            let entries = match cwd {
+                Some(cwd) => store
+                    .exact_prefix_in_cwd(&prefix, &cwd, limit)
+                    .map_err(|error| error.to_string())?,
+                None => store
                     .exact_prefix(&prefix, limit)
                     .map_err(|error| error.to_string())?,
-            )
+            };
+            print_entries(entries)
         }
         HistoryCommand::SearchCwd { cwd, limit } => {
             let store = open_history_store()?;
@@ -111,13 +115,17 @@ fn execute_history(command: HistoryCommand) -> Result<(), String> {
                     .map_err(|error| error.to_string())?,
             )
         }
-        HistoryCommand::SearchFuzzy { needle, limit } => {
+        HistoryCommand::SearchFuzzy { needle, cwd, limit } => {
             let store = open_history_store()?;
-            print_entries(
-                store
+            let entries = match cwd {
+                Some(cwd) => store
+                    .fuzzy_in_cwd(&needle, &cwd, limit)
+                    .map_err(|error| error.to_string())?,
+                None => store
                     .fuzzy(&needle, limit)
                     .map_err(|error| error.to_string())?,
-            )
+            };
+            print_entries(entries)
         }
     }
 }

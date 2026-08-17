@@ -827,4 +827,164 @@ assert_eq '2025-01-01T00:00:00Z' "$REPLY" 'the civil-date conversion is wrong'
 _mbx_history_iso_utc 1786808647
 assert_eq '2026-08-15T15:44:07Z' "$REPLY" 'the civil-date conversion drifted'
 
+# Explicit history-search bind -x (ADR 0009): no-op unless MBX_HISTORY=1,
+# replace the whole line with the first helper line, never enable errexit.
+source "$ROOT/bash/search.bash"
+[[ $(<"$ROOT/bash/search.bash") != *set\ -euo\ pipefail* ]] || \
+    fail 'search.bash must not enable errexit/nounset/pipefail in the sourced module'
+_mbx_search_install
+_mbx_search_install
+assert_eq 1 "${_MBX_SEARCH_INSTALLED:-missing}" \
+    'search install should be idempotent and leave the installed flag set'
+
+READLINE_LINE='keep-me'
+READLINE_POINT=7
+unset MBX_HISTORY || true
+_mbx_search_insert
+assert_eq 'keep-me' "$READLINE_LINE" \
+    'search must no-op when MBX_HISTORY is unset'
+
+search_stub_dir=$(mktemp -d)
+cat >"$search_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+printf '%s\n' "printf 'MBX_SRCH:hit'"
+EOF
+chmod +x "$search_stub_dir/mbx"
+MBX_HISTORY=1
+MBX_BIN=$search_stub_dir/mbx
+MBX_SEARCH_TIMEOUT=1.0
+READLINE_LINE='printf'
+READLINE_POINT=6
+_mbx_search_insert
+assert_eq "printf 'MBX_SRCH:hit'" "$READLINE_LINE" \
+    'search should replace the line with the helper match'
+assert_eq 21 "$READLINE_POINT" 'search should move the cursor to the end of the match'
+
+cat >"$search_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+printf '%s\n' "match-one"
+printf '%s\n' "match-two"
+EOF
+READLINE_LINE='q'
+READLINE_POINT=1
+_mbx_search_insert
+assert_eq 'match-one' "$READLINE_LINE" 'first chord should insert the first helper line'
+_mbx_search_insert
+assert_eq 'match-two' "$READLINE_LINE" 'second chord should cycle to the next match'
+_mbx_search_insert
+assert_eq 'match-one' "$READLINE_LINE" 'third chord should wrap to the first match'
+_mbx_search_restore
+assert_eq 'q' "$READLINE_LINE" 'restore after cycling should put back the typed query'
+assert_eq 1 "$READLINE_POINT" 'restore should put the cursor back on the typed query'
+assert_eq 0 "${#_MBX_SEARCH_MATCHES[@]}" 'restore should drop the snapshot'
+assert_eq 0 "${_MBX_SEARCH_HAS_ORIGINAL:-missing}" 'restore should drop the original line'
+
+READLINE_LINE='keep-me'
+READLINE_POINT=7
+_mbx_search_restore
+assert_eq 'keep-me' "$READLINE_LINE" \
+    'restore with no snapshot should leave the line unchanged'
+
+READLINE_LINE='q'
+READLINE_POINT=1
+_mbx_search_insert
+assert_eq 'match-one' "$READLINE_LINE" 'search should insert after a prior restore'
+_mbx_search_restore
+assert_eq 'q' "$READLINE_LINE" 'restore after a fresh insert should put back the typed query'
+
+cat >"$search_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+READLINE_LINE='q'
+READLINE_POINT=1
+_mbx_search_insert
+assert_eq 'q' "$READLINE_LINE" 'a failed search should leave the typed line'
+_mbx_search_restore
+assert_eq 'q' "$READLINE_LINE" \
+    'restore after a failed search should not revive a stale original'
+
+cat >"$search_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+printf '%s\n' "match-one"
+printf '%s\n' "match-two"
+EOF
+READLINE_LINE=
+READLINE_POINT=0
+_mbx_search_insert
+assert_eq 'match-one' "$READLINE_LINE" 'empty-line search should insert the first recent row'
+_mbx_search_restore
+assert_eq '' "$READLINE_LINE" 'restore should put back an empty typed line'
+assert_eq 0 "$READLINE_POINT" 'restore of an empty line should put the cursor at 0'
+_mbx_search_clear
+assert_eq 0 "${#_MBX_SEARCH_MATCHES[@]}" 'search_clear should drop the snapshot'
+assert_eq 0 "${_MBX_SEARCH_HAS_ORIGINAL:-missing}" 'search_clear should drop the original line'
+
+cat >"$search_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+case " $* " in
+    *" search cwd "*) printf '%s\n' "cwd-hit" ;;
+    *" search recent "*) printf '%s\n' "recent-hit" ;;
+    *) printf '%s\n' "other-hit" ;;
+esac
+EOF
+READLINE_LINE=
+READLINE_POINT=0
+_mbx_search_insert
+assert_eq 'cwd-hit' "$READLINE_LINE" \
+    'empty-line search should prefer cwd matches when PWD is set'
+_mbx_search_clear
+MBX_SEARCH_CWD=0
+READLINE_LINE=
+READLINE_POINT=0
+_mbx_search_insert
+assert_eq 'recent-hit' "$READLINE_LINE" \
+    'MBX_SEARCH_CWD=0 should use global recent on an empty line'
+unset MBX_SEARCH_CWD
+_mbx_search_clear
+
+cat >"$search_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+case " $* " in
+    *" search prefix "*" --cwd "*) printf '%s\n' "cwd-prefix-hit" ;;
+    *" search prefix "*) printf '%s\n' "global-prefix-hit" ;;
+    *) printf '%s\n' "other-hit" ;;
+esac
+EOF
+READLINE_LINE='echo'
+READLINE_POINT=4
+_mbx_search_insert
+assert_eq 'cwd-prefix-hit' "$READLINE_LINE" \
+    'prefix search should prefer cwd matches when PWD is set'
+_mbx_search_clear
+MBX_SEARCH_CWD=0
+READLINE_LINE='echo'
+READLINE_POINT=4
+_mbx_search_insert
+assert_eq 'global-prefix-hit' "$READLINE_LINE" \
+    'MBX_SEARCH_CWD=0 should use global prefix'
+unset MBX_SEARCH_CWD
+_mbx_search_clear
+
+MBX_HISTORY=0
+READLINE_LINE='keep-me'
+READLINE_POINT=7
+_mbx_search_insert
+assert_eq 'keep-me' "$READLINE_LINE" \
+    'search must no-op when MBX_HISTORY is not 1'
+_MBX_SEARCH_HAS_ORIGINAL=1
+_MBX_SEARCH_ORIGINAL='secret'
+_MBX_SEARCH_ORIGINAL_POINT=0
+_mbx_search_restore
+assert_eq 'keep-me' "$READLINE_LINE" \
+    'restore must no-op when MBX_HISTORY is not 1'
+
+MBX_HISTORY=1
+MBX_BIN=/nonexistent/mbx-search-helper
+READLINE_LINE='keep-me'
+_mbx_search_insert
+assert_eq 'keep-me' "$READLINE_LINE" \
+    'search must no-op when the helper is missing'
+rm -rf "$search_stub_dir"
+
 printf 'PASS: focused Bash module contracts\n'
