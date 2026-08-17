@@ -684,8 +684,15 @@ fn ctrl_z_then_search_still_inserts() {
     session.write_str("\n", deadline(2)).expect("submit");
     wait_all(&mut session, &["\nMBX_SRCH:alpha", "> "]);
     session
-        .write_str("kill %1 2>/dev/null || true\n", deadline(2))
+        .write_str(
+            "kill -9 %1 2>/dev/null; wait 2>/dev/null || true\n",
+            deadline(2),
+        )
         .expect("cleanup");
     wait_for(&mut session, "> ");
-    exit_and_wait(&mut session);
+    session
+        .write_str("printf 'MBX_SRCH:after_stop\\n'\n", deadline(2))
+        .expect("sentinel");
+    wait_all(&mut session, &["\nMBX_SRCH:after_stop", "> "]);
+    // First `exit` can refuse while a stopped job remains; Drop SIGKILLs the PTY.
 }

@@ -50,7 +50,7 @@ terminal restoration.
 | T-1 | Prefix insert then Ctrl+C: match does not execute; next prompt runs a sentinel |
 | T-2 | `stty -g` identical before/after insert, `\C-xl` restore, Ctrl+C, and resize; sentinel runs |
 | T-3 | Resize after insert still submits the match; follow-up command runs |
-| T-4 | Ctrl+Z then empty-line `\C-xh` still inserts; Enter prints the sidecar match |
+| T-4 | Ctrl+Z then empty-line `\C-xh` still inserts; Enter prints the sidecar match; a sentinel runs after job cleanup |
 
 ## Stop
 
