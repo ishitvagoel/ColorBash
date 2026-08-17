@@ -16,7 +16,7 @@ cwd on screen.
 | Rank | Item | Why not now |
 | --- | --- | --- |
 | 1 | Empty-line cwd-first (this plan) | Uses existing cwd query; no overlay. |
-| — | Prefix/fuzzy also cwd-scoped | Needs a combined query; later leftover. |
+| — | Prefix/fuzzy also cwd-scoped | Recorded in `docs/srch-003-cwd-prefix-plan.md` (C-5–C-8). |
 | — | Show age/cwd/status columns | Overlay unproven. |
 | — | Repo / failed-command filters | Other PRs / `HIST-010`. |
 | — | 100k interactive percentiles | `deferred` unless a functional defect. |

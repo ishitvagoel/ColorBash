@@ -34,7 +34,8 @@ user presses a dedicated chord does not.
 4. The query is `READLINE_LINE` unless the chord is repeating on the current
    snapshot entry. An empty line prefers cwd-scoped rows (`history search cwd
    "$PWD"`) and falls back to newest sidecar rows (`history search recent`). A
-   non-empty line tries exact prefix, then fuzzy. Results are
+   non-empty line prefers prefix then fuzzy with `--cwd "$PWD"`, then the same
+   queries globally. Results are
    bounded (`MBX_SEARCH_LIMIT`, default 8, max 16). The selected command text
    replaces the entire `READLINE_LINE`; `READLINE_POINT` moves to the end.
    Repeating the chord cycles the snapshot and wraps. The action never executes
@@ -60,12 +61,12 @@ user presses a dedicated chord does not.
 Phase 8 can ship an explicit search insert, bounded cycling, and cancel
 restoration without reopening editor ownership. Stock Ctrl+R remains Bash
 reverse-i-search. A metadata overlay and 100k-row interactive latency stay
-later `SRCH-003` leftovers. Empty-line search prefers cwd (HIST-008) before
-recent. Command text stays out of traces (`M-023`).
+later `SRCH-003` leftovers. Empty-line and typed-prefix search prefer cwd
+(HIST-008) before global rows. Command text stays out of traces (`M-023`).
 
 ## Validation
 
 PTY evidence in `crates/pty/tests/history_search.rs` and module contracts in
 `tests/bash/modules.bash`. Plans: `docs/srch-001-history-search-plan.md`,
 `docs/srch-001-result-view-plan.md`, `docs/srch-002-cancel-restore-plan.md`,
-`docs/srch-003-cwd-filter-plan.md`.
+`docs/srch-003-cwd-filter-plan.md`, `docs/srch-003-cwd-prefix-plan.md`.
