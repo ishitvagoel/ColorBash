@@ -30,7 +30,7 @@ These MVP features are **not** implemented for interactive use:
 | Ghost suggestions | No after-every-key Readline decoration hook |
 | Completion popup | Overlay unproven; ranked-accept chord exists |
 | Syntax highlighting | Same continuous-decoration leftover |
-| Enhanced Ctrl+R overlay | Type-to-filter list still needs a result-view leftover; `\C-xh` insert, `\C-xl` restore, and cwd-scoped empty-line search exist |
+| Enhanced Ctrl+R overlay | Type-to-filter list still needs after-every-key decoration; `\C-xh` insert, `\C-xl` restore, cwd-scoped search, and signal/`stty` PTY exist |
 | Repository-context history | `HIST-010` |
 | macOS PTY matrix | `HRD-001` needs a macOS host |
 

@@ -105,7 +105,8 @@ highlighting, multiline guides, and command palettes remain design
 requirements, not prototype claims. An explicit history-search chord
 (`Ctrl-X` then `h`, ADR 0009) can insert one sidecar match and cycle a bounded
 snapshot; `Ctrl-X` then `l` restores the typed line. Empty and typed chords
-prefer sidecar rows from `$PWD`. It is not the
+prefer sidecar rows from `$PWD`. Ctrl+C, Ctrl+Z, and resize around those
+chords keep a usable prompt and `stty -g`. It is not the
 interactive overlay shown above. The opt-in sidecar can store and query history
 from the CLI. Each later feature must insert or propose ordinary Bash
 text and must never auto-execute. The Readline research and ADR 0003 define the

@@ -60,7 +60,8 @@ DEBUG trap is preserved, and a missing helper uses the Bash fallback.
 
 A genuine PTY suite in `crates/pty` covers interactive prompt lifecycle, helper
 failure, Ctrl+C, Ctrl+Z, resize, and `stty -g` restoration, plus history
-admission characterization and opt-in sidecar recording. Piped interactive
+admission characterization, opt-in sidecar recording, and history-search
+insert/restore signal and terminal-state probes. Piped interactive
 Bash is still not treated as terminal evidence.
 
 Run:

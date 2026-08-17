@@ -337,8 +337,9 @@ writer commits schema v2 in WAL mode (forward-only migration from v1; see ADR
 `WRITER_BATCH_SIZE=32` for busy ingest, applies retention after full batches
 and shutdown, and treats `(session_id, event_sequence)` as the idempotency key.
 `ACK` means the record was accepted by the queue, not that SQLite has committed.
-Search is a direct CLI operation (`mbx history search recent|prefix|cwd`), not
-an MBX2 query.
+Search is a direct CLI operation
+(`mbx history search recent|prefix|cwd|fuzzy`), not an MBX2 query. Prefix and
+fuzzy accept optional `--cwd`.
 `path`, `count`, `clear`, and `delete` are the privacy controls. Command text
 never enters traces.
 
@@ -434,7 +435,8 @@ implemented; `G2` is complete and write-ack percentiles are `deferred`. Provider
 highlighting remain gated by unproven continuous decoration
 (`docs/g3-gate-close-plan.md`). Explicit history search via `bind -x` is
 Strategy A (ADR 0009; `bash/search.bash`; default `\C-xh` insert and `\C-xl`
-restore; bounded cycling; cwd-scoped empty-line/prefix/fuzzy). `COMP-004` popup
+restore; bounded cycling; cwd-scoped empty-line/prefix/fuzzy; Ctrl+C / Ctrl+Z /
+resize / `stty -g` PTY). `COMP-004` popup
 policy records no GUI overlay; ranked-accept `bind -x` evidence is complete
 (`docs/comp-004-ranked-accept-plan.md`).
 `G3` explicit `bind -x` evidence is complete.
