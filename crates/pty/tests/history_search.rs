@@ -405,11 +405,7 @@ fn empty_line_prefers_cwd_over_newer_other_directory() {
     let dir_b = home.path().join("dir-b");
     let mut session = spawn_history_shell(
         home.path(),
-        &enabled_env(
-            data_home_s,
-            histfile_s,
-            &[("MBX_HISTORY_EXCLUDE", "cd *")],
-        ),
+        &enabled_env(data_home_s, histfile_s, &[("MBX_HISTORY_EXCLUDE", "cd *")]),
     );
     wait_for(&mut session, "> ");
     type_line(&mut session, &format!("cd '{}'", dir_a.display()));
@@ -444,11 +440,7 @@ fn empty_line_without_cwd_rows_falls_back_to_recent() {
     let dir_c = home.path().join("dir-c");
     let mut session = spawn_history_shell(
         home.path(),
-        &enabled_env(
-            data_home_s,
-            histfile_s,
-            &[("MBX_HISTORY_EXCLUDE", "cd *")],
-        ),
+        &enabled_env(data_home_s, histfile_s, &[("MBX_HISTORY_EXCLUDE", "cd *")]),
     );
     wait_for(&mut session, "> ");
     type_line(&mut session, &format!("cd '{}'", dir_a.display()));
