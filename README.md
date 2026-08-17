@@ -195,6 +195,18 @@ Press Tab (stock insertion), then `Ctrl-X Ctrl-A` to replace the current word
 with the top-ranked candidate. If the chord is already bound, MBX leaves it
 alone unless `MBX_COMP_ACCEPT_OVERRIDE=1`.
 
+### 8. History ghost suffix (opt-in)
+
+```bash
+MBX_HISTORY=1 MBX_GHOST=1 bash --noprofile --norc
+source /absolute/path/to/ColorBash/bash/init.bash
+echo unique-ghost-alpha
+```
+
+Type `echo unique-ghost-a` and pause. The rest of the previous command should
+appear after the cursor. Enter runs only what you typed. Right Arrow then Enter
+accepts the full suggestion. The suffix is ordinary command text, not dim paint.
+
 ## Prototype controls
 
 ```bash
@@ -211,6 +223,8 @@ MBX_HISTORY=1                   # opt in to the local history sidecar
 MBX_HISTORY_EXCLUDE='git *'     # colon-separated glob exclusions
 MBX_GHOST=1                     # opt-in history suffix after the cursor (needs MBX_HISTORY=1)
 MBX_GHOST_OVERRIDE=1            # overwrite occupied ghost self-insert keys
+MBX_GHOST_KILL_KEYSEQ='\C-x\C-k'   # kill-line helper used by Enter while a suffix is shown
+MBX_GHOST_ACCEPT_KEYSEQ='\C-x\C-m' # accept-line helper used by that Enter macro
 MBX_EDITOR_INSERT_TOKEN=hello   # text inserted by Ctrl-X Ctrl-Y
 MBX_EDITOR_INSERT_KEYSEQ='\C-x\C-y'
 MBX_EDITOR_OVERRIDE=1           # overwrite an occupied insert chord

@@ -1,19 +1,47 @@
 # shellcheck shell=bash
 # Opt-in inline ghost suffix (ADR 0010). Suggestion lives after READLINE_POINT.
-# Enter strips it. It never executes automatically. Not after-every-key paint.
-
-_MBX_GHOST_STRIP_DEFAULT_KEYSEQ='\C-xg'
+# `\C-xg` is glob-list-expansions (M-040). Enter is not bind -x: a -x step in a
+# keyseq macro drops the remaining keys (M-041), so an active suffix arms a
+# Readline-only kill-line + accept-line macro instead.
+_MBX_GHOST_KILL_DEFAULT_KEYSEQ='\C-x\C-k'
+_MBX_GHOST_ACCEPT_DEFAULT_KEYSEQ='\C-x\C-m'
 _MBX_GHOST_HAS=0
+_MBX_GHOST_POINT=0
+_MBX_GHOST_BOUND=0
+_MBX_GHOST_ENTER_ARMED=0
+_MBX_GHOST_KILL_KEYSEQ=$_MBX_GHOST_KILL_DEFAULT_KEYSEQ
+_MBX_GHOST_ACCEPT_KEYSEQ=$_MBX_GHOST_ACCEPT_DEFAULT_KEYSEQ
+
+_mbx_ghost_disarm_enter() {
+    [[ ${_MBX_GHOST_ENTER_ARMED:-0} == 1 ]] || return 0
+    bind -m emacs '"\C-m": accept-line' || return 1
+    _MBX_GHOST_ENTER_ARMED=0
+}
+
+_mbx_ghost_arm_enter() {
+    [[ ${_MBX_GHOST_BOUND:-0} == 1 ]] || return 0
+    [[ ${_MBX_GHOST_ENTER_ARMED:-0} == 1 ]] && return 0
+    bind -m emacs "\"\\C-m\": \"${_MBX_GHOST_KILL_KEYSEQ}${_MBX_GHOST_ACCEPT_KEYSEQ}\"" || \
+        return 1
+    _MBX_GHOST_ENTER_ARMED=1
+}
 
 _mbx_ghost_clear() {
     _MBX_GHOST_HAS=0
+    _MBX_GHOST_POINT=0
+    _mbx_ghost_disarm_enter || true
 }
 
 _mbx_ghost_strip() {
+    local cut
     if [[ ${_MBX_GHOST_HAS:-0} == 1 ]]; then
-        READLINE_LINE=${READLINE_LINE:0:READLINE_POINT}
+        cut=${_MBX_GHOST_POINT:-0}
+        READLINE_LINE=${READLINE_LINE:0:cut}
+        READLINE_POINT=$cut
         _MBX_GHOST_HAS=0
+        _MBX_GHOST_POINT=0
     fi
+    _mbx_ghost_disarm_enter || true
 }
 
 _mbx_ghost_insert_char() {
@@ -72,14 +100,23 @@ _mbx_ghost_usable_match() {
 _mbx_ghost_query() {
     local query=$1
     local deadline output_fd child_pid match=
+    local monitor=0 notify=0
 
     [[ -x ${MBX_BIN:-} ]] || return 1
     [[ -n $query ]] || return 1
     _mbx_deadline_after "${MBX_GHOST_TIMEOUT:-${MBX_HISTORY_TIMEOUT:-0.10}}" || \
         return 1
     deadline=$REPLY
+    [[ $- == *m* ]] && monitor=1
+    [[ $- == *b* ]] && notify=1
+    set +m
+    set +b
     exec {output_fd}< <(exec "$MBX_BIN" history search prefix "$query" --limit 1 \
-        2>/dev/null)
+        2>/dev/null) || {
+        ((notify == 1)) && set -b
+        ((monitor == 1)) && set -m
+        return 1
+    }
     child_pid=$!
     if _mbx_ghost_read_line "$output_fd" "$deadline"; then
         match=$REPLY
@@ -88,6 +125,8 @@ _mbx_ghost_query() {
     if ! _mbx_wait_child_until "$child_pid" "$deadline"; then
         _mbx_terminate_child "$child_pid"
     fi
+    ((notify == 1)) && set -b
+    ((monitor == 1)) && set -m
     _mbx_ghost_usable_match "$query" "$match" || return 1
 }
 
@@ -96,6 +135,8 @@ _mbx_ghost_refresh() {
     local point=${READLINE_POINT:-0}
 
     _MBX_GHOST_HAS=0
+    _MBX_GHOST_POINT=0
+    _mbx_ghost_disarm_enter || true
     [[ ${MBX_GHOST:-} == 1 && ${MBX_HISTORY:-} == 1 ]] || return 0
     ((point == ${#typed})) || return 0
     [[ -n $typed ]] || return 0
@@ -103,10 +144,18 @@ _mbx_ghost_refresh() {
     READLINE_LINE=$REPLY
     READLINE_POINT=$point
     _MBX_GHOST_HAS=1
+    _MBX_GHOST_POINT=$point
+    if ! _mbx_ghost_arm_enter; then
+        READLINE_LINE=$typed
+        READLINE_POINT=$point
+        _MBX_GHOST_HAS=0
+        _MBX_GHOST_POINT=0
+    fi
 }
 
 _mbx_ghost_self_insert() {
-    local ch=${READLINE_KEYSEQ-}
+    local ch=${1-}
+    [[ -n $ch ]] || ch=${READLINE_KEYSEQ-}
     [[ -n $ch ]] || return 0
     _mbx_ghost_strip
     _mbx_ghost_insert_char "$ch"
@@ -131,6 +180,8 @@ _mbx_ghost_forward() {
     if [[ ${_MBX_GHOST_HAS:-0} == 1 ]]; then
         READLINE_POINT=${#READLINE_LINE}
         _MBX_GHOST_HAS=0
+        _MBX_GHOST_POINT=0
+        _mbx_ghost_disarm_enter || true
         return 0
     fi
     if ((point < ${#READLINE_LINE})); then
@@ -171,19 +222,29 @@ _mbx_ghost_can_wrap() {
 _mbx_ghost_bind_x() {
     local keymap=$1
     local keyseq=$2
+    local command=$3
+    local allowed=$4
+    _mbx_ghost_can_wrap "$keyseq" "$keymap" "$allowed" || return 1
+    bind -m "$keymap" -x "\"$keyseq\": $command"
+}
+
+_mbx_ghost_bind_fn() {
+    local keymap=$1
+    local keyseq=$2
     local fn=$3
     local allowed=$4
     _mbx_ghost_can_wrap "$keyseq" "$keymap" "$allowed" || return 1
-    bind -m "$keymap" -x "\"$keyseq\": $fn"
+    bind -m "$keymap" "\"$keyseq\": $fn"
 }
 
 _mbx_ghost_bind_self_chars() {
     local keymap=$1
     local chars=$2
-    local i char wrapped=0
+    local i char wrapped=0 quoted
     for ((i = 0; i < ${#chars}; i++)); do
         char=${chars:i:1}
-        if _mbx_ghost_bind_x "$keymap" "$char" _mbx_ghost_self_insert self-insert; then
+        printf -v quoted '%q' "$char"
+        if _mbx_ghost_bind_x "$keymap" "$char" "_mbx_ghost_self_insert $quoted" self-insert; then
             wrapped=1
         fi
     done
@@ -193,6 +254,7 @@ _mbx_ghost_bind_self_chars() {
 _mbx_ghost_install() {
     [[ ${_MBX_GHOST_INSTALLED:-0} != 1 ]] || return 0
     _MBX_GHOST_BOUND=0
+    _MBX_GHOST_ENTER_ARMED=0
     if [[ $- != *i* ]]; then
         _MBX_GHOST_INSTALLED=1
         return 0
@@ -201,15 +263,27 @@ _mbx_ghost_install() {
         _MBX_GHOST_INSTALLED=1
         return 0
     fi
-    local strip=${MBX_GHOST_STRIP_KEYSEQ:-$_MBX_GHOST_STRIP_DEFAULT_KEYSEQ}
-    local chars='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _-.:/=+,[]@~'
-    if _mbx_ghost_keyseq_has_x "$strip" emacs && \
-        [[ ${MBX_GHOST_OVERRIDE:-0} != 1 ]]; then
+    local kill_key=${MBX_GHOST_KILL_KEYSEQ:-$_MBX_GHOST_KILL_DEFAULT_KEYSEQ}
+    local accept_key=${MBX_GHOST_ACCEPT_KEYSEQ:-$_MBX_GHOST_ACCEPT_DEFAULT_KEYSEQ}
+    local chars='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _-.:/'
+    [[ -n $kill_key && -n $accept_key ]] || {
+        _MBX_GHOST_INSTALLED=1
+        return 0
+    }
+    _mbx_ghost_can_wrap "$kill_key" emacs kill-line || {
+        _MBX_GHOST_INSTALLED=1
+        return 0
+    }
+    _mbx_ghost_can_wrap "$accept_key" emacs accept-line || {
+        _MBX_GHOST_INSTALLED=1
+        return 0
+    }
+    _mbx_ghost_stock_fn '\C-m' emacs
+    if [[ $REPLY != accept-line ]] || _mbx_ghost_keyseq_has_x '\C-m' emacs; then
         _MBX_GHOST_INSTALLED=1
         return 0
     fi
-    _mbx_ghost_stock_fn "$strip" emacs
-    if [[ -n $REPLY && ${MBX_GHOST_OVERRIDE:-0} != 1 ]]; then
+    if [[ $kill_key == "$accept_key" ]]; then
         _MBX_GHOST_INSTALLED=1
         return 0
     fi
@@ -217,15 +291,20 @@ _mbx_ghost_install() {
         _MBX_GHOST_INSTALLED=1
         return 0
     }
+    _mbx_ghost_bind_fn emacs "$kill_key" kill-line kill-line || {
+        _MBX_GHOST_INSTALLED=1
+        return 0
+    }
+    _mbx_ghost_bind_fn emacs "$accept_key" accept-line accept-line || {
+        _MBX_GHOST_INSTALLED=1
+        return 0
+    }
+    _MBX_GHOST_KILL_KEYSEQ=$kill_key
+    _MBX_GHOST_ACCEPT_KEYSEQ=$accept_key
     _mbx_ghost_bind_x emacs '\C-h' _mbx_ghost_backspace backward-delete-char || true
     _mbx_ghost_bind_x emacs '\C-?' _mbx_ghost_backspace backward-delete-char || true
     _mbx_ghost_bind_x emacs '\e[C' _mbx_ghost_forward forward-char || true
     _mbx_ghost_bind_x emacs '\C-f' _mbx_ghost_forward forward-char || true
-    bind -m emacs -x "\"$strip\": _mbx_ghost_strip"
-    _mbx_ghost_stock_fn '\C-m' emacs
-    if [[ $REPLY == accept-line || -z $REPLY || ${MBX_GHOST_OVERRIDE:-0} == 1 ]]; then
-        bind -m emacs "\"\\C-m\": \"${strip}\\C-j\""
-        _MBX_GHOST_BOUND=1
-    fi
+    _MBX_GHOST_BOUND=1
     _MBX_GHOST_INSTALLED=1
 }

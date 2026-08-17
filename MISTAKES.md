@@ -751,3 +751,45 @@ to prevent recurrence, not to assign blame.
   `ranked_accept_refuses_stale_unrelated_word` in
   `crates/pty/tests/completion_harness.rs`.
 
+## M-040 — Default ghost strip chord collided with stock Readline
+
+- Discovered: 2026-08-17
+- Status: Fixed
+- Failed assumption: `\C-xg` was a free emacs chord because it is not a
+  `Ctrl-X Ctrl-` control pair.
+- Impact: stock emacs binds `\C-xg` to `glob-list-expansions`. Ghost install
+  treated the strip chord as occupied, skipped every self-insert wrap, and
+  `_MBX_GHOST_BOUND` stayed `0`. Typing worked through stock `self-insert`
+  with no suffix.
+- Correction: ghost no longer uses a bind -x strip chord. Helper chords are
+  inspected on stock emacs (`bind -p`): default kill-line `\C-x\C-k` and
+  accept-line `\C-x\C-m`. G-5 asserts `_MBX_GHOST_BOUND=1` on a default
+  ghost+history install. A letter suffix such as `\C-xg` / `\C-xj` is not
+  used because those collide with stock functions or wrapped `self-insert`.
+- Prevention: before choosing a default chord, inspect `bind -p` on stock
+  emacs. Occupied-skip that aborts the whole installer must have a
+  default-install bound assertion.
+- Evidence: `bash/ghost.bash`, `default_install_sets_bound_flag` in
+  `crates/pty/tests/ghost.rs`, and ADR 0010.
+
+## M-041 — bind -x inside a keyseq macro drops remaining keys
+
+- Discovered: 2026-08-17
+- Status: Fixed
+- Failed assumption: `"\C-m": "\C-x\C-n\C-j"` could run a bind -x strip
+  function and then stock `accept-line`.
+- Impact: Readline discards keys after a bind -x step. Enter either kept the
+  unaccepted suffix (G-1 executed the full suggestion) or required `eval` of
+  `READLINE_LINE`, which is out of scope and skips `accept-line` / sidecar
+  admission / prompt hooks.
+- Correction: while a suffix is active, Enter is a Readline-only macro:
+  reserved `kill-line` from point, then reserved `accept-line`. The line is
+  not evaluated from bind -x. G-1 asserts sidecar admission of the typed
+  prefix.
+- Prevention: never chain bind -x with later macro keys. Enter and other
+  accept paths must remain Readline functions unless an ADR records a
+  different execution owner.
+- Evidence: `_mbx_ghost_arm_enter` in `bash/ghost.bash`;
+  `typing_shows_suffix_and_enter_runs_typed_prefix` in
+  `crates/pty/tests/ghost.rs`; ADR 0010.
+

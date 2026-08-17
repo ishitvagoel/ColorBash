@@ -455,7 +455,7 @@ keystroke.
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
 | `GHST-001` | Async ranked query with generation IDs and cancellation | `blocked` | async IPC ADR decision |
-| `GHST-002` | Inline ghost rendering with stale-result rejection | `validation` | ADR 0010; G-1–G-6 in `bash/ghost.bash`, `crates/pty/tests/ghost.rs`, `tests/bash/modules.bash`; `docs/ghst-002-inline-ghost-plan.md`; dim paint and async stale-rejection leftovers remain |
+| `GHST-002` | Inline ghost rendering with stale-result rejection | `validation` | ADR 0010; G-1–G-6 in `bash/ghost.bash`, `crates/pty/tests/ghost.rs`, `tests/bash/modules.bash`; `docs/ghst-002-inline-ghost-plan.md`; Enter is a Readline kill-line + accept-line macro (M-041); dim paint and async stale-rejection leftovers remain |
 | `GHST-003` | Full/word acceptance and suggestion cycling | `validation` | Right/`\C-f` full accept in G-2; word-accept and cycling remain |
 | `GHST-004` | Multiline, resize, exact-byte, no-execution, and latency evidence | `blocked` | word/cycle leftover, `PTY-001` matrix leftovers |
 
@@ -700,4 +700,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Ranked-accept replaces the current word when it is a prefix of `_MBX_COMP_RANKED_REPLY` (M-039). Stale unrelated words are refused. Snapshot clears at the next prompt. |
 | 2026-08-16 | Completed `GIT-004` Git completion kinds (`docs/git-004-kinds-plan.md`). `COMP-001` / `COMP-002` move to `complete` (G4 evidence; 5 ms `deferred`). |
 | 2026-08-16 | Completed `HIST-009` bounded fuzzy search (`docs/hist-009-fuzzy-plan.md`; `mbx history search fuzzy`). `HIST-010` remains. |
-| 2026-08-17 | Recorded opt-in inline ghost (`docs/ghst-002-inline-ghost-plan.md`; ADR 0010; G-1–G-6). Suffix after `READLINE_POINT`; Enter strips. Do not mark `GHST-004` complete. Do not start highlighting or overlay. |
+| 2026-08-17 | Recorded opt-in inline ghost (`docs/ghst-002-inline-ghost-plan.md`; ADR 0010; G-1–G-6). Suffix after `READLINE_POINT`; Enter is a Readline kill-line + accept-line macro while a suffix is active (M-041). Do not mark `GHST-004` complete. Do not start highlighting or overlay. |

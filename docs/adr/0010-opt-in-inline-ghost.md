@@ -22,17 +22,21 @@ experiments.
    Readline remains the redisplay owner. MBX does not take editor ownership and
    does not put ANSI in `READLINE_LINE`.
 2. When enabled, emacs `self-insert` for a bounded ASCII set (letters, digits,
-   space, and `_ - . : / = + , [ ] @ ~`) is wrapped with `bind -x`. Stock
+   space, and `_ - . : /`) is wrapped with `bind -x`. Stock
    `self-insert` is replaceable. A user or `-x` binding that is not
-   `self-insert` is skipped unless `MBX_GHOST_OVERRIDE=1`.
+   `self-insert` is skipped unless `MBX_GHOST_OVERRIDE=1`. Helper lookup runs
+   with job-control monitor/notify off so per-key forks do not print jobs or
+   accept the line.
 3. The typed prefix stays left of `READLINE_POINT`. A matching sidecar prefix
    row may extend `READLINE_LINE` to the right of the cursor. That suffix is
    not accepted until the user moves point to the end (default Right /
    `\C-f`).
-4. Enter (`\C-m`) runs an internal strip chord (default `\C-xg`, unbound in
-   stock emacs; M-040) then stock `\C-j` `accept-line`. Unaccepted suffix is
-   discarded. Suggestions never execute automatically. `\C-j` stays
-   `accept-line`.
+4. Enter (`\C-m`) stays `accept-line` except while a suffix is active. Then it
+   is a Readline-only macro: reserved kill-line (default `\C-x\C-k`) from point,
+   then reserved accept-line (default `\C-x\C-m`). `bind -x` cannot be chained
+   in a keyseq macro because remaining keys are dropped (M-041). Do not `eval`
+   the line. Do not rebind `\C-j`. Occupied helper chords skip install.
+   Do not use `\C-xg` or a letter suffix that ghost also wraps.
 5. Helper timeout, missing binary, or a match that is not an exact byte prefix
    / contains controls leaves the typed character inserted and no suffix.
    Query budget is `MBX_GHOST_TIMEOUT` (default `MBX_HISTORY_TIMEOUT` / 0.10 s).

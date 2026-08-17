@@ -831,6 +831,9 @@ assert_eq '2026-08-15T15:44:07Z' "$REPLY" 'the civil-date conversion drifted'
 source "$ROOT/bash/ghost.bash"
 [[ $(<"$ROOT/bash/ghost.bash") != *set\ -euo\ pipefail* ]] || \
     fail 'ghost.bash must not enable errexit/nounset/pipefail in the sourced module'
+if grep -Fq -- 'eval --' "$ROOT/bash/ghost.bash"; then
+    fail 'ghost.bash must not eval the line; Enter uses accept-line (M-041)'
+fi
 ghost_stub_dir=$(mktemp -d)
 cat >"$ghost_stub_dir/mbx" <<'EOF'
 #!/bin/bash

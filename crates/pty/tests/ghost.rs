@@ -23,7 +23,7 @@ fn ghost_env<'a>(
 
 fn record_echo(session: &mut mbx_pty::PtySession, marker: &str) {
     type_line(session, &format!("echo MBX_GHST:{marker}"));
-    wait_all(session, &[&format!("\nMBX_GHST:{marker}"), "> "]);
+    wait_all(session, &[&format!("MBX_GHST:{marker}\n"), "> "]);
 }
 
 fn assert_no_output(session: &mut mbx_pty::PtySession, marker: &str) {
@@ -55,13 +55,27 @@ fn typing_shows_suffix_and_enter_runs_typed_prefix() {
         .write_str("echo MBX_GHST:a", deadline(2))
         .expect("type prefix");
     wait_all(&mut session, &["echo MBX_GHST:alpha"]);
-    assert_no_output(&mut session, "\nMBX_GHST:alpha");
+    assert_no_output(&mut session, "MBX_GHST:alpha\n");
     session.write_str("\n", deadline(2)).expect("enter");
     let output = wait_all(&mut session, &["MBX_GHST:a\n", "> "]);
     assert!(
         !visible_contains(&output, "MBX_GHST:alpha\n"),
         "unaccepted ghost executed: {:?}",
         visible_text(&output)
+    );
+    wait_for_count(&mbx_bin(), &data_home, 2);
+    let recent = sidecar_commands(&mbx_bin(), &data_home);
+    assert!(
+        recent.iter().any(|command| command == "echo MBX_GHST:a"),
+        "typed prefix was not admitted through accept-line: {recent:?}"
+    );
+    assert_eq!(
+        recent
+            .iter()
+            .filter(|command| *command == "echo MBX_GHST:alpha")
+            .count(),
+        1,
+        "unaccepted suffix was admitted: {recent:?}"
     );
     exit_and_wait(&mut session);
 }
@@ -83,9 +97,19 @@ fn right_arrow_accepts_full_suggestion() {
         .expect("type prefix");
     wait_all(&mut session, &["echo MBX_GHST:alpha"]);
     send_keys(&mut session, RIGHT);
-    assert_no_output(&mut session, "\nMBX_GHST:alpha");
+    assert_no_output(&mut session, "MBX_GHST:alpha\n");
     session.write_str("\n", deadline(2)).expect("enter");
     wait_all(&mut session, &["MBX_GHST:alpha\n", "> "]);
+    wait_for_count(&mbx_bin(), &data_home, 2);
+    let recent = sidecar_commands(&mbx_bin(), &data_home);
+    assert_eq!(
+        recent
+            .iter()
+            .filter(|command| *command == "echo MBX_GHST:alpha")
+            .count(),
+        2,
+        "accepted ghost was not admitted through accept-line: {recent:?}"
+    );
     exit_and_wait(&mut session);
 }
 
@@ -149,6 +173,6 @@ fn default_install_sets_bound_flag() {
             deadline(2),
         )
         .expect("status");
-    wait_all(&mut session, &["\nMBX_GHST:bound", "> "]);
+    wait_all(&mut session, &["MBX_GHST:bound\n", "> "]);
     exit_and_wait(&mut session);
 }

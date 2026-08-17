@@ -25,7 +25,10 @@ exists (`HIST-008`).
 1. Install only when `MBX_GHOST=1` and `MBX_HISTORY=1` in emacs. Skip occupied
    non-`self-insert` keys unless `MBX_GHOST_OVERRIDE=1`.
 2. Typing at the end of the line may extend the buffer with one prefix match.
-   Point stays on the typed prefix. Enter strips the suffix then `accept-line`.
+   Point stays on the typed prefix. While a suffix is active, Enter is a
+   Readline macro: kill-line from point (default `\C-x\C-k`) then
+   `accept-line` (default `\C-x\C-m`). That discards the unaccepted suffix
+   without `bind -x` or `eval` (M-041).
 3. Right / `\C-f` with an active suffix moves point to the end (full accept).
    Backspace strips, deletes one typed character, and refreshes.
 4. Matches must be an exact byte prefix of the typed line, control-free, and
@@ -40,6 +43,8 @@ exists (`HIST-008`).
 - `set -euo pipefail` in sourced modules
 - Async MBX2 query protocol
 - Marking Phase 4 complete
+- Clearing the suffix on Left/unwrapped motion; kill-ring isolation for the
+  discarded suffix; wrapping remaining printables
 
 ## Asserts
 

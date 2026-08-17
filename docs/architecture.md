@@ -430,7 +430,8 @@ multiline-width-pty.md`), and the Bash history admission corpus
 implemented; `G2` is complete and write-ack percentiles are `deferred`. Live
 highlighting remains gated by unproven continuous decoration
 (`docs/g3-gate-close-plan.md`). Opt-in inline ghost is ADR 0010
-(`bash/ghost.bash`; suffix after `READLINE_POINT`; Enter strips). `COMP-004`
+(`bash/ghost.bash`; suffix after `READLINE_POINT`; Enter uses a Readline
+kill-line + accept-line macro while a suffix is active). `COMP-004`
 popup policy records no GUI overlay; ranked-accept `bind -x` evidence is complete
 (`docs/comp-004-ranked-accept-plan.md`).
 `G3` explicit `bind -x` evidence is complete.
