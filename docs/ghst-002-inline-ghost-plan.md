@@ -22,8 +22,8 @@ exists (`HIST-008`).
 
 ## Goal
 
-1. Install only when `MBX_GHOST=1` and `MBX_HISTORY=1` in emacs. Skip occupied
-   non-`self-insert` keys unless `MBX_GHOST_OVERRIDE=1`.
+1. Install only when `MBX_GHOST=1` and `MBX_HISTORY=1` in an emacs tty.
+   Skip occupied non-`self-insert` keys unless `MBX_GHOST_OVERRIDE=1`.
 2. Typing at the end of the line may extend the buffer with one prefix match.
    Point stays on the typed prefix. While a suffix is active, `\C-m` and
    `\C-j` are a Readline macro: kill-line from point (default `\C-x\C-k`) then

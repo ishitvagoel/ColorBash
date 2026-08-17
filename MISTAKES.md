@@ -793,3 +793,19 @@ to prevent recurrence, not to assign blame.
   `typing_shows_suffix_and_enter_runs_typed_prefix` in
   `crates/pty/tests/ghost.rs`; ADR 0010.
 
+## M-042 — Ghost install wrapped printables in piped interactive Bash
+
+- Discovered: 2026-08-17
+- Status: Fixed
+- Failed assumption: `$-` containing `i` was enough to treat the session as an
+  editor that can wrap `self-insert`.
+- Impact: `bash -i < corpus` with inherited `MBX_GHOST=1` wrapped letters.
+  Prefix matches from earlier corpus lines leaked into later `MBX_TEST`
+  markers and failed the compatibility comparison.
+- Correction: ghost install requires a tty on stdin. The smoke corpus pins
+  `MBX_GHOST` and `MBX_HISTORY` off so parent environment cannot enable it.
+- Prevention: opt-in editor wrapping must require a tty, not only
+  interactive `$-`. Semantic corpus tests must pin feature flags they do not
+  intend to exercise.
+- Evidence: `_mbx_ghost_install` in `bash/ghost.bash`; `tests/bash/smoke.bash`.
+

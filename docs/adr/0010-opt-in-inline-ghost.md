@@ -22,11 +22,11 @@ experiments.
    Readline remains the redisplay owner. MBX does not take editor ownership and
    does not put ANSI in `READLINE_LINE`.
 2. When enabled, emacs `self-insert` for a bounded ASCII set (letters, digits,
-   space, and `_ - . : /`) is wrapped with `bind -x`. Stock
-   `self-insert` is replaceable. A user or `-x` binding that is not
-   `self-insert` is skipped unless `MBX_GHOST_OVERRIDE=1`. Helper lookup runs
-   with job-control monitor/notify off so per-key forks do not print jobs or
-   accept the line.
+   space, and `_ - . : /`) is wrapped with `bind -x` only in an interactive
+   emacs tty session. Stock `self-insert` is replaceable. A user or `-x`
+   binding that is not `self-insert` is skipped unless `MBX_GHOST_OVERRIDE=1`.
+   Helper lookup runs with job-control monitor/notify off so per-key forks do
+   not print jobs or accept the line. Piped `bash -i` is not wrapped (M-042).
 3. The typed prefix stays left of `READLINE_POINT`. A matching sidecar prefix
    row may extend `READLINE_LINE` to the right of the cursor. That suffix is
    not accepted until the user moves point to the end (default Right /

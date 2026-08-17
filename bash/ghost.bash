@@ -267,7 +267,7 @@ _mbx_ghost_install() {
     _MBX_GHOST_BOUND=0
     _MBX_GHOST_ENTER_ARMED=0
     _MBX_GHOST_WRAP_CTRL_J=0
-    if [[ $- != *i* ]]; then
+    if [[ $- != *i* || ! -t 0 ]]; then
         _MBX_GHOST_INSTALLED=1
         return 0
     fi
