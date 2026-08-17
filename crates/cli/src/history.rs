@@ -117,11 +117,23 @@ pub trait HistoryRecorder: Send + Sync {
 pub trait HistorySearch: Send + Sync {
     fn recent(&self, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError>;
     fn exact_prefix(&self, prefix: &str, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError>;
+    fn exact_prefix_in_cwd(
+        &self,
+        prefix: &str,
+        cwd: &str,
+        limit: usize,
+    ) -> Result<Vec<HistoryEntry>, HistoryError>;
     fn by_cwd(&self, cwd: &str, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError>;
     fn by_repo(&self, repo_root: &str, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError>;
     fn by_branch(&self, repo_branch: &str, limit: usize)
     -> Result<Vec<HistoryEntry>, HistoryError>;
     fn fuzzy(&self, needle: &str, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError>;
+    fn fuzzy_in_cwd(
+        &self,
+        needle: &str,
+        cwd: &str,
+        limit: usize,
+    ) -> Result<Vec<HistoryEntry>, HistoryError>;
     fn failed(&self, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError>;
 }
 

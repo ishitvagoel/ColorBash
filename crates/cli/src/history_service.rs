@@ -350,6 +350,15 @@ mod tests {
             Ok(entries.iter().take(limit).cloned().collect())
         }
 
+        fn exact_prefix_in_cwd(
+            &self,
+            prefix: &str,
+            _cwd: &str,
+            limit: usize,
+        ) -> Result<Vec<HistoryEntry>, HistoryError> {
+            self.exact_prefix(prefix, limit)
+        }
+
         fn by_cwd(&self, _cwd: &str, _limit: usize) -> Result<Vec<HistoryEntry>, HistoryError> {
             Ok(Vec::new())
         }
@@ -371,6 +380,15 @@ mod tests {
         }
 
         fn fuzzy(&self, _needle: &str, _limit: usize) -> Result<Vec<HistoryEntry>, HistoryError> {
+            Ok(Vec::new())
+        }
+
+        fn fuzzy_in_cwd(
+            &self,
+            _needle: &str,
+            _cwd: &str,
+            _limit: usize,
+        ) -> Result<Vec<HistoryEntry>, HistoryError> {
             Ok(Vec::new())
         }
 

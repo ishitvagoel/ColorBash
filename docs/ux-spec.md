@@ -110,7 +110,8 @@ word; Ctrl-X Ctrl-N / Ctrl-P cycle other prefix matches. It is not dim
 after-every-key paint. An explicit history-search chord (`Ctrl-X` then `h`,
 ADR 0009) can insert one sidecar match and cycle a bounded snapshot;
 `Ctrl-X` then `l` restores the typed line. An empty chord prefers sidecar
-rows from `$PWD`. It is not the interactive overlay shown above. The opt-in
+rows from `$PWD`; a typed prefix prefers cwd-scoped prefix then fuzzy before
+global queries. It is not the interactive overlay shown above. The opt-in
 sidecar can store and query history from the CLI. Each later feature must
 insert or propose ordinary Bash text and must never auto-execute. The Readline
 research and ADR 0003 define the validation needed before dim highlighting and

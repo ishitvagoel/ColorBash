@@ -22,7 +22,7 @@ These slices have working code you can exercise in an interactive shell:
 | Failed history search | `MBX_HISTORY=1` then `mbx history search failed` | Rows with nonzero exit status |
 | Repository-context history | `MBX_HISTORY=1` in a Git worktree | Stores root/branch; `search repo ROOT` / `search branch NAME` |
 | History ghost suffix | `MBX_HISTORY=1` and `MBX_GHOST=1` | Suggestion after the cursor on ASCII printables in emacs and vi-insert; Enter runs the typed prefix; Right accepts all; Left / Home / Up / Down / Ctrl-Left dismiss; Alt-F / Ctrl-Right accept one word (emacs); Ctrl-Right in vi-insert; Ctrl-X Ctrl-N / Ctrl-P cycle matches |
-| History-search chord | `MBX_HISTORY=1` then `Ctrl-X` `h` | Replaces the line with a sidecar match; empty line prefers `$PWD`; repeat to cycle; `Ctrl-X` `l` restores; does not run it |
+| History-search chord | `MBX_HISTORY=1` then `Ctrl-X` `h` | Replaces the line with a sidecar match; empty and typed queries prefer `$PWD`; repeat to cycle; `Ctrl-X` `l` restores; does not run it |
 
 ## What remains
 
@@ -122,6 +122,7 @@ source /absolute/path/to/ColorBash/bash/init.bash
 echo hello-mbx
 "$MBX_BIN" history count
 "$MBX_BIN" history search recent --limit 5
+"$MBX_BIN" history search prefix echo --cwd "$PWD" --limit 5
 "$MBX_BIN" history search prefix echo --limit 5
 "$MBX_BIN" history search cwd "$PWD" --limit 5
 "$MBX_BIN" history search fuzzy git --limit 5
@@ -224,7 +225,7 @@ text, not dim paint.
 Requires `MBX_HISTORY=1`. Default chord is `Ctrl-X` then `h` so stock
 `Ctrl-R` reverse-i-search and `Ctrl-X Ctrl-R` re-read-init-file stay
 unchanged. The chord replaces the whole line with a sidecar match (exact
-prefix, then fuzzy; empty line prefers commands from `$PWD`, then newest
+prefix, then fuzzy; empty and typed queries prefer `$PWD`, then newest
 rows) and does **not** run it until Enter. Press the chord again to cycle
 the bounded snapshot (default 8 matches). `Ctrl-X` then `l` restores the typed
 line without running the match. The snapshot clears at the next prompt.

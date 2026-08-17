@@ -1181,6 +1181,29 @@ _mbx_search_clear
 assert_eq 0 "${#_MBX_SEARCH_MATCHES[@]}" 'search_clear should drop the snapshot'
 assert_eq 0 "${_MBX_SEARCH_HAS_ORIGINAL:-missing}" 'search_clear should drop the original line'
 
+cat >"$search_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+case " $* " in
+    *" search prefix "*" --cwd "*) printf '%s\n' "cwd-prefix-hit" ;;
+    *" search prefix "*) printf '%s\n' "global-prefix-hit" ;;
+    *) printf '%s\n' "other-hit" ;;
+esac
+EOF
+READLINE_LINE='echo'
+READLINE_POINT=4
+_mbx_search_insert
+assert_eq 'cwd-prefix-hit' "$READLINE_LINE" \
+    'prefix search should prefer cwd matches when PWD is set'
+_mbx_search_clear
+MBX_SEARCH_CWD=0
+READLINE_LINE='echo'
+READLINE_POINT=4
+_mbx_search_insert
+assert_eq 'global-prefix-hit' "$READLINE_LINE" \
+    'MBX_SEARCH_CWD=0 should use global prefix'
+unset MBX_SEARCH_CWD
+_mbx_search_clear
+
 MBX_HISTORY=0
 READLINE_LINE='keep-me'
 READLINE_POINT=7
