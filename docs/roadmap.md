@@ -5,9 +5,9 @@
 > brief remains `CODEX_MODERN_BASH_ARCHITECTURE.md`; its checkboxes describe the
 > intended program and are not a status tracker.
 
-- Last reviewed: 2026-08-16 UTC
+- Last reviewed: 2026-08-17 UTC
 - Current milestone: Phase 3A sidecar implemented; `G0` and `G2` complete; `G1` accepted
-- Active workstream: `SRCH-001` complete (insert + bounded cycling); overlay/ghost/highlighting blocked on unproven continuous decoration
+- Active workstream: `SRCH-002` complete (cancel restoration); overlay/ghost/highlighting blocked on unproven continuous decoration
 - Next decision gate: continuous-decoration leftover (blocks ghost / highlighting / overlay)
 - Editor-facing work: explicit `bind -x` search is unblocked (ADR 0009). Ghost, highlighting, and overlay stay blocked on after-every-key decoration.
 - Timing policy: unmet percentile targets are `deferred` and do not block
@@ -517,23 +517,23 @@ MVP Git/completion slice. `GIT-005` remains explicitly post-MVP.
 
 ### Phase 8 — Enhanced Ctrl+R
 
-Status: `validation`. Explicit insert and bounded cycling are complete
-(ADR 0009). Cancel restoration, metadata overlay, and 100k interactive
-latency remain. Ghost and highlighting stay blocked on after-every-key
-decoration.
+Status: `validation`. Explicit insert, bounded cycling, and cancel
+restoration are complete (ADR 0009). Metadata overlay and 100k interactive
+latency remain (`SRCH-003`). Ghost and highlighting stay blocked on
+after-every-key decoration.
 
 Build a configurable explicit search action with age, cwd, and useful status
 metadata; bounded filtering; safe cancellation; exact insertion without
 execution; and terminal restoration. Repository/failed-command filters are added
-only when their indexed fields are reliable. Default chord is `\C-xh` so
-stock reverse-i-search stays on `\C-r` and Readline `re-read-init-file` stays
-on `\C-x\C-r`.
+only when their indexed fields are reliable. Default insert chord is `\C-xh`
+so stock reverse-i-search stays on `\C-r` and Readline `re-read-init-file`
+stays on `\C-x\C-r`. Restore is `\C-xl` and does not steal `\C-g`.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
 | `SRCH-001` | Configurable bounded history-search action and result view | `complete` | insert S-1–S-7 and cycling V-1–V-4 in `bash/search.bash`, `crates/pty/tests/history_search.rs`, `tests/bash/modules.bash`; ADR 0009; `docs/srch-001-history-search-plan.md`; `docs/srch-001-result-view-plan.md` |
-| `SRCH-002` | Cancel restoration and exact insertion without execution | `blocked` | exact insert recorded; cancel/restore leftover |
-| `SRCH-003` | Metadata filters, 100k-row latency, signal, and terminal-state evidence | `blocked` | `SRCH-002`; repository filters also need `HIST-010` |
+| `SRCH-002` | Cancel restoration and exact insertion without execution | `complete` | exact insert S-1; restore R-1–R-4 in `bash/search.bash`, `crates/pty/tests/history_search.rs`, `tests/bash/modules.bash`; `docs/srch-002-cancel-restore-plan.md` |
+| `SRCH-003` | Metadata filters, 100k-row latency, signal, and terminal-state evidence | `blocked` | restore complete; metadata overlay and 100k interactive latency remain; repository filters also need `HIST-010` |
 
 Exit condition: `SRCH-003`.
 
@@ -564,12 +564,11 @@ Exit condition: `G5` after every `HRD-*` item is complete.
 percentile leftovers are `deferred` and must not block product slices
 (`docs/latency-budget-deferral.md`).
 
-1. `SRCH-001` is `complete` (insert + bounded cycling; ADR 0009). Do not
-   start overlay, ghost, or highlighting. `COMP-004` stays `discovery`. Do not
-   mark `COMP-004`, `COMP-005`, `SRCH-002`, or `SRCH-003` complete.
-2. Next named leftovers are `SRCH-002` cancel restoration and the `HIST-010` /
-   `GIT-003` pair. Prefer a Strategy A restore action (no printable-key
-   rebinds).
+1. `SRCH-001` and `SRCH-002` are `complete` (insert, cycling, restore;
+   ADR 0009). Do not start overlay, ghost, or highlighting. `COMP-004` stays
+   `discovery`. Do not mark `COMP-004`, `COMP-005`, or `SRCH-003` complete.
+2. Next named leftovers are `SRCH-003` (blocked on metadata/100k evidence;
+   repo filters also need `HIST-010`) and the `HIST-010` / `GIT-003` pair.
 3. `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
    slice on FND-001 SHA refresh or percentile benches unless a functional
    prompt-path defect is proven.
@@ -703,3 +702,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Completed `GIT-004` Git completion kinds (`docs/git-004-kinds-plan.md`). `COMP-001` / `COMP-002` move to `complete` (G4 evidence; 5 ms `deferred`). |
 | 2026-08-16 | Completed `HIST-009` bounded fuzzy search (`docs/hist-009-fuzzy-plan.md`; `mbx history search fuzzy`). `HIST-010` remains. |
 | 2026-08-16 | Accepted ADR 0009: explicit history-search `bind -x` is Strategy A, not continuous decoration. Implemented `SRCH-001` insert (`bash/search.bash`, default `\C-xh`; S-1–S-7; M-040) and bounded cycling (V-1–V-4; M-041). `SRCH-001` is `complete`. Cancel restoration (`SRCH-002`) and overlay remain. Do not steal stock `\C-r` or `\C-x\C-r`. Do not start overlay, ghost, or highlighting. |
+| 2026-08-17 | Completed `SRCH-002` cancel restoration (`docs/srch-002-cancel-restore-plan.md`; default `\C-xl`; R-1–R-4). Exact insert already evidenced. Do not steal `\C-g` / `\C-r` / `\C-x\C-r`. Do not start overlay, ghost, highlighting, or `SRCH-003`. |

@@ -873,8 +873,52 @@ _mbx_search_insert
 assert_eq 'match-two' "$READLINE_LINE" 'second chord should cycle to the next match'
 _mbx_search_insert
 assert_eq 'match-one' "$READLINE_LINE" 'third chord should wrap to the first match'
+_mbx_search_restore
+assert_eq 'q' "$READLINE_LINE" 'restore after cycling should put back the typed query'
+assert_eq 1 "$READLINE_POINT" 'restore should put the cursor back on the typed query'
+assert_eq 0 "${#_MBX_SEARCH_MATCHES[@]}" 'restore should drop the snapshot'
+assert_eq 0 "${_MBX_SEARCH_HAS_ORIGINAL:-missing}" 'restore should drop the original line'
+
+READLINE_LINE='keep-me'
+READLINE_POINT=7
+_mbx_search_restore
+assert_eq 'keep-me' "$READLINE_LINE" \
+    'restore with no snapshot should leave the line unchanged'
+
+READLINE_LINE='q'
+READLINE_POINT=1
+_mbx_search_insert
+assert_eq 'match-one' "$READLINE_LINE" 'search should insert after a prior restore'
+_mbx_search_restore
+assert_eq 'q' "$READLINE_LINE" 'restore after a fresh insert should put back the typed query'
+
+cat >"$search_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+READLINE_LINE='q'
+READLINE_POINT=1
+_mbx_search_insert
+assert_eq 'q' "$READLINE_LINE" 'a failed search should leave the typed line'
+_mbx_search_restore
+assert_eq 'q' "$READLINE_LINE" \
+    'restore after a failed search should not revive a stale original'
+
+cat >"$search_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+printf '%s\n' "match-one"
+printf '%s\n' "match-two"
+EOF
+READLINE_LINE=
+READLINE_POINT=0
+_mbx_search_insert
+assert_eq 'match-one' "$READLINE_LINE" 'empty-line search should insert the first recent row'
+_mbx_search_restore
+assert_eq '' "$READLINE_LINE" 'restore should put back an empty typed line'
+assert_eq 0 "$READLINE_POINT" 'restore of an empty line should put the cursor at 0'
 _mbx_search_clear
 assert_eq 0 "${#_MBX_SEARCH_MATCHES[@]}" 'search_clear should drop the snapshot'
+assert_eq 0 "${_MBX_SEARCH_HAS_ORIGINAL:-missing}" 'search_clear should drop the original line'
 
 MBX_HISTORY=0
 READLINE_LINE='keep-me'
@@ -882,6 +926,12 @@ READLINE_POINT=7
 _mbx_search_insert
 assert_eq 'keep-me' "$READLINE_LINE" \
     'search must no-op when MBX_HISTORY is not 1'
+_MBX_SEARCH_HAS_ORIGINAL=1
+_MBX_SEARCH_ORIGINAL='secret'
+_MBX_SEARCH_ORIGINAL_POINT=0
+_mbx_search_restore
+assert_eq 'keep-me' "$READLINE_LINE" \
+    'restore must no-op when MBX_HISTORY is not 1'
 
 MBX_HISTORY=1
 MBX_BIN=/nonexistent/mbx-search-helper

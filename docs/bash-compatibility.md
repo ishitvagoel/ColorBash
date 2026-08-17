@@ -41,6 +41,7 @@ ranked-accept, history search) but not continuous highlighting on every
 keypress without rebinding or taking deeper ownership of the editor.
 Default history-search chord is `\C-xh` so stock reverse-i-search stays on
 `\C-r` and Readline `re-read-init-file` stays on `\C-x\C-r` (ADR 0009).
+Restore is `\C-xl` and does not steal `\C-g` abort.
 
 ## Smoke corpus
 

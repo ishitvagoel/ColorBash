@@ -767,7 +767,8 @@ to prevent recurrence, not to assign blame.
   stock emacs and vi-insert, and avoid `C-s`/`C-q` flow-control bytes. Occupied-
   skip tests that pre-bind a fake occupant do not prove the default chord is
   free or PTY-safe. Add a default-install bound assertion and an insert PTY case.
-- Evidence: `bash/search.bash`, `default_chord_installs_on_stock_emacs` in
+- Evidence: `bash/search.bash`, `default_chord_installs_on_stock_emacs` and
+  `default_restore_chord_installs_on_stock_emacs` in
   `crates/pty/tests/history_search.rs`, and ADR 0009.
 
 ## M-041 — Protocol frame reader rejected multi-line search output

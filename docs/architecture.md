@@ -60,7 +60,7 @@ bash/
   editor.bash        non-destructive bind -x insert prototype
   completion.bash    stock completion adapter and ranked-accept chord
   history.bash       opt-in admitted-entry observation and MBX2 RECORD send
-  search.bash        explicit history-search bind -x and bounded cycling (ADR 0009)
+  search.bash        explicit history-search bind -x, cycling, and restore (ADR 0009)
 
 crates/protocol/     dependency-free MBX1 wire model and PromptFlags value type
 crates/cli/src/
@@ -433,7 +433,8 @@ multiline-width-pty.md`), and the Bash history admission corpus
 implemented; `G2` is complete and write-ack percentiles are `deferred`. Provider expansion and
 highlighting remain gated by unproven continuous decoration
 (`docs/g3-gate-close-plan.md`). Explicit history search via `bind -x` is
-Strategy A (ADR 0009; `bash/search.bash`; default `\C-xh`; bounded cycling). `COMP-004` popup
+Strategy A (ADR 0009; `bash/search.bash`; default `\C-xh` insert and `\C-xl`
+restore; bounded cycling). `COMP-004` popup
 policy records no GUI overlay; ranked-accept `bind -x` evidence is complete
 (`docs/comp-004-ranked-accept-plan.md`).
 `G3` explicit `bind -x` evidence is complete.
