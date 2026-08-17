@@ -19,7 +19,7 @@ These slices have working code you can exercise in an interactive shell:
 | Ranked-accept chord | Default `Ctrl-X Ctrl-A` after wrapped Tab | Replaces current word with ranked candidate; Tab stays stock |
 | Git completion kinds | Wrap `git` or `mbx_comp_git` fixture | Additive `ref`/`flag`/`file`; no Git subprocess |
 | Fuzzy history search | `MBX_HISTORY=1` then `mbx history search fuzzy TEXT` | Ranks a bounded recent pool |
-| History-search chord | `MBX_HISTORY=1` then `Ctrl-X` `h` | Replaces the line with a sidecar match; repeat to cycle; `Ctrl-X` `l` restores the typed line; does not run it |
+| History-search chord | `MBX_HISTORY=1` then `Ctrl-X` `h` | Replaces the line with a sidecar match; empty line prefers `$PWD`; repeat to cycle; `Ctrl-X` `l` restores; does not run it |
 
 ## What remains
 
@@ -30,7 +30,7 @@ These MVP features are **not** implemented for interactive use:
 | Ghost suggestions | No after-every-key Readline decoration hook |
 | Completion popup | Overlay unproven; ranked-accept chord exists |
 | Syntax highlighting | Same continuous-decoration leftover |
-| Enhanced Ctrl+R overlay | Type-to-filter list still needs a result-view leftover; `\C-xh` insert and `\C-xl` restore exist |
+| Enhanced Ctrl+R overlay | Type-to-filter list still needs a result-view leftover; `\C-xh` insert, `\C-xl` restore, and cwd-scoped empty-line search exist |
 | Repository-context history | `HIST-010` |
 | macOS PTY matrix | `HRD-001` needs a macOS host |
 
@@ -200,10 +200,11 @@ alone unless `MBX_COMP_ACCEPT_OVERRIDE=1`.
 
 Requires `MBX_HISTORY=1`. Default chord is `Ctrl-X` then `h` so stock
 `Ctrl-R` reverse-i-search is unchanged. The chord replaces the whole line with
-the top sidecar match (exact prefix, then fuzzy; empty line uses newest
-rows) and does **not** run it until Enter. Press the chord again to cycle
-the bounded snapshot (default 8 matches). `Ctrl-X` then `l` restores the typed
-line without running the match. The snapshot clears at the next prompt.
+the top sidecar match (exact prefix, then fuzzy; empty line prefers commands
+from `$PWD`, then newest rows) and does **not** run it until Enter. Press the
+chord again to cycle the bounded snapshot (default 8 matches). `Ctrl-X` then
+`l` restores the typed line without running the match. The snapshot clears at
+the next prompt.
 
 ```bash
 MBX_HISTORY=1 bash --noprofile --norc
@@ -214,7 +215,8 @@ printf 'MBX_SRCH:beta\n'
 
 At the next prompt type `printf 'MBX_SRCH:a` and press `Ctrl-X` then `h`, then
 Enter. Expect `MBX_SRCH:alpha`. An empty line plus the same chord inserts the
-newest row. Repeat the chord to cycle older matches. `Ctrl-X` then `l` puts the
+newest row from `$PWD` (or the global newest if this directory has no rows).
+Repeat the chord to cycle older matches. `Ctrl-X` then `l` puts the
 typed prefix back. If that chord is already bound, MBX leaves it alone unless
 `MBX_SEARCH_OVERRIDE=1` (insert) or `MBX_SEARCH_RESTORE_OVERRIDE=1` (restore).
 
@@ -243,6 +245,7 @@ MBX_SEARCH_RESTORE_KEYSEQ='\C-xl'  # restore typed line (default)
 MBX_SEARCH_RESTORE_OVERRIDE=1   # overwrite an occupied restore chord
 MBX_SEARCH_TIMEOUT=0.10         # helper budget for one search insert
 MBX_SEARCH_LIMIT=8              # bounded snapshot size for cycling (max 16)
+MBX_SEARCH_CWD=0                # empty-line search uses global recent only
 MBX_LOG=trace                   # helper timing/events; never logs command text
 ```
 

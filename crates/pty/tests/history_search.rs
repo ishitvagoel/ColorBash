@@ -391,3 +391,77 @@ fn default_restore_chord_installs_on_stock_emacs() {
     wait_all(&mut session, &["\nMBX_SRCH:restore-bound", "> "]);
     exit_and_wait(&mut session);
 }
+
+#[test]
+fn empty_line_prefers_cwd_over_newer_other_directory() {
+    let home = TempHome::new("srch-c1");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    std::fs::create_dir(home.path().join("dir-a")).expect("dir-a");
+    std::fs::create_dir(home.path().join("dir-b")).expect("dir-b");
+    let dir_a = home.path().join("dir-a");
+    let dir_b = home.path().join("dir-b");
+    let mut session = spawn_history_shell(
+        home.path(),
+        &enabled_env(
+            data_home_s,
+            histfile_s,
+            &[("MBX_HISTORY_EXCLUDE", "cd *")],
+        ),
+    );
+    wait_for(&mut session, "> ");
+    type_line(&mut session, &format!("cd '{}'", dir_a.display()));
+    wait_for(&mut session, "> ");
+    type_line(&mut session, "echo MBX_SRCH:dir-a");
+    wait_all(&mut session, &["\nMBX_SRCH:dir-a", "> "]);
+    type_line(&mut session, &format!("cd '{}'", dir_b.display()));
+    wait_for(&mut session, "> ");
+    type_line(&mut session, "echo MBX_SRCH:dir-b");
+    wait_all(&mut session, &["\nMBX_SRCH:dir-b", "> "]);
+    wait_for_count(&mbx_bin(), &data_home, 2);
+    type_line(&mut session, &format!("cd '{}'", dir_a.display()));
+    wait_for(&mut session, "> ");
+
+    send_keyseq(&mut session, DEFAULT_KEYSEQ);
+    assert_no_marker(&mut session, "\nMBX_SRCH:dir-b");
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["MBX_SRCH:dir-a\n", "> "]);
+    exit_and_wait(&mut session);
+}
+
+#[test]
+fn empty_line_without_cwd_rows_falls_back_to_recent() {
+    let home = TempHome::new("srch-c2");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    std::fs::create_dir(home.path().join("dir-a")).expect("dir-a");
+    std::fs::create_dir(home.path().join("dir-c")).expect("dir-c");
+    let dir_a = home.path().join("dir-a");
+    let dir_c = home.path().join("dir-c");
+    let mut session = spawn_history_shell(
+        home.path(),
+        &enabled_env(
+            data_home_s,
+            histfile_s,
+            &[("MBX_HISTORY_EXCLUDE", "cd *")],
+        ),
+    );
+    wait_for(&mut session, "> ");
+    type_line(&mut session, &format!("cd '{}'", dir_a.display()));
+    wait_for(&mut session, "> ");
+    type_line(&mut session, "echo MBX_SRCH:dir-a");
+    wait_all(&mut session, &["\nMBX_SRCH:dir-a", "> "]);
+    wait_for_count(&mbx_bin(), &data_home, 1);
+    type_line(&mut session, &format!("cd '{}'", dir_c.display()));
+    wait_for(&mut session, "> ");
+
+    send_keyseq(&mut session, DEFAULT_KEYSEQ);
+    assert_no_marker(&mut session, "\nMBX_SRCH:dir-a");
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["MBX_SRCH:dir-a\n", "> "]);
+    exit_and_wait(&mut session);
+}

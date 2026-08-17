@@ -920,6 +920,29 @@ _mbx_search_clear
 assert_eq 0 "${#_MBX_SEARCH_MATCHES[@]}" 'search_clear should drop the snapshot'
 assert_eq 0 "${_MBX_SEARCH_HAS_ORIGINAL:-missing}" 'search_clear should drop the original line'
 
+cat >"$search_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+case " $* " in
+    *" search cwd "*) printf '%s\n' "cwd-hit" ;;
+    *" search recent "*) printf '%s\n' "recent-hit" ;;
+    *) printf '%s\n' "other-hit" ;;
+esac
+EOF
+READLINE_LINE=
+READLINE_POINT=0
+_mbx_search_insert
+assert_eq 'cwd-hit' "$READLINE_LINE" \
+    'empty-line search should prefer cwd matches when PWD is set'
+_mbx_search_clear
+MBX_SEARCH_CWD=0
+READLINE_LINE=
+READLINE_POINT=0
+_mbx_search_insert
+assert_eq 'recent-hit' "$READLINE_LINE" \
+    'MBX_SEARCH_CWD=0 should use global recent on an empty line'
+unset MBX_SEARCH_CWD
+_mbx_search_clear
+
 MBX_HISTORY=0
 READLINE_LINE='keep-me'
 READLINE_POINT=7
