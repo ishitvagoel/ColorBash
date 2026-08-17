@@ -881,8 +881,38 @@ assert_eq 'e' "$READLINE_LINE" 'history-off ghost should insert the typed charac
 if _mbx_ghost_usable_match 'e' $'echo \033bad'; then
     fail 'ghost accepted a match containing an escape'
 fi
+cat >"$ghost_stub_dir/mbx" <<'EOF'
+#!/bin/bash
+printf '%s\n' 'echo first extra' 'echo second extra'
+EOF
+MBX_HISTORY=1
+MBX_GHOST=1
+READLINE_LINE=
+READLINE_POINT=0
+READLINE_KEYSEQ=e
+_MBX_GHOST_HAS=0
+_mbx_ghost_self_insert
+assert_eq 'echo first extra' "$READLINE_LINE" \
+    'ghost should show the newest prefix match first'
+assert_eq 1 "$READLINE_POINT" 'ghost cycle should keep the cursor on the typed prefix'
+assert_eq 2 "${#_MBX_GHOST_CANDIDATES[@]}" 'ghost should collect multiple prefix matches'
+assert_eq 0 "${_MBX_GHOST_INDEX:-missing}" 'ghost should start on the newest match'
+_mbx_ghost_cycle_next
+assert_eq 'echo second extra' "$READLINE_LINE" \
+    'ghost cycle next should show the older prefix match'
+assert_eq 1 "$READLINE_POINT" 'ghost cycle next should restore the typed prefix point'
+assert_eq 1 "${_MBX_GHOST_INDEX:-missing}" 'ghost cycle next should advance the index'
+_mbx_ghost_cycle_next
+assert_eq 'echo first extra' "$READLINE_LINE" \
+    'ghost cycle next should wrap to the newest match'
+assert_eq 0 "${_MBX_GHOST_INDEX:-missing}" 'ghost cycle next should wrap the index'
+_mbx_ghost_cycle_prev
+assert_eq 'echo second extra' "$READLINE_LINE" \
+    'ghost cycle prev should wrap to the oldest collected match'
+assert_eq 1 "${_MBX_GHOST_INDEX:-missing}" 'ghost cycle prev should wrap the index'
 rm -rf "$ghost_stub_dir"
 unset MBX_BIN MBX_GHOST MBX_HISTORY READLINE_LINE READLINE_POINT READLINE_KEYSEQ \
-    _MBX_GHOST_HAS _MBX_GHOST_POINT
+    _MBX_GHOST_HAS _MBX_GHOST_POINT _MBX_GHOST_INDEX _MBX_GHOST_TYPED_LEN \
+    _MBX_GHOST_CANDIDATES
 
 printf 'PASS: focused Bash module contracts\n'

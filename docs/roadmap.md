@@ -7,7 +7,7 @@
 
 - Last reviewed: 2026-08-17 UTC
 - Current milestone: Phase 3A sidecar implemented; `G0` and `G2` complete; `G1` accepted
-- Active workstream: `GHST-002` opt-in inline ghost recorded; highlighting/overlay blocked on unproven continuous decoration
+- Active workstream: `GHST-003` cycling recorded; highlighting/overlay blocked on unproven continuous decoration
 - Next decision gate: continuous-decoration leftover (blocks highlighting / overlay)
 - Editor-facing work: opt-in ghost suffix is unblocked (ADR 0010). Highlighting and GUI overlay stay blocked on after-every-key paint.
 - Timing policy: unmet percentile targets are `deferred` and do not block
@@ -444,8 +444,8 @@ the roadmap cannot make that scope change by itself.
 ### Phase 4 — Ghost suggestions
 
 Status: `validation`. Opt-in suffix ghost is recorded (ADR 0010). Word-accept
-is recorded (`docs/ghst-003-word-accept-plan.md`). Dim paint, async lookup,
-and cycling remain.
+and cycling are recorded (`docs/ghst-003-word-accept-plan.md`,
+`docs/ghst-003-cycle-plan.md`). Dim paint and async lookup remain.
 
 After the gates pass, implement asynchronous ranked-history lookup with generation
 IDs, stale-result rejection, inline rendering, full/word acceptance, cycling, and
@@ -457,8 +457,8 @@ keystroke.
 | --- | --- | --- | --- |
 | `GHST-001` | Async ranked query with generation IDs and cancellation | `blocked` | async IPC ADR decision |
 | `GHST-002` | Inline ghost rendering with stale-result rejection | `validation` | ADR 0010; G-1–G-6 in `bash/ghost.bash`, `crates/pty/tests/ghost.rs`, `tests/bash/modules.bash`; `docs/ghst-002-inline-ghost-plan.md`; Enter is a Readline kill-line + accept-line macro (M-041); dim paint and async stale-rejection leftovers remain |
-| `GHST-003` | Full/word acceptance and suggestion cycling | `validation` | Right/`\C-f` full accept in G-2; `\ef` / Ctrl-Right word-accept in W-1–W-3 (`docs/ghst-003-word-accept-plan.md`); cycling remains |
-| `GHST-004` | Multiline, resize, exact-byte, no-execution, and latency evidence | `blocked` | word/cycle leftover, `PTY-001` matrix leftovers |
+| `GHST-003` | Full/word acceptance and suggestion cycling | `complete` | Right/`\C-f` full accept in G-2; `\ef` / Ctrl-Right word-accept in W-1–W-3 (`docs/ghst-003-word-accept-plan.md`); `\C-x\C-n` / `\C-x\C-p` cycling in C-1–C-3 (`docs/ghst-003-cycle-plan.md`) |
+| `GHST-004` | Multiline, resize, exact-byte, no-execution, and latency evidence | `blocked` | `PTY-001` matrix leftovers |
 
 Exit condition: `GHST-004` meets the accepted editing and safety budgets.
 
@@ -564,13 +564,14 @@ Exit condition: `G5` after every `HRD-*` item is complete.
 percentile leftovers are `deferred` and must not block product slices
 (`docs/latency-budget-deferral.md`).
 
-1. `GHST-002` opt-in inline ghost is recorded (ADR 0010). Word-accept is
-   recorded (`docs/ghst-003-word-accept-plan.md`). Do not mark `GHST-003` or
-   `GHST-004` complete. Do not start highlighting, overlay, or cycling.
+1. `GHST-003` full/word accept and cycling are recorded (ADR 0010;
+   `docs/ghst-003-word-accept-plan.md`; `docs/ghst-003-cycle-plan.md`). Do not
+   mark `GHST-004` complete. Do not start highlighting or overlay.
    `COMP-004` stays `discovery`. Do not mark `COMP-004` or `COMP-005` complete.
-2. Next named leftovers are ghost cycling, `HIST-010` / `GIT-003`,
-   and remaining `SRCH-003` work on other branches. Do not duplicate those PRs.
-2. `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
+2. Next named leftovers are `HIST-010` / `GIT-003` and remaining `SRCH-003`
+   work on other branches. Do not duplicate those PRs. Dim ghost paint stays
+   blocked on unproven after-every-key decoration.
+3. `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
    slice on FND-001 SHA refresh or percentile benches unless a functional
    prompt-path defect is proven.
 
@@ -704,3 +705,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Completed `HIST-009` bounded fuzzy search (`docs/hist-009-fuzzy-plan.md`; `mbx history search fuzzy`). `HIST-010` remains. |
 | 2026-08-17 | Recorded opt-in inline ghost (`docs/ghst-002-inline-ghost-plan.md`; ADR 0010; G-1–G-6). Suffix after `READLINE_POINT`; Enter is a Readline kill-line + accept-line macro while a suffix is active (M-041). Do not mark `GHST-004` complete. Do not start highlighting or overlay. |
 | 2026-08-17 | Recorded ghost word-accept (`docs/ghst-003-word-accept-plan.md`; W-1–W-3). `\ef` / Ctrl-Right advance one alphanumeric word. Cycling remains. Do not mark `GHST-003` or `GHST-004` complete. |
+| 2026-08-17 | Recorded ghost cycling (`docs/ghst-003-cycle-plan.md`; C-1–C-3). `\C-x\C-n` / `\C-x\C-p` cycle prefix matches. `GHST-003` moves to `complete`. Do not mark `GHST-004` complete. Do not start highlighting or overlay. |

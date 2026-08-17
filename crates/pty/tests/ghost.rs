@@ -7,6 +7,7 @@ use std::time::Duration;
 
 const RIGHT: &[u8] = b"\x1b[C";
 const META_F: &[u8] = b"\x1bf";
+const CTRL_X_CTRL_N: &[u8] = b"\x18\x0e";
 
 fn send_keys(session: &mut mbx_pty::PtySession, keys: &[u8]) {
     session.write_all(keys, deadline(2)).expect("keys");
@@ -170,7 +171,7 @@ fn default_install_sets_bound_flag() {
     wait_for(&mut session, "> ");
     session
         .write_str(
-            "[[ ${_MBX_GHOST_BOUND:-missing} == 1 ]] && printf 'MBX_GHST:bound\\n'\n",
+            "[[ ${_MBX_GHOST_BOUND:-missing} == 1 && ${_MBX_GHOST_CYCLE_BOUND:-missing} == 1 ]] && printf 'MBX_GHST:bound\\n'\n",
             deadline(2),
         )
         .expect("status");
@@ -209,6 +210,55 @@ fn alt_f_accepts_one_word() {
     assert!(
         recent.iter().any(|command| command == "echo MBX_GHST:one"),
         "word-accepted prefix was not admitted: {recent:?}"
+    );
+    exit_and_wait(&mut session);
+}
+
+#[test]
+fn ctrl_x_ctrl_n_cycles_to_older_prefix_match() {
+    let home = TempHome::new("ghst-c2");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let mut session = spawn_history_shell(home.path(), &ghost_env(data_home_s, histfile_s, &[]));
+    wait_for(&mut session, "> ");
+    record_echo(&mut session, "one");
+    record_echo(&mut session, "two");
+    wait_for_count(&mbx_bin(), &data_home, 2);
+
+    session
+        .write_str("echo MBX_GHST:", deadline(2))
+        .expect("type prefix");
+    wait_all(&mut session, &["echo MBX_GHST:two"]);
+    send_keys(&mut session, CTRL_X_CTRL_N);
+    wait_all(&mut session, &["echo MBX_GHST:one"]);
+    assert_no_output(&mut session, "MBX_GHST:one\n");
+    send_keys(&mut session, RIGHT);
+    session.write_str("\n", deadline(2)).expect("enter");
+    let output = wait_all(&mut session, &["MBX_GHST:one\n", "> "]);
+    assert!(
+        !visible_contains(&output, "MBX_GHST:two\n"),
+        "newest match executed after cycling to the older one: {:?}",
+        visible_text(&output)
+    );
+    wait_for_count(&mbx_bin(), &data_home, 3);
+    let recent = sidecar_commands(&mbx_bin(), &data_home);
+    assert_eq!(
+        recent
+            .iter()
+            .filter(|command| *command == "echo MBX_GHST:one")
+            .count(),
+        2,
+        "cycled older match was not admitted: {recent:?}"
+    );
+    assert_eq!(
+        recent
+            .iter()
+            .filter(|command| *command == "echo MBX_GHST:two")
+            .count(),
+        1,
+        "newest match was admitted after cycling away: {recent:?}"
     );
     exit_and_wait(&mut session);
 }

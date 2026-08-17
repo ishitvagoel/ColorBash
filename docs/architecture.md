@@ -432,7 +432,7 @@ highlighting remains gated by unproven continuous decoration
 (`docs/g3-gate-close-plan.md`). Opt-in inline ghost is ADR 0010
 (`bash/ghost.bash`; suffix after `READLINE_POINT`; Enter uses a Readline
 kill-line + accept-line macro while a suffix is active; `\ef` / Ctrl-Right
-accept one word). `COMP-004`
+accept one word; `\C-x\C-n` / `\C-x\C-p` cycle prefix matches). `COMP-004`
 popup policy records no GUI overlay; ranked-accept `bind -x` evidence is complete
 (`docs/comp-004-ranked-accept-plan.md`).
 `G3` explicit `bind -x` evidence is complete.

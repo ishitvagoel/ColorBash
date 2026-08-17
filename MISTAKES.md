@@ -770,7 +770,8 @@ to prevent recurrence, not to assign blame.
   emacs. Occupied-skip that aborts the whole installer must have a
   default-install bound assertion.
 - Evidence: `bash/ghost.bash`, `default_install_sets_bound_flag` in
-  `crates/pty/tests/ghost.rs`, and ADR 0010.
+  `crates/pty/tests/ghost.rs` (`_MBX_GHOST_BOUND` and `_MBX_GHOST_CYCLE_BOUND`),
+  and ADR 0010.
 
 ## M-041 — bind -x inside a keyseq macro drops remaining keys
 

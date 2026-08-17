@@ -114,5 +114,6 @@ have no supported after-every-key hook; they remain deferred per ADR 0003 until 
 separate strategy is evidenced (`docs/edt-001-exact-bytes-plan.md` B-5). Opt-in
 inline ghost (ADR 0010) keeps the suggestion in `READLINE_LINE` after
 `READLINE_POINT` instead of painting after redisplay. Enter is a Readline-only
-kill-line + accept-line macro while that suffix is active (M-041).
+kill-line + accept-line macro while that suffix is active (M-041). Unbound
+`\C-x\C-n` / `\C-x\C-p` cycle other exact-prefix rows.
 

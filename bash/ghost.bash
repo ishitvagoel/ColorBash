@@ -3,13 +3,20 @@
 # `\C-xg` is glob-list-expansions (M-040). Enter is not bind -x: a -x step in a
 # keyseq macro drops the remaining keys (M-041), so an active suffix arms a
 # Readline-only kill-line + accept-line macro on `\C-m` and `\C-j` instead.
+# Cycle next/prev default to unbound `\C-x\C-n` / `\C-x\C-p` (not `\en`/`\ep`).
 _MBX_GHOST_KILL_DEFAULT_KEYSEQ='\C-x\C-k'
 _MBX_GHOST_ACCEPT_DEFAULT_KEYSEQ='\C-x\C-m'
+_MBX_GHOST_NEXT_DEFAULT_KEYSEQ='\C-x\C-n'
+_MBX_GHOST_PREV_DEFAULT_KEYSEQ='\C-x\C-p'
 _MBX_GHOST_HAS=0
 _MBX_GHOST_POINT=0
 _MBX_GHOST_BOUND=0
+_MBX_GHOST_CYCLE_BOUND=0
 _MBX_GHOST_ENTER_ARMED=0
 _MBX_GHOST_WRAP_CTRL_J=0
+_MBX_GHOST_INDEX=0
+_MBX_GHOST_TYPED_LEN=0
+_MBX_GHOST_CANDIDATES=()
 _MBX_GHOST_KILL_KEYSEQ=$_MBX_GHOST_KILL_DEFAULT_KEYSEQ
 _MBX_GHOST_ACCEPT_KEYSEQ=$_MBX_GHOST_ACCEPT_DEFAULT_KEYSEQ
 
@@ -37,9 +44,16 @@ _mbx_ghost_arm_enter() {
     _MBX_GHOST_ENTER_ARMED=1
 }
 
-_mbx_ghost_clear() {
+_mbx_ghost_reset_state() {
     _MBX_GHOST_HAS=0
     _MBX_GHOST_POINT=0
+    _MBX_GHOST_INDEX=0
+    _MBX_GHOST_TYPED_LEN=0
+    _MBX_GHOST_CANDIDATES=()
+}
+
+_mbx_ghost_clear() {
+    _mbx_ghost_reset_state
     _mbx_ghost_disarm_enter || true
 }
 
@@ -49,9 +63,8 @@ _mbx_ghost_strip() {
         cut=${_MBX_GHOST_POINT:-0}
         READLINE_LINE=${READLINE_LINE:0:cut}
         READLINE_POINT=$cut
-        _MBX_GHOST_HAS=0
-        _MBX_GHOST_POINT=0
     fi
+    _mbx_ghost_reset_state
     _mbx_ghost_disarm_enter || true
 }
 
@@ -108,13 +121,42 @@ _mbx_ghost_usable_match() {
     REPLY=$match
 }
 
+_mbx_ghost_limit() {
+    local n=${MBX_GHOST_LIMIT:-8}
+    case $n in
+        '' | *[!0-9]*)
+            n=8
+            ;;
+    esac
+    if ((10#$n < 1)); then
+        n=1
+    fi
+    if ((10#$n > 8)); then
+        n=8
+    fi
+    REPLY=$n
+}
+
+_mbx_ghost_candidate_seen() {
+    local candidate=$1
+    local existing
+    for existing in "${_MBX_GHOST_CANDIDATES[@]}"; do
+        [[ $existing == "$candidate" ]] && return 0
+    done
+    return 1
+}
+
 _mbx_ghost_query() {
     local query=$1
-    local deadline output_fd child_pid match=
+    local deadline output_fd child_pid match= limit
     local monitor=0 notify=0
 
+    _MBX_GHOST_CANDIDATES=()
+    _MBX_GHOST_INDEX=0
     [[ -x ${MBX_BIN:-} ]] || return 1
     [[ -n $query ]] || return 1
+    _mbx_ghost_limit
+    limit=$REPLY
     _mbx_deadline_after "${MBX_GHOST_TIMEOUT:-${MBX_HISTORY_TIMEOUT:-0.10}}" || \
         return 1
     deadline=$REPLY
@@ -122,46 +164,88 @@ _mbx_ghost_query() {
     [[ $- == *b* ]] && notify=1
     set +m
     set +b
-    exec {output_fd}< <(exec "$MBX_BIN" history search prefix "$query" --limit 1 \
+    exec {output_fd}< <(exec "$MBX_BIN" history search prefix "$query" --limit "$limit" \
         2>/dev/null) || {
         ((notify == 1)) && set -b
         ((monitor == 1)) && set -m
         return 1
     }
     child_pid=$!
-    if _mbx_ghost_read_line "$output_fd" "$deadline"; then
+    while ((${#_MBX_GHOST_CANDIDATES[@]} < limit)); do
+        _mbx_ghost_read_line "$output_fd" "$deadline" || break
         match=$REPLY
-    fi
+        _mbx_ghost_usable_match "$query" "$match" || continue
+        match=$REPLY
+        _mbx_ghost_candidate_seen "$match" && continue
+        _MBX_GHOST_CANDIDATES+=("$match")
+    done
     exec {output_fd}<&-
     if ! _mbx_wait_child_until "$child_pid" "$deadline"; then
         _mbx_terminate_child "$child_pid"
     fi
     ((notify == 1)) && set -b
     ((monitor == 1)) && set -m
-    _mbx_ghost_usable_match "$query" "$match" || return 1
+    ((${#_MBX_GHOST_CANDIDATES[@]} > 0)) || return 1
+    REPLY=${_MBX_GHOST_CANDIDATES[0]}
 }
 
-_mbx_ghost_refresh() {
-    local typed=${READLINE_LINE-}
-    local point=${READLINE_POINT:-0}
+_mbx_ghost_show() {
+    local match=$1
+    local typed=$2
+    local point=${_MBX_GHOST_TYPED_LEN:-0}
 
-    _MBX_GHOST_HAS=0
-    _MBX_GHOST_POINT=0
-    _mbx_ghost_disarm_enter || true
-    [[ ${MBX_GHOST:-} == 1 && ${MBX_HISTORY:-} == 1 ]] || return 0
-    ((point == ${#typed})) || return 0
-    [[ -n $typed ]] || return 0
-    _mbx_ghost_query "$typed" || return 0
-    READLINE_LINE=$REPLY
+    READLINE_LINE=$match
     READLINE_POINT=$point
     _MBX_GHOST_HAS=1
     _MBX_GHOST_POINT=$point
     if ! _mbx_ghost_arm_enter; then
         READLINE_LINE=$typed
         READLINE_POINT=$point
-        _MBX_GHOST_HAS=0
-        _MBX_GHOST_POINT=0
+        _mbx_ghost_reset_state
+        return 1
     fi
+}
+
+_mbx_ghost_refresh() {
+    local typed=${READLINE_LINE-}
+    local point=${READLINE_POINT:-0}
+
+    _mbx_ghost_reset_state
+    _mbx_ghost_disarm_enter || true
+    [[ ${MBX_GHOST:-} == 1 && ${MBX_HISTORY:-} == 1 ]] || return 0
+    ((point == ${#typed})) || return 0
+    [[ -n $typed ]] || return 0
+    _mbx_ghost_query "$typed" || return 0
+    _MBX_GHOST_TYPED_LEN=$point
+    _mbx_ghost_show "$REPLY" "$typed" || return 0
+}
+
+_mbx_ghost_cycle() {
+    local delta=${1:-1}
+    local n=${#_MBX_GHOST_CANDIDATES[@]}
+    local i typed typed_len
+
+    [[ ${_MBX_GHOST_HAS:-0} == 1 ]] || return 0
+    ((n >= 2)) || return 0
+    typed_len=${_MBX_GHOST_TYPED_LEN:-0}
+    typed=${READLINE_LINE:0:typed_len}
+    i=$((_MBX_GHOST_INDEX + delta))
+    if ((i < 0)); then
+        i=$((n - 1))
+    fi
+    if ((i >= n)); then
+        i=0
+    fi
+    _MBX_GHOST_INDEX=$i
+    _mbx_ghost_show "${_MBX_GHOST_CANDIDATES[i]}" "$typed" || return 0
+}
+
+_mbx_ghost_cycle_next() {
+    _mbx_ghost_cycle 1
+}
+
+_mbx_ghost_cycle_prev() {
+    _mbx_ghost_cycle -1
 }
 
 _mbx_ghost_self_insert() {
@@ -190,8 +274,7 @@ _mbx_ghost_forward() {
     local point=${READLINE_POINT:-0}
     if [[ ${_MBX_GHOST_HAS:-0} == 1 ]]; then
         READLINE_POINT=${#READLINE_LINE}
-        _MBX_GHOST_HAS=0
-        _MBX_GHOST_POINT=0
+        _mbx_ghost_reset_state
         _mbx_ghost_disarm_enter || true
         return 0
     fi
@@ -222,8 +305,7 @@ _mbx_ghost_forward_word() {
         return 0
     fi
     if ((point >= n)); then
-        _MBX_GHOST_HAS=0
-        _MBX_GHOST_POINT=0
+        _mbx_ghost_reset_state
         _mbx_ghost_disarm_enter || true
         return 0
     fi
@@ -295,6 +377,7 @@ _mbx_ghost_bind_self_chars() {
 _mbx_ghost_install() {
     [[ ${_MBX_GHOST_INSTALLED:-0} != 1 ]] || return 0
     _MBX_GHOST_BOUND=0
+    _MBX_GHOST_CYCLE_BOUND=0
     _MBX_GHOST_ENTER_ARMED=0
     _MBX_GHOST_WRAP_CTRL_J=0
     if [[ $- != *i* || ! -t 0 ]]; then
@@ -307,6 +390,8 @@ _mbx_ghost_install() {
     fi
     local kill_key=${MBX_GHOST_KILL_KEYSEQ:-$_MBX_GHOST_KILL_DEFAULT_KEYSEQ}
     local accept_key=${MBX_GHOST_ACCEPT_KEYSEQ:-$_MBX_GHOST_ACCEPT_DEFAULT_KEYSEQ}
+    local next_key=${MBX_GHOST_NEXT_KEYSEQ:-$_MBX_GHOST_NEXT_DEFAULT_KEYSEQ}
+    local prev_key=${MBX_GHOST_PREV_KEYSEQ:-$_MBX_GHOST_PREV_DEFAULT_KEYSEQ}
     local chars='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _-.:/'
     [[ -n $kill_key && -n $accept_key ]] || {
         _MBX_GHOST_INSTALLED=1
@@ -358,6 +443,14 @@ _mbx_ghost_install() {
     _mbx_ghost_bind_x emacs '\ef' _mbx_ghost_forward_word forward-word || true
     _mbx_ghost_bind_x emacs '\e[1;5C' _mbx_ghost_forward_word forward-word || true
     _mbx_ghost_bind_x emacs '\e[5C' _mbx_ghost_forward_word forward-word || true
+    if [[ -n $next_key && $next_key != "$kill_key" && $next_key != "$accept_key" ]]; then
+        if _mbx_ghost_bind_x emacs "$next_key" _mbx_ghost_cycle_next ''; then
+            _MBX_GHOST_CYCLE_BOUND=1
+        fi
+    fi
+    if [[ -n $prev_key && $prev_key != "$kill_key" && $prev_key != "$accept_key" && $prev_key != "$next_key" ]]; then
+        _mbx_ghost_bind_x emacs "$prev_key" _mbx_ghost_cycle_prev '' || true
+    fi
     _MBX_GHOST_BOUND=1
     _MBX_GHOST_INSTALLED=1
 }

@@ -19,7 +19,7 @@ These slices have working code you can exercise in an interactive shell:
 | Ranked-accept chord | Default `Ctrl-X Ctrl-A` after wrapped Tab | Replaces current word with ranked candidate; Tab stays stock |
 | Git completion kinds | Wrap `git` or `mbx_comp_git` fixture | Additive `ref`/`flag`/`file`; no Git subprocess |
 | Fuzzy history search | `MBX_HISTORY=1` then `mbx history search fuzzy TEXT` | Ranks a bounded recent pool |
-| History ghost suffix | `MBX_HISTORY=1` and `MBX_GHOST=1` | Suggestion after the cursor; Enter runs the typed prefix; Right accepts all; Alt-F / Ctrl-Right accept one word |
+| History ghost suffix | `MBX_HISTORY=1` and `MBX_GHOST=1` | Suggestion after the cursor; Enter runs the typed prefix; Right accepts all; Alt-F / Ctrl-Right accept one word; Ctrl-X Ctrl-N / Ctrl-P cycle matches |
 
 ## What remains
 
@@ -205,8 +205,9 @@ echo unique-ghost-alpha
 
 Type `echo unique-ghost-a` and pause. The rest of the previous command should
 appear after the cursor. Enter runs only what you typed. Right Arrow then Enter
-accepts the full suggestion. Alt-F or Ctrl-Right accepts one word. The suffix is
-ordinary command text, not dim paint.
+accepts the full suggestion. Alt-F or Ctrl-Right accepts one word. Ctrl-X Ctrl-N
+and Ctrl-X Ctrl-P cycle other prefix matches. The suffix is ordinary command
+text, not dim paint.
 
 ## Prototype controls
 
@@ -224,8 +225,11 @@ MBX_HISTORY=1                   # opt in to the local history sidecar
 MBX_HISTORY_EXCLUDE='git *'     # colon-separated glob exclusions
 MBX_GHOST=1                     # opt-in history suffix after the cursor (needs MBX_HISTORY=1)
 MBX_GHOST_OVERRIDE=1            # overwrite occupied ghost self-insert keys
+MBX_GHOST_LIMIT=8               # max prefix matches collected for cycling (1-8)
 MBX_GHOST_KILL_KEYSEQ='\C-x\C-k'   # kill-line helper used by Enter while a suffix is shown
 MBX_GHOST_ACCEPT_KEYSEQ='\C-x\C-m' # accept-line helper used by that Enter macro
+MBX_GHOST_NEXT_KEYSEQ='\C-x\C-n'   # cycle to the next prefix match
+MBX_GHOST_PREV_KEYSEQ='\C-x\C-p'   # cycle to the previous prefix match
 MBX_EDITOR_INSERT_TOKEN=hello   # text inserted by Ctrl-X Ctrl-Y
 MBX_EDITOR_INSERT_KEYSEQ='\C-x\C-y'
 MBX_EDITOR_OVERRIDE=1           # overwrite an occupied insert chord

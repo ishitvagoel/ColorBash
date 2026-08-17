@@ -1,7 +1,7 @@
 # GHST-003 leftover: word-accept one suffix word (W-1–W-3)
 
-Status: `complete` for word-accept (2026-08-17). Suggestion cycling remains.
-Do **not** mark `GHST-003` or `GHST-004` complete.
+Status: `complete` for word-accept (2026-08-17). Suggestion cycling is recorded
+in `docs/ghst-003-cycle-plan.md`. Do **not** mark `GHST-004` complete.
 
 ## Why this slice
 
@@ -12,7 +12,7 @@ unaccepted suffix, so Enter's kill-line macro (M-041) still drops the rest.
 | Rank | Item | Why not now |
 | --- | --- | --- |
 | 1 | Word-accept (this plan) | Named `GHST-003` leftover; no overlay. |
-| — | Suggestion cycling | Needs more than `--limit 1` and a dedicated chord. |
+| — | Suggestion cycling | Recorded in `docs/ghst-003-cycle-plan.md`. |
 | — | Dim / highlighting | After-every-key paint still unproven. |
 
 ## Goal
@@ -24,12 +24,10 @@ unaccepted suffix, so Enter's kill-line macro (M-041) still drops the rest.
    records that as `_MBX_GHOST_POINT`. Remaining suffix stays after point.
 3. A word-accept that reaches the end of the line is full accept (clear the
    suffix flag; disarm Enter). Enter still must not run unaccepted words.
-4. Do not mark cycling or `GHST-004` complete. Do not start highlighting.
 
 ## Out of scope (hard)
 
 - Dim ANSI, GUI overlay, syntax highlighting
-- Suggestion cycling / ranked next-prev
 - Rebinding Tab, `\C-r`, `\C-g`, `\C-x\C-r`, `\C-x\C-s`
 - `eval` from bind -x
 - Marking Phase 4 complete
@@ -44,5 +42,5 @@ unaccepted suffix, so Enter's kill-line macro (M-041) still drops the rest.
 
 ## Stop
 
-Do not start cycling, highlighting, or a completion overlay. Do not mark
-`GHST-003` or `GHST-004` complete.
+Do not start highlighting or a completion overlay. Do not mark `GHST-004`
+complete. Cycling is specified in `docs/ghst-003-cycle-plan.md`.
