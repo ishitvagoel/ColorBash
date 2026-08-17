@@ -31,12 +31,14 @@ experiments.
    row may extend `READLINE_LINE` to the right of the cursor. That suffix is
    not accepted until the user moves point to the end (default Right /
    `\C-f`).
-4. Enter (`\C-m`) stays `accept-line` except while a suffix is active. Then it
-   is a Readline-only macro: reserved kill-line (default `\C-x\C-k`) from point,
-   then reserved accept-line (default `\C-x\C-m`). `bind -x` cannot be chained
-   in a keyseq macro because remaining keys are dropped (M-041). Do not `eval`
-   the line. Do not rebind `\C-j`. Occupied helper chords skip install.
-   Do not use `\C-xg` or a letter suffix that ghost also wraps.
+4. Enter (`\C-m`) and newline (`\C-j`, when it is stock `accept-line`) stay
+   `accept-line` except while a suffix is active. Then both are a Readline-only
+   macro: reserved kill-line (default `\C-x\C-k`) from point, then reserved
+   accept-line (default `\C-x\C-m`). Terminals often deliver Enter as `\n`
+   (`\C-j`) via `icrnl`. `bind -x` cannot be chained in a keyseq macro because
+   remaining keys are dropped (M-041). Do not `eval` the line. Occupied helper
+   chords skip install. Do not use `\C-xg` or a letter suffix that ghost also
+   wraps.
 5. Helper timeout, missing binary, or a match that is not an exact byte prefix
    / contains controls leaves the typed character inserted and no suffix.
    Query budget is `MBX_GHOST_TIMEOUT` (default `MBX_HISTORY_TIMEOUT` / 0.10 s).

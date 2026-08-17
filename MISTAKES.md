@@ -782,10 +782,10 @@ to prevent recurrence, not to assign blame.
   unaccepted suffix (G-1 executed the full suggestion) or required `eval` of
   `READLINE_LINE`, which is out of scope and skips `accept-line` / sidecar
   admission / prompt hooks.
-- Correction: while a suffix is active, Enter is a Readline-only macro:
-  reserved `kill-line` from point, then reserved `accept-line`. The line is
-  not evaluated from bind -x. G-1 asserts sidecar admission of the typed
-  prefix.
+- Correction: while a suffix is active, `\C-m` and `\C-j` (newline / `icrnl`
+  Enter) are a Readline-only macro: reserved `kill-line` from point, then
+  reserved `accept-line`. The line is not evaluated from bind -x. G-1 asserts
+  sidecar admission of the typed prefix.
 - Prevention: never chain bind -x with later macro keys. Enter and other
   accept paths must remain Readline functions unless an ADR records a
   different execution owner.

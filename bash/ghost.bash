@@ -2,27 +2,38 @@
 # Opt-in inline ghost suffix (ADR 0010). Suggestion lives after READLINE_POINT.
 # `\C-xg` is glob-list-expansions (M-040). Enter is not bind -x: a -x step in a
 # keyseq macro drops the remaining keys (M-041), so an active suffix arms a
-# Readline-only kill-line + accept-line macro instead.
+# Readline-only kill-line + accept-line macro on `\C-m` and `\C-j` instead.
 _MBX_GHOST_KILL_DEFAULT_KEYSEQ='\C-x\C-k'
 _MBX_GHOST_ACCEPT_DEFAULT_KEYSEQ='\C-x\C-m'
 _MBX_GHOST_HAS=0
 _MBX_GHOST_POINT=0
 _MBX_GHOST_BOUND=0
 _MBX_GHOST_ENTER_ARMED=0
+_MBX_GHOST_WRAP_CTRL_J=0
 _MBX_GHOST_KILL_KEYSEQ=$_MBX_GHOST_KILL_DEFAULT_KEYSEQ
 _MBX_GHOST_ACCEPT_KEYSEQ=$_MBX_GHOST_ACCEPT_DEFAULT_KEYSEQ
 
 _mbx_ghost_disarm_enter() {
     [[ ${_MBX_GHOST_ENTER_ARMED:-0} == 1 ]] || return 0
     bind -m emacs '"\C-m": accept-line' || return 1
+    if [[ ${_MBX_GHOST_WRAP_CTRL_J:-0} == 1 ]]; then
+        bind -m emacs '"\C-j": accept-line' || return 1
+    fi
     _MBX_GHOST_ENTER_ARMED=0
 }
 
 _mbx_ghost_arm_enter() {
+    local macro
     [[ ${_MBX_GHOST_BOUND:-0} == 1 ]] || return 0
     [[ ${_MBX_GHOST_ENTER_ARMED:-0} == 1 ]] && return 0
-    bind -m emacs "\"\\C-m\": \"${_MBX_GHOST_KILL_KEYSEQ}${_MBX_GHOST_ACCEPT_KEYSEQ}\"" || \
-        return 1
+    macro="${_MBX_GHOST_KILL_KEYSEQ}${_MBX_GHOST_ACCEPT_KEYSEQ}"
+    bind -m emacs "\"\\C-m\": \"$macro\"" || return 1
+    if [[ ${_MBX_GHOST_WRAP_CTRL_J:-0} == 1 ]]; then
+        if ! bind -m emacs "\"\\C-j\": \"$macro\""; then
+            bind -m emacs '"\C-m": accept-line' || true
+            return 1
+        fi
+    fi
     _MBX_GHOST_ENTER_ARMED=1
 }
 
@@ -255,6 +266,7 @@ _mbx_ghost_install() {
     [[ ${_MBX_GHOST_INSTALLED:-0} != 1 ]] || return 0
     _MBX_GHOST_BOUND=0
     _MBX_GHOST_ENTER_ARMED=0
+    _MBX_GHOST_WRAP_CTRL_J=0
     if [[ $- != *i* ]]; then
         _MBX_GHOST_INSTALLED=1
         return 0
@@ -280,6 +292,14 @@ _mbx_ghost_install() {
     }
     _mbx_ghost_stock_fn '\C-m' emacs
     if [[ $REPLY != accept-line ]] || _mbx_ghost_keyseq_has_x '\C-m' emacs; then
+        _MBX_GHOST_INSTALLED=1
+        return 0
+    fi
+    _mbx_ghost_stock_fn '\C-j' emacs
+    if [[ $REPLY == accept-line ]] && ! _mbx_ghost_keyseq_has_x '\C-j' emacs; then
+        _MBX_GHOST_WRAP_CTRL_J=1
+    fi
+    if [[ ${_MBX_GHOST_WRAP_CTRL_J:-0} != 1 ]]; then
         _MBX_GHOST_INSTALLED=1
         return 0
     fi
