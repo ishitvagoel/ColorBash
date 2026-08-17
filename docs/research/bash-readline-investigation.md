@@ -111,5 +111,7 @@ buffers preserve exact bytes and usable prompts after insert, cancel, resize, an
 job control. This satisfies the **insert-time** redraw question for explicit
 actions only. Continuous syntax decoration, ghost text, and popup menus still
 have no supported after-every-key hook; they remain deferred per ADR 0003 until a
-separate strategy is evidenced (`docs/edt-001-exact-bytes-plan.md` B-5).
+separate strategy is evidenced (`docs/edt-001-exact-bytes-plan.md` B-5). Opt-in
+inline ghost (ADR 0010) keeps the suggestion in `READLINE_LINE` after
+`READLINE_POINT` instead of painting after redisplay.
 

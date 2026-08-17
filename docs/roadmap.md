@@ -5,11 +5,11 @@
 > brief remains `CODEX_MODERN_BASH_ARCHITECTURE.md`; its checkboxes describe the
 > intended program and are not a status tracker.
 
-- Last reviewed: 2026-08-16 UTC
+- Last reviewed: 2026-08-17 UTC
 - Current milestone: Phase 3A sidecar implemented; `G0` and `G2` complete; `G1` accepted
-- Active workstream: unblocked leftovers (`GIT-004` / `HIST-009`); overlay/ghost/highlighting blocked on unproven continuous decoration
-- Next decision gate: continuous-decoration leftover (blocks ghost / highlighting)
-- Editor-facing work is blocked by: unproven after-every-key decoration, as identified per phase
+- Active workstream: `GHST-002` opt-in inline ghost recorded; highlighting/overlay blocked on unproven continuous decoration
+- Next decision gate: continuous-decoration leftover (blocks highlighting / overlay)
+- Editor-facing work: opt-in ghost suffix is unblocked (ADR 0010). Highlighting and GUI overlay stay blocked on after-every-key paint.
 - Timing policy: unmet percentile targets are `deferred` and do not block
   product development (`docs/latency-budget-deferral.md`)
 
@@ -123,7 +123,8 @@ recorded a green run on `origin/main` at commit
 Not implemented:
 
 - fuzzy history ranking or repository-context history fields;
-- enhanced Ctrl+R, ghost suggestions, completion UI, or live highlighting;
+- enhanced Ctrl+R overlay, completion UI, or live highlighting;
+- opt-in inline ghost is implemented (ADR 0010); dim after-every-key paint is not;
 - arbitrary key-injection coverage (Tab, arrows, Ctrl+R), the release platform
   matrix, or remaining `G0` platform-matrix evidence;
 - prompt-boundary write-ack percentile budget (correctness recorded; p95 miss
@@ -276,7 +277,8 @@ prototype:
 - restores terminal state and prompt output after cancellation/failure; and
 - demonstrates insert-time Readline redraw without printable-key rebinds
   (B-5). Continuous after-every-key decoration stays unproven and still
-  blocks ghost and highlighting (`docs/g3-gate-close-plan.md`; ADR 0003).
+  blocks highlighting and GUI overlays (`docs/g3-gate-close-plan.md`; ADR 0003).
+  Opt-in inline ghost is a separate Strategy A path (ADR 0010).
 
 ### G4 — Completion parity
 
@@ -317,7 +319,7 @@ latency budgets.
 | 1 | Bootstrap | `complete` | CI linked; broader lifecycle tracing deferred |
 | 2 | Prompt | `complete` | capability/width/wrap recorded; `PRM-004` percentiles `deferred` |
 | 3 | History | `complete` | Phase 3A / `G2` complete; `HIST-009` complete; `HIST-010` remains; write-ack percentiles `deferred` |
-| 4 | Ghost suggestions | `blocked` | unproven continuous decoration |
+| 4 | Ghost suggestions | `validation` | ADR 0010 opt-in suffix; async/dim/word-cycle leftovers remain |
 | 5 | Completion | `validation` | `G4` / `COMP-001` / `COMP-002` / `COMP-003` complete; `COMP-004` in `discovery` (no overlay); `GIT-004` complete |
 | 6 | Syntax highlighting | `blocked` | unproven continuous decoration; intentionally after search/ghost/completion evidence |
 | 7 | Git/provider expansion | `discovery` | bounded prompt subset exists; richer capabilities await a consumer |
@@ -441,7 +443,8 @@ the roadmap cannot make that scope change by itself.
 
 ### Phase 4 — Ghost suggestions
 
-Status: `blocked` by unproven continuous decoration.
+Status: `validation`. Opt-in suffix ghost is recorded (ADR 0010). Dim paint,
+async lookup, word-accept, and cycling remain.
 
 After the gates pass, implement asynchronous ranked-history lookup with generation
 IDs, stale-result rejection, inline rendering, full/word acceptance, cycling, and
@@ -452,9 +455,9 @@ keystroke.
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
 | `GHST-001` | Async ranked query with generation IDs and cancellation | `blocked` | async IPC ADR decision |
-| `GHST-002` | Inline ghost rendering with stale-result rejection | `blocked` | unproven continuous decoration, `GHST-001` |
-| `GHST-003` | Full/word acceptance and suggestion cycling | `blocked` | `GHST-002` |
-| `GHST-004` | Multiline, resize, exact-byte, no-execution, and latency evidence | `blocked` | `GHST-003`, `PTY-001` |
+| `GHST-002` | Inline ghost rendering with stale-result rejection | `validation` | ADR 0010; G-1–G-6 in `bash/ghost.bash`, `crates/pty/tests/ghost.rs`, `tests/bash/modules.bash`; `docs/ghst-002-inline-ghost-plan.md`; dim paint and async stale-rejection leftovers remain |
+| `GHST-003` | Full/word acceptance and suggestion cycling | `validation` | Right/`\C-f` full accept in G-2; word-accept and cycling remain |
+| `GHST-004` | Multiline, resize, exact-byte, no-execution, and latency evidence | `blocked` | word/cycle leftover, `PTY-001` matrix leftovers |
 
 Exit condition: `GHST-004` meets the accepted editing and safety budgets.
 
@@ -560,9 +563,11 @@ Exit condition: `G5` after every `HRD-*` item is complete.
 percentile leftovers are `deferred` and must not block product slices
 (`docs/latency-budget-deferral.md`).
 
-1. Next unblocked leftover is the `HIST-010` / `GIT-003` pair (repo context on
-   history rows). Do not start overlay, ghost, or highlighting. `COMP-004`
-   stays `discovery`. Do not mark `COMP-004` or `COMP-005` complete.
+1. `GHST-002` opt-in inline ghost is recorded (ADR 0010). Do not mark
+   `GHST-004` complete. Do not start highlighting or a GUI overlay.
+   `COMP-004` stays `discovery`. Do not mark `COMP-004` or `COMP-005` complete.
+2. Next named leftovers are ghost word-accept/cycling, `HIST-010` / `GIT-003`,
+   and remaining `SRCH-003` work on other branches. Do not duplicate those PRs.
 2. `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
    slice on FND-001 SHA refresh or percentile benches unless a functional
    prompt-path defect is proven.
@@ -695,3 +700,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Ranked-accept replaces the current word when it is a prefix of `_MBX_COMP_RANKED_REPLY` (M-039). Stale unrelated words are refused. Snapshot clears at the next prompt. |
 | 2026-08-16 | Completed `GIT-004` Git completion kinds (`docs/git-004-kinds-plan.md`). `COMP-001` / `COMP-002` move to `complete` (G4 evidence; 5 ms `deferred`). |
 | 2026-08-16 | Completed `HIST-009` bounded fuzzy search (`docs/hist-009-fuzzy-plan.md`; `mbx history search fuzzy`). `HIST-010` remains. |
+| 2026-08-17 | Recorded opt-in inline ghost (`docs/ghst-002-inline-ghost-plan.md`; ADR 0010; G-1–G-6). Suffix after `READLINE_POINT`; Enter strips. Do not mark `GHST-004` complete. Do not start highlighting or overlay. |

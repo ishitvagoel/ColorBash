@@ -827,4 +827,47 @@ assert_eq '2025-01-01T00:00:00Z' "$REPLY" 'the civil-date conversion is wrong'
 _mbx_history_iso_utc 1786808647
 assert_eq '2026-08-15T15:44:07Z' "$REPLY" 'the civil-date conversion drifted'
 
+# Opt-in inline ghost (ADR 0010): suffix after POINT, never auto-executes.
+source "$ROOT/bash/ghost.bash"
+[[ $(<"$ROOT/bash/ghost.bash") != *set\ -euo\ pipefail* ]] || \
+    fail 'ghost.bash must not enable errexit/nounset/pipefail in the sourced module'
+ghost_stub_dir=$(mktemp -d)
+cat >"$ghost_stub_dir/mbx" <<'EOF'
+#!/bin/bash
+printf '%s\n' 'echo MBX_GHST:alpha'
+EOF
+chmod +x "$ghost_stub_dir/mbx"
+MBX_BIN=$ghost_stub_dir/mbx
+MBX_GHOST=1
+MBX_HISTORY=1
+READLINE_LINE=
+READLINE_POINT=0
+READLINE_KEYSEQ=e
+_mbx_ghost_self_insert
+assert_eq 'echo MBX_GHST:alpha' "$READLINE_LINE" \
+    'ghost should extend the typed prefix with a sidecar match'
+assert_eq 1 "$READLINE_POINT" 'ghost should keep the cursor on the typed prefix'
+assert_eq 1 "${_MBX_GHOST_HAS:-missing}" 'ghost should mark an active suffix'
+_mbx_ghost_strip
+assert_eq 'e' "$READLINE_LINE" 'ghost strip should restore the typed prefix'
+assert_eq 0 "${_MBX_GHOST_HAS:-missing}" 'ghost strip should clear the suffix flag'
+READLINE_LINE='echo MBX_GHST:alpha'
+READLINE_POINT=1
+_MBX_GHOST_HAS=1
+_mbx_ghost_forward
+assert_eq 19 "$READLINE_POINT" 'ghost accept should move the cursor to the end'
+assert_eq 0 "${_MBX_GHOST_HAS:-missing}" 'ghost accept should clear the suffix flag'
+MBX_HISTORY=0
+READLINE_LINE=
+READLINE_POINT=0
+READLINE_KEYSEQ=e
+_MBX_GHOST_HAS=0
+_mbx_ghost_self_insert
+assert_eq 'e' "$READLINE_LINE" 'history-off ghost should insert the typed character only'
+if _mbx_ghost_usable_match 'e' $'echo \033bad'; then
+    fail 'ghost accepted a match containing an escape'
+fi
+rm -rf "$ghost_stub_dir"
+unset MBX_BIN MBX_GHOST MBX_HISTORY READLINE_LINE READLINE_POINT READLINE_KEYSEQ
+
 printf 'PASS: focused Bash module contracts\n'

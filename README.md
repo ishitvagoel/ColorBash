@@ -19,6 +19,7 @@ These slices have working code you can exercise in an interactive shell:
 | Ranked-accept chord | Default `Ctrl-X Ctrl-A` after wrapped Tab | Replaces current word with ranked candidate; Tab stays stock |
 | Git completion kinds | Wrap `git` or `mbx_comp_git` fixture | Additive `ref`/`flag`/`file`; no Git subprocess |
 | Fuzzy history search | `MBX_HISTORY=1` then `mbx history search fuzzy TEXT` | Ranks a bounded recent pool |
+| History ghost suffix | `MBX_HISTORY=1` and `MBX_GHOST=1` | Suggestion appears after the cursor; Enter runs only what you typed; Right accepts |
 
 ## What remains
 
@@ -26,7 +27,7 @@ These MVP features are **not** implemented for interactive use:
 
 | Feature | Why it is waiting |
 | --- | --- |
-| Ghost suggestions | No after-every-key Readline decoration hook |
+| Ghost dim / live paint | Opt-in suffix ghost exists (ADR 0010); dim after-every-key styling does not |
 | Completion popup | Overlay unproven; ranked-accept chord exists |
 | Syntax highlighting | Same continuous-decoration leftover |
 | Enhanced Ctrl+R | Same leftover; explicit search UI not built |
@@ -208,6 +209,8 @@ MBX_PRODUCTION_CONTEXT=1        # show the prominent production state
 MBX_ENABLE_DURATION_TIMING=1    # opt in only when no DEBUG trap is already used
 MBX_HISTORY=1                   # opt in to the local history sidecar
 MBX_HISTORY_EXCLUDE='git *'     # colon-separated glob exclusions
+MBX_GHOST=1                     # opt-in history suffix after the cursor (needs MBX_HISTORY=1)
+MBX_GHOST_OVERRIDE=1            # overwrite occupied ghost self-insert keys
 MBX_EDITOR_INSERT_TOKEN=hello   # text inserted by Ctrl-X Ctrl-Y
 MBX_EDITOR_INSERT_KEYSEQ='\C-x\C-y'
 MBX_EDITOR_OVERRIDE=1           # overwrite an occupied insert chord

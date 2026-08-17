@@ -36,8 +36,9 @@ subshell/function contexts, making generic trap composition unsafe. The prototyp
 therefore chooses no duration rather than overwriting unknown user behavior.
 
 `bind -x` exposes `READLINE_LINE`, `READLINE_POINT`, and related variables to a
-shell function. This supports future text insertion but not continuous highlighting
-on every keypress without rebinding or taking deeper ownership of the editor.
+shell function. This supports text insertion and an opt-in ghost suffix after the
+cursor (ADR 0010) but not continuous highlighting on every keypress without
+rebinding remaining keys or taking deeper ownership of the editor.
 
 ## Smoke corpus
 
@@ -56,7 +57,8 @@ DEBUG trap is preserved, and a missing helper uses the Bash fallback.
 
 A genuine PTY suite in `crates/pty` covers interactive prompt lifecycle, helper
 failure, Ctrl+C, Ctrl+Z, resize, and `stty -g` restoration, plus history
-admission characterization and opt-in sidecar recording. Piped interactive
+admission characterization, opt-in sidecar recording, and opt-in ghost suffix
+insert/accept. Piped interactive
 Bash is still not treated as terminal evidence.
 
 Run:
