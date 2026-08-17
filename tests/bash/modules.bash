@@ -860,6 +860,17 @@ _MBX_GHOST_HAS=1
 _mbx_ghost_forward
 assert_eq 19 "$READLINE_POINT" 'ghost accept should move the cursor to the end'
 assert_eq 0 "${_MBX_GHOST_HAS:-missing}" 'ghost accept should clear the suffix flag'
+READLINE_LINE='echo MBX_GHST:one two'
+READLINE_POINT=15
+_MBX_GHOST_HAS=1
+_MBX_GHOST_POINT=15
+_mbx_ghost_forward_word
+assert_eq 17 "$READLINE_POINT" 'word-accept should land after the current word'
+assert_eq 1 "${_MBX_GHOST_HAS:-missing}" 'word-accept should keep a remaining suffix'
+assert_eq 17 "${_MBX_GHOST_POINT:-missing}" 'word-accept should advance the accepted prefix'
+_mbx_ghost_forward_word
+assert_eq 21 "$READLINE_POINT" 'second word-accept should reach the end'
+assert_eq 0 "${_MBX_GHOST_HAS:-missing}" 'last word-accept should clear the suffix flag'
 MBX_HISTORY=0
 READLINE_LINE=
 READLINE_POINT=0
@@ -871,6 +882,7 @@ if _mbx_ghost_usable_match 'e' $'echo \033bad'; then
     fail 'ghost accepted a match containing an escape'
 fi
 rm -rf "$ghost_stub_dir"
-unset MBX_BIN MBX_GHOST MBX_HISTORY READLINE_LINE READLINE_POINT READLINE_KEYSEQ
+unset MBX_BIN MBX_GHOST MBX_HISTORY READLINE_LINE READLINE_POINT READLINE_KEYSEQ \
+    _MBX_GHOST_HAS _MBX_GHOST_POINT
 
 printf 'PASS: focused Bash module contracts\n'

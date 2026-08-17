@@ -29,8 +29,8 @@ experiments.
    not print jobs or accept the line. Piped `bash -i` is not wrapped (M-042).
 3. The typed prefix stays left of `READLINE_POINT`. A matching sidecar prefix
    row may extend `READLINE_LINE` to the right of the cursor. That suffix is
-   not accepted until the user moves point to the end (default Right /
-   `\C-f`).
+   not accepted until the user moves point (Right / `\C-f` for the full row;
+   `\ef` / Ctrl-Right `forward-word` for one alphanumeric word).
 4. Enter (`\C-m`) and newline (`\C-j`, when it is stock `accept-line`) stay
    `accept-line` except while a suffix is active. Then both are a Readline-only
    macro: reserved kill-line (default `\C-x\C-k`) from point, then reserved
@@ -42,9 +42,9 @@ experiments.
 5. Helper timeout, missing binary, or a match that is not an exact byte prefix
    / contains controls leaves the typed character inserted and no suffix.
    Query budget is `MBX_GHOST_TIMEOUT` (default `MBX_HISTORY_TIMEOUT` / 0.10 s).
-6. Dim styling, vi-insert, remaining printables, word-accept, cycling, async
-   generation IDs, and highlighting remain later leftovers. Do not steal Tab,
-   `\C-r`, `\C-g`, `\C-x\C-r`, or `\C-x\C-s`.
+6. Dim styling, vi-insert, remaining printables, cycling, async generation
+   IDs, and highlighting remain later leftovers. Do not steal Tab, `\C-r`,
+   `\C-g`, `\C-x\C-r`, or `\C-x\C-s`.
 
 ## Alternatives
 

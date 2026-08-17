@@ -6,6 +6,7 @@ use mbx_pty::{visible_contains, visible_text};
 use std::time::Duration;
 
 const RIGHT: &[u8] = b"\x1b[C";
+const META_F: &[u8] = b"\x1bf";
 
 fn send_keys(session: &mut mbx_pty::PtySession, keys: &[u8]) {
     session.write_all(keys, deadline(2)).expect("keys");
@@ -174,5 +175,40 @@ fn default_install_sets_bound_flag() {
         )
         .expect("status");
     wait_all(&mut session, &["MBX_GHST:bound\n", "> "]);
+    exit_and_wait(&mut session);
+}
+
+#[test]
+fn alt_f_accepts_one_word() {
+    let home = TempHome::new("ghst-w3");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let mut session = spawn_history_shell(home.path(), &ghost_env(data_home_s, histfile_s, &[]));
+    wait_for(&mut session, "> ");
+    type_line(&mut session, "echo MBX_GHST:one two");
+    wait_all(&mut session, &["MBX_GHST:one two\n", "> "]);
+    wait_for_count(&mbx_bin(), &data_home, 1);
+
+    session
+        .write_str("echo MBX_GHST:o", deadline(2))
+        .expect("type prefix");
+    wait_all(&mut session, &["echo MBX_GHST:one two"]);
+    send_keys(&mut session, META_F);
+    assert_no_output(&mut session, "MBX_GHST:one two\n");
+    session.write_str("\n", deadline(2)).expect("enter");
+    let output = wait_all(&mut session, &["MBX_GHST:one\n", "> "]);
+    assert!(
+        !visible_contains(&output, "MBX_GHST:one two\n"),
+        "unaccepted words executed: {:?}",
+        visible_text(&output)
+    );
+    wait_for_count(&mbx_bin(), &data_home, 2);
+    let recent = sidecar_commands(&mbx_bin(), &data_home);
+    assert!(
+        recent.iter().any(|command| command == "echo MBX_GHST:one"),
+        "word-accepted prefix was not admitted: {recent:?}"
+    );
     exit_and_wait(&mut session);
 }

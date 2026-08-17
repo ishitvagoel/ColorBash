@@ -19,7 +19,7 @@ These slices have working code you can exercise in an interactive shell:
 | Ranked-accept chord | Default `Ctrl-X Ctrl-A` after wrapped Tab | Replaces current word with ranked candidate; Tab stays stock |
 | Git completion kinds | Wrap `git` or `mbx_comp_git` fixture | Additive `ref`/`flag`/`file`; no Git subprocess |
 | Fuzzy history search | `MBX_HISTORY=1` then `mbx history search fuzzy TEXT` | Ranks a bounded recent pool |
-| History ghost suffix | `MBX_HISTORY=1` and `MBX_GHOST=1` | Suggestion appears after the cursor; Enter runs only what you typed; Right accepts |
+| History ghost suffix | `MBX_HISTORY=1` and `MBX_GHOST=1` | Suggestion after the cursor; Enter runs the typed prefix; Right accepts all; Alt-F / Ctrl-Right accept one word |
 
 ## What remains
 
@@ -205,7 +205,8 @@ echo unique-ghost-alpha
 
 Type `echo unique-ghost-a` and pause. The rest of the previous command should
 appear after the cursor. Enter runs only what you typed. Right Arrow then Enter
-accepts the full suggestion. The suffix is ordinary command text, not dim paint.
+accepts the full suggestion. Alt-F or Ctrl-Right accepts one word. The suffix is
+ordinary command text, not dim paint.
 
 ## Prototype controls
 

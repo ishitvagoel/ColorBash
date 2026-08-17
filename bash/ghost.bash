@@ -200,6 +200,36 @@ _mbx_ghost_forward() {
     fi
 }
 
+_mbx_ghost_forward_word() {
+    local line=${READLINE_LINE-}
+    local point=${READLINE_POINT:-0}
+    local n=${#line}
+    local c
+    local LC_ALL=C
+
+    while ((point < n)); do
+        c=${line:point:1}
+        [[ $c == [[:alnum:]] ]] && break
+        point=$((point + 1))
+    done
+    while ((point < n)); do
+        c=${line:point:1}
+        [[ $c == [[:alnum:]] ]] || break
+        point=$((point + 1))
+    done
+    READLINE_POINT=$point
+    if [[ ${_MBX_GHOST_HAS:-0} != 1 ]]; then
+        return 0
+    fi
+    if ((point >= n)); then
+        _MBX_GHOST_HAS=0
+        _MBX_GHOST_POINT=0
+        _mbx_ghost_disarm_enter || true
+        return 0
+    fi
+    _MBX_GHOST_POINT=$point
+}
+
 _mbx_ghost_keyseq_has_x() {
     local keyseq=$1
     local keymap=$2
@@ -325,6 +355,9 @@ _mbx_ghost_install() {
     _mbx_ghost_bind_x emacs '\C-?' _mbx_ghost_backspace backward-delete-char || true
     _mbx_ghost_bind_x emacs '\e[C' _mbx_ghost_forward forward-char || true
     _mbx_ghost_bind_x emacs '\C-f' _mbx_ghost_forward forward-char || true
+    _mbx_ghost_bind_x emacs '\ef' _mbx_ghost_forward_word forward-word || true
+    _mbx_ghost_bind_x emacs '\e[1;5C' _mbx_ghost_forward_word forward-word || true
+    _mbx_ghost_bind_x emacs '\e[5C' _mbx_ghost_forward_word forward-word || true
     _MBX_GHOST_BOUND=1
     _MBX_GHOST_INSTALLED=1
 }
