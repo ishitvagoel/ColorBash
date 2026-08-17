@@ -1,8 +1,9 @@
 # SRCH-003 leftover: cwd-scoped prefix and fuzzy search (C-5–C-8)
 
 Status: `complete` for this Strategy A cwd-filter slice (2026-08-17). Age/status
-overlay, 100k interactive latency, repo filters, failed-command filters, and
-signal/terminal-state evidence remain. Do **not** mark `SRCH-003` complete.
+overlay, 100k interactive latency, repo filters, and failed-command filters
+remain. Signal/terminal-state PTY is recorded in
+`docs/srch-003-signal-plan.md`. Do **not** mark `SRCH-003` complete.
 
 ## Why this slice
 
@@ -16,7 +17,7 @@ and does not draw metadata, steal `\C-r`, or duplicate `HIST-010`.
 | 1 | Prefix/fuzzy cwd-first (this plan) | Named leftover after empty-line cwd. |
 | — | Show age/cwd/status columns | Overlay unproven. |
 | — | Repo / failed-command filters | Other PRs / `HIST-010`. |
-| — | Signal / terminal-state PTY | Separate leftover. |
+| — | Signal / terminal-state PTY | Recorded in `docs/srch-003-signal-plan.md` (T-1–T-4). |
 | — | 100k interactive percentiles | `deferred` unless a functional defect. |
 | — | Ghost / highlighting / popup | After-every-key leftover. |
 

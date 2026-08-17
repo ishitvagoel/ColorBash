@@ -33,7 +33,7 @@ These MVP features are **not** implemented for interactive use:
 | Ghost dim / live paint | Opt-in suffix ghost exists (ADR 0010); dim after-every-key styling does not |
 | Completion popup | Overlay unproven; ranked-accept chord exists |
 | Syntax highlighting | Same continuous-decoration leftover |
-| Enhanced Ctrl+R overlay | Type-to-filter list still needs a leftover; `\C-xh` insert, cycling, `\C-xl` restore, and cwd-scoped empty-line search exist |
+| Enhanced Ctrl+R overlay | Type-to-filter list still needs a leftover; `\C-xh` insert, cycling, `\C-xl` restore, cwd preference, and signal PTY exist |
 | macOS PTY matrix | `HRD-001` needs a macOS host |
 
 Canonical status lives in [`docs/roadmap.md`](docs/roadmap.md). `G0`, `G2`,

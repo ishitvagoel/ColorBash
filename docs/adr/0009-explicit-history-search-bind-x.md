@@ -61,8 +61,10 @@ user presses a dedicated chord does not.
 Phase 8 can ship an explicit search insert, bounded cycling, and cancel
 restoration without reopening editor ownership. Stock Ctrl+R remains Bash
 reverse-i-search. A metadata overlay and 100k-row interactive latency stay
-later `SRCH-003` leftovers. Empty-line and typed-prefix search prefer cwd
-(HIST-008) before global rows. Command text stays out of traces (`M-023`).
+later `SRCH-003` leftovers. Signal and terminal-state PTY around the insert
+and restore chords is recorded (`docs/srch-003-signal-plan.md`). Empty-line
+and typed-prefix search prefer cwd (HIST-008) before global rows. Command
+text stays out of traces (`M-023`).
 
 Later status (2026-08-25): ADR 0010 landed opt-in suffix ghost as Strategy A
 (not dim after-every-key paint). Decision 6's live highlighting and GUI overlay
@@ -76,4 +78,5 @@ M-040). Restore is `\C-xl`.
 PTY evidence in `crates/pty/tests/history_search.rs` and module contracts in
 `tests/bash/modules.bash`. Plans: `docs/srch-001-history-search-plan.md`,
 `docs/srch-001-result-view-plan.md`, `docs/srch-002-cancel-restore-plan.md`,
-`docs/srch-003-cwd-filter-plan.md`, `docs/srch-003-cwd-prefix-plan.md`.
+`docs/srch-003-cwd-filter-plan.md`, `docs/srch-003-cwd-prefix-plan.md`,
+`docs/srch-003-signal-plan.md`.

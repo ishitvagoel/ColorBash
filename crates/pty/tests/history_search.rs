@@ -2,7 +2,7 @@
 mod common;
 
 use common::*;
-use mbx_pty::visible_contains;
+use mbx_pty::{CTRL_C, CTRL_Z, WinSize, visible_contains};
 use std::time::Duration;
 
 const CTRL_X: u8 = 0x18;
@@ -31,6 +31,26 @@ fn assert_no_marker(session: &mut mbx_pty::PtySession, marker: &str) {
 fn record_printf(session: &mut mbx_pty::PtySession, marker: &str) {
     type_line(session, &format!("printf 'MBX_SRCH:{marker}\\n'"));
     wait_all(session, &[&format!("\nMBX_SRCH:{marker}"), "> "]);
+}
+
+fn start_sleep(session: &mut mbx_pty::PtySession) {
+    session
+        .write_str(
+            "sh -c 'printf \"MBX_PTY:running\\n\"; exec sleep 30'\n",
+            deadline(2),
+        )
+        .expect("write");
+    wait_all(session, &["\nMBX_PTY:running"]);
+}
+
+fn extract_marked(output: &[u8], prefix: &str, suffix: &str) -> String {
+    let text = String::from_utf8_lossy(output);
+    text.rfind(prefix)
+        .and_then(|start| {
+            let rest = &text[start + prefix.len()..];
+            rest.find(suffix).map(|end| rest[..end].to_string())
+        })
+        .unwrap_or_else(|| panic!("missing {prefix}..{suffix} in {text}"))
 }
 
 #[test]
@@ -535,5 +555,137 @@ fn prefix_without_cwd_rows_falls_back_to_global() {
     assert_no_marker(&mut session, "\nMBX_SRCH:a-other");
     session.write_str("\n", deadline(2)).expect("submit");
     wait_all(&mut session, &["MBX_SRCH:a-other\n", "> "]);
+    exit_and_wait(&mut session);
+}
+
+#[test]
+fn ctrl_c_after_insert_leaves_a_usable_prompt() {
+    let home = TempHome::new("srch-t1");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let mut session = spawn_history_shell(home.path(), &enabled_env(data_home_s, histfile_s, &[]));
+    wait_for(&mut session, "> ");
+    record_printf(&mut session, "alpha");
+    wait_for_count(&mbx_bin(), &data_home, 1);
+
+    session
+        .write_str("printf 'MBX_SRCH:a", deadline(2))
+        .expect("type prefix");
+    wait_all(&mut session, &["printf 'MBX_SRCH:a"]);
+    send_keyseq(&mut session, DEFAULT_KEYSEQ);
+    assert_no_marker(&mut session, "\nMBX_SRCH:alpha");
+    session.write_all(&[CTRL_C], deadline(2)).expect("cancel");
+    let after_cancel = wait_for(&mut session, "> ");
+    assert!(
+        !visible_contains(&after_cancel, "\nMBX_SRCH:alpha"),
+        "search insert executed on Ctrl+C: {:?}",
+        mbx_pty::visible_text(&after_cancel)
+    );
+    session
+        .write_str("printf 'MBX_SRCH:after_cancel\\n'\n", deadline(2))
+        .expect("sentinel");
+    wait_all(&mut session, &["\nMBX_SRCH:after_cancel", "> "]);
+    exit_and_wait(&mut session);
+}
+
+#[test]
+fn insert_restore_signal_and_resize_preserve_stty() {
+    let home = TempHome::new("srch-t2");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let mut session = spawn_history_shell(home.path(), &enabled_env(data_home_s, histfile_s, &[]));
+    wait_for(&mut session, "> ");
+    session
+        .write_str("printf 'STTY1:%s:END\\n' \"$(stty -g)\"\n", deadline(2))
+        .expect("stty before");
+    let first = wait_all(&mut session, &["\nSTTY1:", ":END"]);
+    let before = extract_marked(&first, "STTY1:", ":END");
+    record_printf(&mut session, "alpha");
+    wait_for_count(&mbx_bin(), &data_home, 1);
+
+    session
+        .write_str("printf 'MBX_SRCH:a", deadline(2))
+        .expect("type prefix");
+    wait_all(&mut session, &["printf 'MBX_SRCH:a"]);
+    send_keyseq(&mut session, DEFAULT_KEYSEQ);
+    send_keyseq(&mut session, DEFAULT_RESTORE_KEYSEQ);
+    session.write_all(&[CTRL_C], deadline(2)).expect("cancel");
+    wait_for(&mut session, "> ");
+    session
+        .resize(WinSize { rows: 20, cols: 72 })
+        .expect("resize");
+    session
+        .write_str("printf 'STTY2:%s:END\\n' \"$(stty -g)\"\n", deadline(2))
+        .expect("stty after");
+    let second = wait_all(&mut session, &["\nSTTY2:", ":END"]);
+    let after = extract_marked(&second, "STTY2:", ":END");
+    assert_eq!(before, after);
+    session
+        .write_str("printf 'MBX_SRCH:stty_ok\\n'\n", deadline(2))
+        .expect("sentinel");
+    wait_all(&mut session, &["\nMBX_SRCH:stty_ok", "> "]);
+    exit_and_wait(&mut session);
+}
+
+#[test]
+fn resize_after_insert_still_submits_match() {
+    let home = TempHome::new("srch-t3");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let mut session = spawn_history_shell(home.path(), &enabled_env(data_home_s, histfile_s, &[]));
+    wait_for(&mut session, "> ");
+    record_printf(&mut session, "alpha");
+    wait_for_count(&mbx_bin(), &data_home, 1);
+
+    session
+        .write_str("printf 'MBX_SRCH:a", deadline(2))
+        .expect("type prefix");
+    wait_all(&mut session, &["printf 'MBX_SRCH:a"]);
+    send_keyseq(&mut session, DEFAULT_KEYSEQ);
+    session
+        .resize(WinSize { rows: 16, cols: 64 })
+        .expect("resize");
+    assert_no_marker(&mut session, "\nMBX_SRCH:alpha");
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["\nMBX_SRCH:alpha", "> "]);
+    session
+        .write_str("printf 'MBX_SRCH:resized\\n'\n", deadline(2))
+        .expect("follow-up");
+    wait_all(&mut session, &["\nMBX_SRCH:resized", "> "]);
+    exit_and_wait(&mut session);
+}
+
+#[test]
+fn ctrl_z_then_search_still_inserts() {
+    let home = TempHome::new("srch-t4");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let mut session = spawn_history_shell(
+        home.path(),
+        &enabled_env(data_home_s, histfile_s, &[("MBX_HISTORY_EXCLUDE", "sh *")]),
+    );
+    wait_for(&mut session, "> ");
+    record_printf(&mut session, "alpha");
+    wait_for_count(&mbx_bin(), &data_home, 1);
+    start_sleep(&mut session);
+    session.write_all(&[CTRL_Z], deadline(2)).expect("ctrl-z");
+    wait_for(&mut session, "> ");
+
+    send_keyseq(&mut session, DEFAULT_KEYSEQ);
+    assert_no_marker(&mut session, "\nMBX_SRCH:alpha");
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["\nMBX_SRCH:alpha", "> "]);
+    session
+        .write_str("kill %1 2>/dev/null || true\n", deadline(2))
+        .expect("cleanup");
+    wait_for(&mut session, "> ");
     exit_and_wait(&mut session);
 }
