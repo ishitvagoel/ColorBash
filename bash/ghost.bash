@@ -6,6 +6,7 @@
 # Cycle next/prev default to unbound `\C-x\C-n` / `\C-x\C-p` (not `\en`/`\ep`).
 # Remaining ASCII printables use Readline quoted keyseqs so `"` / `\` bind.
 # vi-insert is wrapped after emacs; ESC is vi-movement-mode so `\ef` is not.
+# Left / `\C-b` strip an unaccepted suffix then backward-char (Home stays later).
 _MBX_GHOST_KILL_DEFAULT_KEYSEQ='\C-x\C-k'
 _MBX_GHOST_ACCEPT_DEFAULT_KEYSEQ='\C-x\C-m'
 _MBX_GHOST_NEXT_DEFAULT_KEYSEQ='\C-x\C-n'
@@ -313,6 +314,17 @@ _mbx_ghost_forward() {
     fi
 }
 
+_mbx_ghost_backward() {
+    local point=${READLINE_POINT:-0}
+    if [[ ${_MBX_GHOST_HAS:-0} == 1 ]]; then
+        _mbx_ghost_strip
+        point=${READLINE_POINT:-0}
+    fi
+    if ((point > 0)); then
+        READLINE_POINT=$((point - 1))
+    fi
+}
+
 _mbx_ghost_forward_word() {
     local line=${READLINE_LINE-}
     local point=${READLINE_POINT:-0}
@@ -454,6 +466,8 @@ _mbx_ghost_install_vi() {
     _mbx_ghost_bind_x vi-insert '\C-?' _mbx_ghost_backspace backward-delete-char || true
     _mbx_ghost_bind_x vi-insert '\e[C' _mbx_ghost_forward forward-char || true
     _mbx_ghost_bind_x vi-insert '\eOC' _mbx_ghost_forward forward-char || true
+    _mbx_ghost_bind_x vi-insert '\e[D' _mbx_ghost_backward backward-char || true
+    _mbx_ghost_bind_x vi-insert '\eOD' _mbx_ghost_backward backward-char || true
     _mbx_ghost_bind_x_stock vi-insert '\e[1;5C' _mbx_ghost_forward_word forward-word || \
         true
     if [[ -n $next_key && $next_key != "$kill_key" && $next_key != "$accept_key" ]]; then
@@ -546,6 +560,9 @@ _mbx_ghost_install() {
     _mbx_ghost_bind_x emacs '\C-?' _mbx_ghost_backspace backward-delete-char || true
     _mbx_ghost_bind_x emacs '\e[C' _mbx_ghost_forward forward-char || true
     _mbx_ghost_bind_x emacs '\C-f' _mbx_ghost_forward forward-char || true
+    _mbx_ghost_bind_x emacs '\e[D' _mbx_ghost_backward backward-char || true
+    _mbx_ghost_bind_x emacs '\C-b' _mbx_ghost_backward backward-char || true
+    _mbx_ghost_bind_x emacs '\eOD' _mbx_ghost_backward backward-char || true
     _mbx_ghost_bind_x emacs '\ef' _mbx_ghost_forward_word forward-word || true
     _mbx_ghost_bind_x emacs '\e[1;5C' _mbx_ghost_forward_word forward-word || true
     _mbx_ghost_bind_x emacs '\e[5C' _mbx_ghost_forward_word forward-word || true

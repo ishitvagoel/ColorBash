@@ -38,7 +38,8 @@ therefore chooses no duration rather than overwriting unknown user behavior.
 `bind -x` exposes `READLINE_LINE`, `READLINE_POINT`, and related variables to a
 shell function. This supports text insertion and an opt-in ghost suffix after the
 cursor (ADR 0010). While that suffix is active, Enter is a Readline kill-line +
-`accept-line` macro rather than bind -x (M-041). Ctrl-X Ctrl-N / Ctrl-P cycle
+`accept-line` macro rather than bind -x (M-041). Left / `\C-b` dismiss the
+suffix then `backward-char`. Ctrl-X Ctrl-N / Ctrl-P cycle
 other prefix matches without accepting them. This is not continuous
 highlighting on every keypress.
 

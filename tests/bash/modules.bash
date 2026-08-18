@@ -930,6 +930,15 @@ _mbx_ghost_self_insert
 assert_eq 'echo foo=bar' "$READLINE_LINE" \
     'ghost should extend a prefix that ends with equals'
 assert_eq 9 "$READLINE_POINT" 'equals insert should keep the cursor on the typed prefix'
+READLINE_LINE='echo MBX_GHST:alpha'
+READLINE_POINT=15
+_MBX_GHOST_HAS=1
+_MBX_GHOST_POINT=15
+_mbx_ghost_backward
+assert_eq 'echo MBX_GHST:a' "$READLINE_LINE" \
+    'ghost Left should restore the typed prefix without the suffix'
+assert_eq 14 "$READLINE_POINT" 'ghost Left should move one character into the typed prefix'
+assert_eq 0 "${_MBX_GHOST_HAS:-missing}" 'ghost Left should clear the suffix flag'
 rm -rf "$ghost_stub_dir"
 unset MBX_BIN MBX_GHOST MBX_HISTORY READLINE_LINE READLINE_POINT READLINE_KEYSEQ \
     _MBX_GHOST_HAS _MBX_GHOST_POINT _MBX_GHOST_INDEX _MBX_GHOST_TYPED_LEN \
