@@ -5,9 +5,9 @@
 > brief remains `CODEX_MODERN_BASH_ARCHITECTURE.md`; its checkboxes describe the
 > intended program and are not a status tracker.
 
-- Last reviewed: 2026-08-17 UTC
+- Last reviewed: 2026-08-18 UTC
 - Current milestone: Phase 3A sidecar implemented; `G0` and `G2` complete; `G1` accepted
-- Active workstream: `GHST-003` cycling recorded; highlighting/overlay blocked on unproven continuous decoration
+- Active workstream: `GHST-002` remaining printables recorded; highlighting/overlay blocked on unproven continuous decoration
 - Next decision gate: continuous-decoration leftover (blocks highlighting / overlay)
 - Editor-facing work: opt-in ghost suffix is unblocked (ADR 0010). Highlighting and GUI overlay stay blocked on after-every-key paint.
 - Timing policy: unmet percentile targets are `deferred` and do not block
@@ -319,7 +319,7 @@ latency budgets.
 | 1 | Bootstrap | `complete` | CI linked; broader lifecycle tracing deferred |
 | 2 | Prompt | `complete` | capability/width/wrap recorded; `PRM-004` percentiles `deferred` |
 | 3 | History | `complete` | Phase 3A / `G2` complete; `HIST-009` complete; `HIST-010` remains; write-ack percentiles `deferred` |
-| 4 | Ghost suggestions | `validation` | ADR 0010 opt-in suffix; async/dim/word-cycle leftovers remain |
+| 4 | Ghost suggestions | `validation` | ADR 0010 opt-in suffix; async/dim/vi-insert leftovers remain |
 | 5 | Completion | `validation` | `G4` / `COMP-001` / `COMP-002` / `COMP-003` complete; `COMP-004` in `discovery` (no overlay); `GIT-004` complete |
 | 6 | Syntax highlighting | `blocked` | unproven continuous decoration; intentionally after search/ghost/completion evidence |
 | 7 | Git/provider expansion | `discovery` | bounded prompt subset exists; richer capabilities await a consumer |
@@ -443,9 +443,9 @@ the roadmap cannot make that scope change by itself.
 
 ### Phase 4 — Ghost suggestions
 
-Status: `validation`. Opt-in suffix ghost is recorded (ADR 0010). Word-accept
-and cycling are recorded (`docs/ghst-003-word-accept-plan.md`,
-`docs/ghst-003-cycle-plan.md`). Dim paint and async lookup remain.
+Status: `validation`. Opt-in suffix ghost is recorded (ADR 0010). Word-accept,
+cycling, and remaining printables are recorded. Dim paint, async lookup, and
+vi-insert remain.
 
 After the gates pass, implement asynchronous ranked-history lookup with generation
 IDs, stale-result rejection, inline rendering, full/word acceptance, cycling, and
@@ -456,7 +456,7 @@ keystroke.
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
 | `GHST-001` | Async ranked query with generation IDs and cancellation | `blocked` | async IPC ADR decision |
-| `GHST-002` | Inline ghost rendering with stale-result rejection | `validation` | ADR 0010; G-1–G-6 in `bash/ghost.bash`, `crates/pty/tests/ghost.rs`, `tests/bash/modules.bash`; `docs/ghst-002-inline-ghost-plan.md`; Enter is a Readline kill-line + accept-line macro (M-041); dim paint and async stale-rejection leftovers remain |
+| `GHST-002` | Inline ghost rendering with stale-result rejection | `validation` | ADR 0010; G-1–G-6 in `bash/ghost.bash`, `crates/pty/tests/ghost.rs`, `tests/bash/modules.bash`; `docs/ghst-002-inline-ghost-plan.md`; remaining printables P-1–P-3 (`docs/ghst-002-printables-plan.md`); Enter is a Readline kill-line + accept-line macro (M-041); dim paint and async stale-rejection leftovers remain |
 | `GHST-003` | Full/word acceptance and suggestion cycling | `complete` | Right/`\C-f` full accept in G-2; `\ef` / Ctrl-Right word-accept in W-1–W-3 (`docs/ghst-003-word-accept-plan.md`); `\C-x\C-n` / `\C-x\C-p` cycling in C-1–C-3 (`docs/ghst-003-cycle-plan.md`) |
 | `GHST-004` | Multiline, resize, exact-byte, no-execution, and latency evidence | `blocked` | `PTY-001` matrix leftovers |
 
@@ -564,10 +564,11 @@ Exit condition: `G5` after every `HRD-*` item is complete.
 percentile leftovers are `deferred` and must not block product slices
 (`docs/latency-budget-deferral.md`).
 
-1. `GHST-003` full/word accept and cycling are recorded (ADR 0010;
-   `docs/ghst-003-word-accept-plan.md`; `docs/ghst-003-cycle-plan.md`). Do not
-   mark `GHST-004` complete. Do not start highlighting or overlay.
-   `COMP-004` stays `discovery`. Do not mark `COMP-004` or `COMP-005` complete.
+1. `GHST-003` full/word accept and cycling are recorded. Remaining ghost
+   printables are recorded (`docs/ghst-002-printables-plan.md`). Do not mark
+   `GHST-004` complete. Do not start highlighting, overlay, or vi-insert
+   ghost wrapping. `COMP-004` stays `discovery`. Do not mark `COMP-004` or
+   `COMP-005` complete.
 2. Next named leftovers are `HIST-010` / `GIT-003` and remaining `SRCH-003`
    work on other branches. Do not duplicate those PRs. Dim ghost paint stays
    blocked on unproven after-every-key decoration.
@@ -706,3 +707,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-17 | Recorded opt-in inline ghost (`docs/ghst-002-inline-ghost-plan.md`; ADR 0010; G-1–G-6). Suffix after `READLINE_POINT`; Enter is a Readline kill-line + accept-line macro while a suffix is active (M-041). Do not mark `GHST-004` complete. Do not start highlighting or overlay. |
 | 2026-08-17 | Recorded ghost word-accept (`docs/ghst-003-word-accept-plan.md`; W-1–W-3). `\ef` / Ctrl-Right advance one alphanumeric word. Cycling remains. Do not mark `GHST-003` or `GHST-004` complete. |
 | 2026-08-17 | Recorded ghost cycling (`docs/ghst-003-cycle-plan.md`; C-1–C-3). `\C-x\C-n` / `\C-x\C-p` cycle prefix matches. `GHST-003` moves to `complete`. Do not mark `GHST-004` complete. Do not start highlighting or overlay. |
+| 2026-08-18 | Recorded remaining ghost printables (`docs/ghst-002-printables-plan.md`; P-1–P-3). ASCII punctuation that is stock `self-insert` is wrapped with Readline quoted keyseqs. vi-insert remains. Do not mark `GHST-004` complete. Do not start highlighting or overlay. |

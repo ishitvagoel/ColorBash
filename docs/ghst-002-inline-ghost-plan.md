@@ -1,8 +1,9 @@
 # GHST-002 leftover: opt-in inline ghost suffix (G-1–G-6)
 
-Status: `complete` for this Strategy A ghost slice (2026-08-17). Async lookup,
-dim styling, vi-insert, and remaining printables remain. Word-accept and
-cycling are recorded. Do **not** mark `GHST-004` complete.
+Status: `complete` for this Strategy A ghost slice (2026-08-17). Remaining
+printables are recorded (`docs/ghst-002-printables-plan.md`). Async lookup,
+dim styling, and vi-insert remain. Word-accept and cycling are recorded. Do
+**not** mark `GHST-004` complete.
 
 ## Why this slice
 
@@ -45,7 +46,7 @@ exists (`HIST-008`).
 - Async MBX2 query protocol
 - Marking Phase 4 complete
 - Clearing the suffix on Left/unwrapped motion; kill-ring isolation for the
-  discarded suffix; wrapping remaining printables
+  discarded suffix
 
 ## Asserts
 

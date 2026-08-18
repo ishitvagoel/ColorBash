@@ -4,6 +4,7 @@
 # keyseq macro drops the remaining keys (M-041), so an active suffix arms a
 # Readline-only kill-line + accept-line macro on `\C-m` and `\C-j` instead.
 # Cycle next/prev default to unbound `\C-x\C-n` / `\C-x\C-p` (not `\en`/`\ep`).
+# Remaining ASCII printables use Readline quoted keyseqs so `"` / `\` bind.
 _MBX_GHOST_KILL_DEFAULT_KEYSEQ='\C-x\C-k'
 _MBX_GHOST_ACCEPT_DEFAULT_KEYSEQ='\C-x\C-m'
 _MBX_GHOST_NEXT_DEFAULT_KEYSEQ='\C-x\C-n'
@@ -312,17 +313,32 @@ _mbx_ghost_forward_word() {
     _MBX_GHOST_POINT=$point
 }
 
+_mbx_ghost_quoted_keyseq() {
+    local ch=$1
+    local LC_ALL=C
+    case $ch in
+        \\) REPLY='"\\"' ;;
+        \") REPLY='"\""' ;;
+        *) REPLY="\"${ch}\"" ;;
+    esac
+}
+
 _mbx_ghost_keyseq_has_x() {
     local keyseq=$1
     local keymap=$2
-    bind -m "$keymap" -X 2>/dev/null | grep -Fq "\"$keyseq\":"
+    local quoted
+    _mbx_ghost_quoted_keyseq "$keyseq"
+    quoted=$REPLY
+    bind -m "$keymap" -X 2>/dev/null | grep -Fq "${quoted}:"
 }
 
 _mbx_ghost_stock_fn() {
     local keyseq=$1
     local keymap=$2
-    local line=
-    line=$(bind -m "$keymap" -p 2>/dev/null | grep -F "\"$keyseq\":" | head -n 1) || \
+    local quoted line=
+    _mbx_ghost_quoted_keyseq "$keyseq"
+    quoted=$REPLY
+    line=$(bind -m "$keymap" -p 2>/dev/null | grep -F "${quoted}:" | head -n 1) || \
         line=
     REPLY=${line##*: }
     REPLY=${REPLY# }
@@ -347,8 +363,11 @@ _mbx_ghost_bind_x() {
     local keyseq=$2
     local command=$3
     local allowed=$4
+    local spec
     _mbx_ghost_can_wrap "$keyseq" "$keymap" "$allowed" || return 1
-    bind -m "$keymap" -x "\"$keyseq\": $command"
+    _mbx_ghost_quoted_keyseq "$keyseq"
+    spec="${REPLY}: $command"
+    bind -m "$keymap" -x "$spec"
 }
 
 _mbx_ghost_bind_fn() {
@@ -356,8 +375,11 @@ _mbx_ghost_bind_fn() {
     local keyseq=$2
     local fn=$3
     local allowed=$4
+    local spec
     _mbx_ghost_can_wrap "$keyseq" "$keymap" "$allowed" || return 1
-    bind -m "$keymap" "\"$keyseq\": $fn"
+    _mbx_ghost_quoted_keyseq "$keyseq"
+    spec="${REPLY}: $fn"
+    bind -m "$keymap" "$spec"
 }
 
 _mbx_ghost_bind_self_chars() {
@@ -392,7 +414,7 @@ _mbx_ghost_install() {
     local accept_key=${MBX_GHOST_ACCEPT_KEYSEQ:-$_MBX_GHOST_ACCEPT_DEFAULT_KEYSEQ}
     local next_key=${MBX_GHOST_NEXT_KEYSEQ:-$_MBX_GHOST_NEXT_DEFAULT_KEYSEQ}
     local prev_key=${MBX_GHOST_PREV_KEYSEQ:-$_MBX_GHOST_PREV_DEFAULT_KEYSEQ}
-    local chars='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _-.:/'
+    local chars=$'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _-.:/!#$%&()*+,;<=>?@[]^{|}~\'"`\\'
     [[ -n $kill_key && -n $accept_key ]] || {
         _MBX_GHOST_INSTALLED=1
         return 0

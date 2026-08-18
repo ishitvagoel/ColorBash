@@ -19,7 +19,7 @@ These slices have working code you can exercise in an interactive shell:
 | Ranked-accept chord | Default `Ctrl-X Ctrl-A` after wrapped Tab | Replaces current word with ranked candidate; Tab stays stock |
 | Git completion kinds | Wrap `git` or `mbx_comp_git` fixture | Additive `ref`/`flag`/`file`; no Git subprocess |
 | Fuzzy history search | `MBX_HISTORY=1` then `mbx history search fuzzy TEXT` | Ranks a bounded recent pool |
-| History ghost suffix | `MBX_HISTORY=1` and `MBX_GHOST=1` | Suggestion after the cursor; Enter runs the typed prefix; Right accepts all; Alt-F / Ctrl-Right accept one word; Ctrl-X Ctrl-N / Ctrl-P cycle matches |
+| History ghost suffix | `MBX_HISTORY=1` and `MBX_GHOST=1` | Suggestion after the cursor on ASCII printables; Enter runs the typed prefix; Right accepts all; Alt-F / Ctrl-Right accept one word; Ctrl-X Ctrl-N / Ctrl-P cycle matches |
 
 ## What remains
 

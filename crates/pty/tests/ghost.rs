@@ -258,7 +258,41 @@ fn ctrl_x_ctrl_n_cycles_to_older_prefix_match() {
             .filter(|command| *command == "echo MBX_GHST:two")
             .count(),
         1,
-        "newest match was admitted after cycling away: {recent:?}"
+    exit_and_wait(&mut session);
+}
+
+#[test]
+fn equals_printable_shows_suffix_and_enter_runs_typed_prefix() {
+    let home = TempHome::new("ghst-p2");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let mut session = spawn_history_shell(home.path(), &ghost_env(data_home_s, histfile_s, &[]));
+    wait_for(&mut session, "> ");
+    type_line(&mut session, "echo MBX_GHST:foo=bar");
+    wait_all(&mut session, &["MBX_GHST:foo=bar\n", "> "]);
+    wait_for_count(&mbx_bin(), &data_home, 1);
+
+    session
+        .write_str("echo MBX_GHST:foo=", deadline(2))
+        .expect("type prefix");
+    wait_all(&mut session, &["echo MBX_GHST:foo=bar"]);
+    assert_no_output(&mut session, "MBX_GHST:foo=bar\n");
+    session.write_str("\n", deadline(2)).expect("enter");
+    let output = wait_all(&mut session, &["MBX_GHST:foo=\n", "> "]);
+    assert!(
+        !visible_contains(&output, "MBX_GHST:foo=bar\n"),
+        "unaccepted equals suffix executed: {:?}",
+        visible_text(&output)
+    );
+    wait_for_count(&mbx_bin(), &data_home, 2);
+    let recent = sidecar_commands(&mbx_bin(), &data_home);
+    assert!(
+        recent
+            .iter()
+            .any(|command| command == "echo MBX_GHST:foo="),
+        "typed equals prefix was not admitted: {recent:?}"
     );
     exit_and_wait(&mut session);
 }

@@ -910,6 +910,26 @@ _mbx_ghost_cycle_prev
 assert_eq 'echo second extra' "$READLINE_LINE" \
     'ghost cycle prev should wrap to the oldest collected match'
 assert_eq 1 "${_MBX_GHOST_INDEX:-missing}" 'ghost cycle prev should wrap the index'
+_mbx_ghost_quoted_keyseq '='
+assert_eq '"="' "$REPLY" 'equals should use a quoted bind keyseq'
+_mbx_ghost_quoted_keyseq '"'
+assert_eq '"\""' "$REPLY" 'double-quote should use a Readline escaped keyseq'
+_mbx_ghost_quoted_keyseq '\'
+assert_eq '"\\"' "$REPLY" 'backslash should use a Readline escaped keyseq'
+_mbx_ghost_quoted_keyseq '\C-h'
+assert_eq '"\C-h"' "$REPLY" 'control keyseq should keep its Readline form'
+cat >"$ghost_stub_dir/mbx" <<'EOF'
+#!/bin/bash
+printf '%s\n' 'echo foo=bar'
+EOF
+READLINE_LINE='echo foo'
+READLINE_POINT=8
+READLINE_KEYSEQ='='
+_MBX_GHOST_HAS=0
+_mbx_ghost_self_insert
+assert_eq 'echo foo=bar' "$READLINE_LINE" \
+    'ghost should extend a prefix that ends with equals'
+assert_eq 9 "$READLINE_POINT" 'equals insert should keep the cursor on the typed prefix'
 rm -rf "$ghost_stub_dir"
 unset MBX_BIN MBX_GHOST MBX_HISTORY READLINE_LINE READLINE_POINT READLINE_KEYSEQ \
     _MBX_GHOST_HAS _MBX_GHOST_POINT _MBX_GHOST_INDEX _MBX_GHOST_TYPED_LEN \

@@ -35,7 +35,7 @@ cycling them needs no overlay or dim paint.
 - Async generation IDs / stale-result rejection
 - Rebinding Tab, `\C-r`, `\C-g`, `\C-x\C-r`, `\C-x\C-s`
 - `eval` from bind -x
-- Remaining printables / vi-insert
+- Remaining printables (`docs/ghst-002-printables-plan.md`) / vi-insert
 - Marking Phase 4 complete
 
 ## Asserts
