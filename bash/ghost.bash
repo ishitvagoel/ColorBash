@@ -49,12 +49,16 @@ _mbx_ghost_arm_enter_keymap() {
 
 _mbx_ghost_disarm_enter() {
     [[ ${_MBX_GHOST_ENTER_ARMED:-0} == 1 ]] || return 0
-    _mbx_ghost_disarm_enter_keymap emacs "${_MBX_GHOST_WRAP_CTRL_J:-0}" || return 1
+    local status=0
+    _mbx_ghost_disarm_enter_keymap emacs "${_MBX_GHOST_WRAP_CTRL_J:-0}" || status=1
     if [[ ${_MBX_GHOST_VI_BOUND:-0} == 1 ]]; then
         _mbx_ghost_disarm_enter_keymap vi-insert "${_MBX_GHOST_VI_WRAP_CTRL_J:-0}" || \
-            return 1
+            status=1
     fi
+    # Always clear the flag so a later arm can retry. Returning before this
+    # left emacs disarmed while Enter stayed the kill-line macro (M-044).
     _MBX_GHOST_ENTER_ARMED=0
+    return "$status"
 }
 
 _mbx_ghost_arm_enter() {
@@ -177,10 +181,16 @@ _mbx_ghost_candidate_seen() {
     return 1
 }
 
+_mbx_ghost_restore_jobs() {
+    ((${_MBX_GHOST_SAVED_NOTIFY:-0} == 1)) && set -b
+    ((${_MBX_GHOST_SAVED_MONITOR:-0} == 1)) && set -m
+    _MBX_GHOST_SAVED_NOTIFY=0
+    _MBX_GHOST_SAVED_MONITOR=0
+}
+
 _mbx_ghost_query() {
     local query=$1
     local deadline output_fd child_pid match= limit
-    local monitor=0 notify=0
 
     _MBX_GHOST_CANDIDATES=()
     _MBX_GHOST_INDEX=0
@@ -191,14 +201,15 @@ _mbx_ghost_query() {
     _mbx_deadline_after "${MBX_GHOST_TIMEOUT:-${MBX_HISTORY_TIMEOUT:-0.10}}" || \
         return 1
     deadline=$REPLY
-    [[ $- == *m* ]] && monitor=1
-    [[ $- == *b* ]] && notify=1
+    _MBX_GHOST_SAVED_MONITOR=0
+    _MBX_GHOST_SAVED_NOTIFY=0
+    [[ $- == *m* ]] && _MBX_GHOST_SAVED_MONITOR=1
+    [[ $- == *b* ]] && _MBX_GHOST_SAVED_NOTIFY=1
     set +m
     set +b
     exec {output_fd}< <(exec "$MBX_BIN" history search prefix "$query" --limit "$limit" \
         2>/dev/null) || {
-        ((notify == 1)) && set -b
-        ((monitor == 1)) && set -m
+        _mbx_ghost_restore_jobs
         return 1
     }
     child_pid=$!
@@ -214,8 +225,7 @@ _mbx_ghost_query() {
     if ! _mbx_wait_child_until "$child_pid" "$deadline"; then
         _mbx_terminate_child "$child_pid"
     fi
-    ((notify == 1)) && set -b
-    ((monitor == 1)) && set -m
+    _mbx_ghost_restore_jobs
     ((${#_MBX_GHOST_CANDIDATES[@]} > 0)) || return 1
     REPLY=${_MBX_GHOST_CANDIDATES[0]}
 }
@@ -229,11 +239,13 @@ _mbx_ghost_show() {
     READLINE_POINT=$point
     _MBX_GHOST_HAS=1
     _MBX_GHOST_POINT=$point
-    if ! _mbx_ghost_arm_enter; then
-        READLINE_LINE=$typed
-        READLINE_POINT=$point
-        _mbx_ghost_reset_state
-        return 1
+    if [[ ${_MBX_GHOST_BOUND:-0} == 1 ]]; then
+        if ! _mbx_ghost_arm_enter || [[ ${_MBX_GHOST_ENTER_ARMED:-0} != 1 ]]; then
+            READLINE_LINE=$typed
+            READLINE_POINT=$point
+            _mbx_ghost_reset_state
+            return 1
+        fi
     fi
 }
 
@@ -360,6 +372,7 @@ _mbx_ghost_quoted_keyseq() {
     case $ch in
         \\) REPLY='"\\"' ;;
         \") REPLY='"\""' ;;
+        \`) REPLY='"`"' ;;
         *) REPLY="\"${ch}\"" ;;
     esac
 }
@@ -542,10 +555,8 @@ _mbx_ghost_install() {
         _MBX_GHOST_INSTALLED=1
         return 0
     fi
-    _mbx_ghost_bind_self_chars emacs "$chars" || {
-        _MBX_GHOST_INSTALLED=1
-        return 0
-    }
+    # Bind Enter helpers before printables. Wrapping self-insert first and then
+    # failing a helper left suffixes visible with stock accept-line (M-044).
     _mbx_ghost_bind_fn emacs "$kill_key" kill-line kill-line || {
         _MBX_GHOST_INSTALLED=1
         return 0
@@ -556,6 +567,10 @@ _mbx_ghost_install() {
     }
     _MBX_GHOST_KILL_KEYSEQ=$kill_key
     _MBX_GHOST_ACCEPT_KEYSEQ=$accept_key
+    _mbx_ghost_bind_self_chars emacs "$chars" || {
+        _MBX_GHOST_INSTALLED=1
+        return 0
+    }
     _mbx_ghost_bind_x emacs '\C-h' _mbx_ghost_backspace backward-delete-char || true
     _mbx_ghost_bind_x emacs '\C-?' _mbx_ghost_backspace backward-delete-char || true
     _mbx_ghost_bind_x emacs '\e[C' _mbx_ghost_forward forward-char || true

@@ -918,6 +918,10 @@ _mbx_ghost_quoted_keyseq '\'
 assert_eq '"\\"' "$REPLY" 'backslash should use a Readline escaped keyseq'
 _mbx_ghost_quoted_keyseq '\C-h'
 assert_eq '"\C-h"' "$REPLY" 'control keyseq should keep its Readline form'
+_mbx_ghost_quoted_keyseq '$'
+assert_eq '"$"' "$REPLY" 'dollar should use a quoted bind keyseq'
+_mbx_ghost_quoted_keyseq '`'
+assert_eq '"`"' "$REPLY" 'backtick should match the bind -p quoted keyseq'
 cat >"$ghost_stub_dir/mbx" <<'EOF'
 #!/bin/bash
 printf '%s\n' 'echo foo=bar'
@@ -939,6 +943,24 @@ assert_eq 'echo MBX_GHST:a' "$READLINE_LINE" \
     'ghost Left should restore the typed prefix without the suffix'
 assert_eq 14 "$READLINE_POINT" 'ghost Left should move one character into the typed prefix'
 assert_eq 0 "${_MBX_GHOST_HAS:-missing}" 'ghost Left should clear the suffix flag'
+_MBX_GHOST_ENTER_ARMED=1
+_MBX_GHOST_VI_BOUND=1
+_MBX_GHOST_WRAP_CTRL_J=0
+_MBX_GHOST_VI_WRAP_CTRL_J=1
+_mbx_ghost_disarm_enter_keymap() {
+    if [[ $1 == emacs ]]; then
+        return 0
+    fi
+    return 1
+}
+_mbx_ghost_disarm_enter || true
+assert_eq 0 "${_MBX_GHOST_ENTER_ARMED:-missing}" \
+    'partial keymap disarm must still clear ENTER_ARMED (M-044)'
+source "$ROOT/bash/ghost.bash"
+set -m
+_mbx_ghost_query 'e' || true
+[[ $- == *m* ]] || fail 'ghost query must restore monitor mode after a lookup'
+set +m
 rm -rf "$ghost_stub_dir"
 unset MBX_BIN MBX_GHOST MBX_HISTORY READLINE_LINE READLINE_POINT READLINE_KEYSEQ \
     _MBX_GHOST_HAS _MBX_GHOST_POINT _MBX_GHOST_INDEX _MBX_GHOST_TYPED_LEN \

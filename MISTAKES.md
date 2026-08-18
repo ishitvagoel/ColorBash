@@ -825,3 +825,27 @@ to prevent recurrence, not to assign blame.
 - Evidence: `ctrl_x_ctrl_n_cycles_to_older_prefix_match` in
   `crates/pty/tests/ghost.rs`; compile failure on `dc4d78d`.
 
+## M-044 — Ghost Enter armed flag survived a partial keymap disarm
+
+- Discovered: 2026-08-18
+- Status: Fixed
+- Failed assumption: `_mbx_ghost_disarm_enter` could return after a successful
+  emacs disarm and a failed vi-insert disarm without clearing
+  `_MBX_GHOST_ENTER_ARMED`, and wrapping printables before Enter helpers was
+  safe because helper `can_wrap` had already succeeded.
+- Impact: emacs Enter could already be stock `accept-line` while the armed
+  flag stayed set, so the next arm skipped and a suffix could be submitted.
+  If printables wrapped and a later helper bind failed, `_MBX_GHOST_BOUND`
+  stayed 0, `arm_enter` was a no-op success, and stock Enter executed the
+  unaccepted suffix.
+- Correction: disarm always clears `_MBX_GHOST_ENTER_ARMED` after attempting
+  both keymaps. Emacs install binds kill-line / accept-line helpers before
+  printables. When `_MBX_GHOST_BOUND=1`, `_mbx_ghost_show` keeps a suffix only
+  if Enter is actually armed.
+- Prevention: never show an inline suffix unless the Enter macro is armed.
+  Bind accept helpers before wrapping `self-insert`. Armed flags must clear
+  even when a secondary keymap bind fails.
+- Evidence: `_mbx_ghost_disarm_enter` / `_mbx_ghost_install` /
+  `_mbx_ghost_show` in `bash/ghost.bash`; module contract for partial disarm
+  in `tests/bash/modules.bash`.
+
