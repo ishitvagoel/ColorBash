@@ -1,9 +1,8 @@
 # GHST-002 leftover: opt-in inline ghost suffix (G-1–G-6)
 
 Status: `complete` for this Strategy A ghost slice (2026-08-17). Remaining
-printables are recorded (`docs/ghst-002-printables-plan.md`). Async lookup,
-dim styling, and vi-insert remain. Word-accept and cycling are recorded. Do
-**not** mark `GHST-004` complete.
+printables and vi-insert are recorded. Async lookup and dim styling remain.
+Word-accept and cycling are recorded. Do **not** mark `GHST-004` complete.
 
 ## Why this slice
 

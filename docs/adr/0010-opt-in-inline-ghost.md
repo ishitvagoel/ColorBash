@@ -21,12 +21,12 @@ experiments.
 1. Opt-in inline ghost (`MBX_GHOST=1` and `MBX_HISTORY=1`) is Strategy A.
    Readline remains the redisplay owner. MBX does not take editor ownership and
    does not put ANSI in `READLINE_LINE`.
-2. When enabled, emacs `self-insert` for ASCII printables is wrapped with
-   `bind -x` only in an interactive emacs tty session. Stock `self-insert`
-   is replaceable. A user or `-x` binding that is not `self-insert` is
-   skipped unless `MBX_GHOST_OVERRIDE=1`. Helper lookup runs with job-control
+2. When enabled, `self-insert` for ASCII printables is wrapped with `bind -x`
+   on emacs and vi-insert in an interactive tty. Stock `self-insert` is
+   replaceable. A user or `-x` binding that is not `self-insert` is skipped
+   unless `MBX_GHOST_OVERRIDE=1`. Helper lookup runs with job-control
    monitor/notify off so per-key forks do not print jobs or accept the line.
-   Piped `bash -i` is not wrapped (M-042).
+   Piped `bash -i` is not wrapped (M-042). vi-command is not wrapped.
 3. The typed prefix stays left of `READLINE_POINT`. A matching sidecar prefix
    row may extend `READLINE_LINE` to the right of the cursor. That suffix is
    not accepted until the user moves point (Right / `\C-f` for the full row;
@@ -43,17 +43,18 @@ experiments.
 5. Helper timeout, missing binary, or a match that is not an exact byte prefix
    / contains controls leaves the typed character inserted and no suffix.
    Query budget is `MBX_GHOST_TIMEOUT` (default `MBX_HISTORY_TIMEOUT` / 0.10 s).
-6. Dim styling, vi-insert, async generation IDs, and highlighting remain
-   later leftovers. Remaining ASCII printables that are stock `self-insert`
-   are wrapped using Readline quoted keyseqs. Prefix-match cycling uses
+6. Dim styling, async generation IDs, and highlighting remain later leftovers.
+   Remaining ASCII printables that are stock `self-insert` are wrapped using
+   Readline quoted keyseqs. vi-insert uses the same helpers; `\ef` is not
+   bound there because ESC is `vi-movement-mode`. Prefix-match cycling uses
    unbound `\C-x\C-n` / `\C-x\C-p`. Do not steal Tab, `\C-r`, `\C-g`,
    `\C-x\C-r`, or `\C-x\C-s`.
 
 ## Alternatives
 
 - Paint dim text after `bind -x` returns: Readline redisplays and erases it.
-- Rebind Left/unwrapped motion and remaining editor keymaps: deferred. ASCII
-  printables that are stock `self-insert` are wrapped.
+- Rebind Left/unwrapped motion and vi-command: deferred. ASCII printables that
+  are stock `self-insert` are wrapped on emacs and vi-insert.
 - Custom editor (Strategy B): still unjustified (ADR 0003).
 - Default-on ghost: rejected; wrapping `self-insert` must be explicit.
 
@@ -68,5 +69,5 @@ GUI overlays stay blocked.
 
 PTY evidence in `crates/pty/tests/ghost.rs` and module contracts in
 `tests/bash/modules.bash`. Plans: `docs/ghst-002-inline-ghost-plan.md`,
-`docs/ghst-002-printables-plan.md`, `docs/ghst-003-word-accept-plan.md`,
-`docs/ghst-003-cycle-plan.md`.
+`docs/ghst-002-printables-plan.md`, `docs/ghst-002-vi-insert-plan.md`,
+`docs/ghst-003-word-accept-plan.md`, `docs/ghst-003-cycle-plan.md`.

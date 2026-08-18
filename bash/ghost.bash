@@ -5,6 +5,7 @@
 # Readline-only kill-line + accept-line macro on `\C-m` and `\C-j` instead.
 # Cycle next/prev default to unbound `\C-x\C-n` / `\C-x\C-p` (not `\en`/`\ep`).
 # Remaining ASCII printables use Readline quoted keyseqs so `"` / `\` bind.
+# vi-insert is wrapped after emacs; ESC is vi-movement-mode so `\ef` is not.
 _MBX_GHOST_KILL_DEFAULT_KEYSEQ='\C-x\C-k'
 _MBX_GHOST_ACCEPT_DEFAULT_KEYSEQ='\C-x\C-m'
 _MBX_GHOST_NEXT_DEFAULT_KEYSEQ='\C-x\C-n'
@@ -12,20 +13,45 @@ _MBX_GHOST_PREV_DEFAULT_KEYSEQ='\C-x\C-p'
 _MBX_GHOST_HAS=0
 _MBX_GHOST_POINT=0
 _MBX_GHOST_BOUND=0
+_MBX_GHOST_VI_BOUND=0
 _MBX_GHOST_CYCLE_BOUND=0
 _MBX_GHOST_ENTER_ARMED=0
 _MBX_GHOST_WRAP_CTRL_J=0
+_MBX_GHOST_VI_WRAP_CTRL_J=0
 _MBX_GHOST_INDEX=0
 _MBX_GHOST_TYPED_LEN=0
 _MBX_GHOST_CANDIDATES=()
 _MBX_GHOST_KILL_KEYSEQ=$_MBX_GHOST_KILL_DEFAULT_KEYSEQ
 _MBX_GHOST_ACCEPT_KEYSEQ=$_MBX_GHOST_ACCEPT_DEFAULT_KEYSEQ
 
+_mbx_ghost_disarm_enter_keymap() {
+    local keymap=$1
+    local wrap_j=$2
+    bind -m "$keymap" '"\C-m": accept-line' || return 1
+    if [[ $wrap_j == 1 ]]; then
+        bind -m "$keymap" '"\C-j": accept-line' || return 1
+    fi
+}
+
+_mbx_ghost_arm_enter_keymap() {
+    local keymap=$1
+    local wrap_j=$2
+    local macro=$3
+    bind -m "$keymap" "\"\\C-m\": \"$macro\"" || return 1
+    if [[ $wrap_j == 1 ]]; then
+        if ! bind -m "$keymap" "\"\\C-j\": \"$macro\""; then
+            bind -m "$keymap" '"\C-m": accept-line' || true
+            return 1
+        fi
+    fi
+}
+
 _mbx_ghost_disarm_enter() {
     [[ ${_MBX_GHOST_ENTER_ARMED:-0} == 1 ]] || return 0
-    bind -m emacs '"\C-m": accept-line' || return 1
-    if [[ ${_MBX_GHOST_WRAP_CTRL_J:-0} == 1 ]]; then
-        bind -m emacs '"\C-j": accept-line' || return 1
+    _mbx_ghost_disarm_enter_keymap emacs "${_MBX_GHOST_WRAP_CTRL_J:-0}" || return 1
+    if [[ ${_MBX_GHOST_VI_BOUND:-0} == 1 ]]; then
+        _mbx_ghost_disarm_enter_keymap vi-insert "${_MBX_GHOST_VI_WRAP_CTRL_J:-0}" || \
+            return 1
     fi
     _MBX_GHOST_ENTER_ARMED=0
 }
@@ -35,10 +61,13 @@ _mbx_ghost_arm_enter() {
     [[ ${_MBX_GHOST_BOUND:-0} == 1 ]] || return 0
     [[ ${_MBX_GHOST_ENTER_ARMED:-0} == 1 ]] && return 0
     macro="${_MBX_GHOST_KILL_KEYSEQ}${_MBX_GHOST_ACCEPT_KEYSEQ}"
-    bind -m emacs "\"\\C-m\": \"$macro\"" || return 1
-    if [[ ${_MBX_GHOST_WRAP_CTRL_J:-0} == 1 ]]; then
-        if ! bind -m emacs "\"\\C-j\": \"$macro\""; then
-            bind -m emacs '"\C-m": accept-line' || true
+    _mbx_ghost_arm_enter_keymap emacs "${_MBX_GHOST_WRAP_CTRL_J:-0}" "$macro" || \
+        return 1
+    if [[ ${_MBX_GHOST_VI_BOUND:-0} == 1 ]]; then
+        if ! _mbx_ghost_arm_enter_keymap vi-insert "${_MBX_GHOST_VI_WRAP_CTRL_J:-0}" \
+            "$macro"; then
+            _mbx_ghost_disarm_enter_keymap emacs "${_MBX_GHOST_WRAP_CTRL_J:-0}" || \
+                true
             return 1
         fi
     fi
@@ -382,6 +411,59 @@ _mbx_ghost_bind_fn() {
     bind -m "$keymap" "$spec"
 }
 
+_mbx_ghost_bind_x_stock() {
+    local keymap=$1
+    local keyseq=$2
+    local command=$3
+    local allowed=$4
+    local fn spec
+    if _mbx_ghost_keyseq_has_x "$keyseq" "$keymap"; then
+        [[ ${MBX_GHOST_OVERRIDE:-0} == 1 ]] || return 1
+    else
+        _mbx_ghost_stock_fn "$keyseq" "$keymap"
+        fn=$REPLY
+        [[ $fn == "$allowed" ]] || return 1
+    fi
+    _mbx_ghost_quoted_keyseq "$keyseq"
+    spec="${REPLY}: $command"
+    bind -m "$keymap" -x "$spec"
+}
+
+_mbx_ghost_install_vi() {
+    local kill_key=$1
+    local accept_key=$2
+    local next_key=$3
+    local prev_key=$4
+    local chars=$5
+    _MBX_GHOST_VI_WRAP_CTRL_J=0
+    _mbx_ghost_can_wrap "$kill_key" vi-insert kill-line || return 1
+    _mbx_ghost_can_wrap "$accept_key" vi-insert accept-line || return 1
+    _mbx_ghost_stock_fn '\C-m' vi-insert
+    if [[ $REPLY != accept-line ]] || _mbx_ghost_keyseq_has_x '\C-m' vi-insert; then
+        return 1
+    fi
+    _mbx_ghost_stock_fn '\C-j' vi-insert
+    if [[ $REPLY == accept-line ]] && ! _mbx_ghost_keyseq_has_x '\C-j' vi-insert; then
+        _MBX_GHOST_VI_WRAP_CTRL_J=1
+    fi
+    [[ ${_MBX_GHOST_VI_WRAP_CTRL_J:-0} == 1 ]] || return 1
+    _mbx_ghost_bind_fn vi-insert "$kill_key" kill-line kill-line || return 1
+    _mbx_ghost_bind_fn vi-insert "$accept_key" accept-line accept-line || return 1
+    _mbx_ghost_bind_self_chars vi-insert "$chars" || return 1
+    _mbx_ghost_bind_x vi-insert '\C-h' _mbx_ghost_backspace backward-delete-char || true
+    _mbx_ghost_bind_x vi-insert '\C-?' _mbx_ghost_backspace backward-delete-char || true
+    _mbx_ghost_bind_x vi-insert '\e[C' _mbx_ghost_forward forward-char || true
+    _mbx_ghost_bind_x vi-insert '\eOC' _mbx_ghost_forward forward-char || true
+    _mbx_ghost_bind_x_stock vi-insert '\e[1;5C' _mbx_ghost_forward_word forward-word || \
+        true
+    if [[ -n $next_key && $next_key != "$kill_key" && $next_key != "$accept_key" ]]; then
+        _mbx_ghost_bind_x vi-insert "$next_key" _mbx_ghost_cycle_next '' || true
+    fi
+    if [[ -n $prev_key && $prev_key != "$kill_key" && $prev_key != "$accept_key" && $prev_key != "$next_key" ]]; then
+        _mbx_ghost_bind_x vi-insert "$prev_key" _mbx_ghost_cycle_prev '' || true
+    fi
+}
+
 _mbx_ghost_bind_self_chars() {
     local keymap=$1
     local chars=$2
@@ -399,9 +481,11 @@ _mbx_ghost_bind_self_chars() {
 _mbx_ghost_install() {
     [[ ${_MBX_GHOST_INSTALLED:-0} != 1 ]] || return 0
     _MBX_GHOST_BOUND=0
+    _MBX_GHOST_VI_BOUND=0
     _MBX_GHOST_CYCLE_BOUND=0
     _MBX_GHOST_ENTER_ARMED=0
     _MBX_GHOST_WRAP_CTRL_J=0
+    _MBX_GHOST_VI_WRAP_CTRL_J=0
     if [[ $- != *i* || ! -t 0 ]]; then
         _MBX_GHOST_INSTALLED=1
         return 0
@@ -474,5 +558,8 @@ _mbx_ghost_install() {
         _mbx_ghost_bind_x emacs "$prev_key" _mbx_ghost_cycle_prev '' || true
     fi
     _MBX_GHOST_BOUND=1
+    if _mbx_ghost_install_vi "$kill_key" "$accept_key" "$next_key" "$prev_key" "$chars"; then
+        _MBX_GHOST_VI_BOUND=1
+    fi
     _MBX_GHOST_INSTALLED=1
 }

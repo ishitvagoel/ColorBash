@@ -171,7 +171,7 @@ fn default_install_sets_bound_flag() {
     wait_for(&mut session, "> ");
     session
         .write_str(
-            "[[ ${_MBX_GHOST_BOUND:-missing} == 1 && ${_MBX_GHOST_CYCLE_BOUND:-missing} == 1 ]] && printf 'MBX_GHST:bound\\n'\n",
+            "[[ ${_MBX_GHOST_BOUND:-missing} == 1 && ${_MBX_GHOST_CYCLE_BOUND:-missing} == 1 && ${_MBX_GHOST_VI_BOUND:-missing} == 1 ]] && printf 'MBX_GHST:bound\\n'\n",
             deadline(2),
         )
         .expect("status");
@@ -293,6 +293,80 @@ fn equals_printable_shows_suffix_and_enter_runs_typed_prefix() {
     assert!(
         recent.iter().any(|command| command == "echo MBX_GHST:foo="),
         "typed equals prefix was not admitted: {recent:?}"
+    );
+    exit_and_wait(&mut session);
+}
+
+#[test]
+fn vi_insert_typing_shows_suffix_and_enter_runs_typed_prefix() {
+    let home = TempHome::new("ghst-v2");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let mut session = spawn_history_shell_rc(
+        home.path(),
+        &ghost_env(data_home_s, histfile_s, &[]),
+        "set -o vi\n",
+    );
+    wait_for(&mut session, "> ");
+    record_echo(&mut session, "alpha");
+    wait_for_count(&mbx_bin(), &data_home, 1);
+
+    session
+        .write_str("echo MBX_GHST:a", deadline(2))
+        .expect("type prefix");
+    wait_all(&mut session, &["echo MBX_GHST:alpha"]);
+    assert_no_output(&mut session, "MBX_GHST:alpha\n");
+    session.write_str("\n", deadline(2)).expect("enter");
+    let output = wait_all(&mut session, &["MBX_GHST:a\n", "> "]);
+    assert!(
+        !visible_contains(&output, "MBX_GHST:alpha\n"),
+        "unaccepted vi-insert ghost executed: {:?}",
+        visible_text(&output)
+    );
+    wait_for_count(&mbx_bin(), &data_home, 2);
+    let recent = sidecar_commands(&mbx_bin(), &data_home);
+    assert!(
+        recent.iter().any(|command| command == "echo MBX_GHST:a"),
+        "vi-insert typed prefix was not admitted through accept-line: {recent:?}"
+    );
+    exit_and_wait(&mut session);
+}
+
+#[test]
+fn vi_insert_right_arrow_accepts_full_suggestion() {
+    let home = TempHome::new("ghst-v3");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let mut session = spawn_history_shell_rc(
+        home.path(),
+        &ghost_env(data_home_s, histfile_s, &[]),
+        "set -o vi\n",
+    );
+    wait_for(&mut session, "> ");
+    record_echo(&mut session, "alpha");
+    wait_for_count(&mbx_bin(), &data_home, 1);
+
+    session
+        .write_str("echo MBX_GHST:a", deadline(2))
+        .expect("type prefix");
+    wait_all(&mut session, &["echo MBX_GHST:alpha"]);
+    send_keys(&mut session, RIGHT);
+    assert_no_output(&mut session, "MBX_GHST:alpha\n");
+    session.write_str("\n", deadline(2)).expect("enter");
+    wait_all(&mut session, &["MBX_GHST:alpha\n", "> "]);
+    wait_for_count(&mbx_bin(), &data_home, 2);
+    let recent = sidecar_commands(&mbx_bin(), &data_home);
+    assert_eq!(
+        recent
+            .iter()
+            .filter(|command| *command == "echo MBX_GHST:alpha")
+            .count(),
+        2,
+        "vi-insert accepted ghost was not admitted through accept-line: {recent:?}"
     );
     exit_and_wait(&mut session);
 }

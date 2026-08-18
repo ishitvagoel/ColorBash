@@ -1,7 +1,8 @@
 # GHST-002 leftover: remaining printable self-insert (P-1–P-3)
 
-Status: `complete` for remaining printables (2026-08-18). vi-insert, dim paint,
-and async lookup remain. Do **not** mark `GHST-004` complete.
+Status: `complete` for remaining printables (2026-08-18). vi-insert is recorded
+in `docs/ghst-002-vi-insert-plan.md`. Dim paint and async lookup remain. Do
+**not** mark `GHST-004` complete.
 
 ## Why this slice
 
@@ -13,7 +14,7 @@ and `\C-x\C-s` stay untouched.
 | Rank | Item | Why not now |
 | --- | --- | --- |
 | 1 | Remaining printables (this plan) | Named ADR 0010 leftover; no overlay. |
-| — | vi-insert keymap | Separate keymap; emacs tty remains the default. |
+| — | vi-insert keymap | Recorded in `docs/ghst-002-vi-insert-plan.md`. |
 | — | Dim / highlighting | After-every-key paint still unproven. |
 
 ## Goal
@@ -47,5 +48,5 @@ and `\C-x\C-s` stay untouched.
 
 ## Stop
 
-Do not start vi-insert, highlighting, or overlay. Do not mark `GHST-004`
-complete.
+Do not start highlighting or overlay. Do not mark `GHST-004` complete.
+vi-insert is specified in `docs/ghst-002-vi-insert-plan.md`.
