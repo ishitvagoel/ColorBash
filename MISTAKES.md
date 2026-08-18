@@ -810,3 +810,18 @@ to prevent recurrence, not to assign blame.
   intend to exercise.
 - Evidence: `_mbx_ghost_install` in `bash/ghost.bash`; `tests/bash/smoke.bash`.
 
+## M-043 — Appending a PTY test truncated a prior assert
+
+- Discovered: 2026-08-18
+- Status: Fixed
+- Failed assumption: replacing a function's trailing `exit_and_wait` plus
+  closing brace was unique enough to insert a new test.
+- Impact: the older-match `assert_eq!` in the ghost cycling PTY test lost its
+  message and closing delimiter, so `mbx-pty` test `ghost` failed to compile.
+- Correction: restore the full assertion, then append the remaining-printables
+  test after the complete function.
+- Prevention: when inserting after a test, include a unique assertion message
+  in the match context, not only a repeated `exit_and_wait` trailer.
+- Evidence: `ctrl_x_ctrl_n_cycles_to_older_prefix_match` in
+  `crates/pty/tests/ghost.rs`; compile failure on `dc4d78d`.
+
