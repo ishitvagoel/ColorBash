@@ -291,9 +291,7 @@ fn equals_printable_shows_suffix_and_enter_runs_typed_prefix() {
     wait_for_count(&mbx_bin(), &data_home, 2);
     let recent = sidecar_commands(&mbx_bin(), &data_home);
     assert!(
-        recent
-            .iter()
-            .any(|command| command == "echo MBX_GHST:foo="),
+        recent.iter().any(|command| command == "echo MBX_GHST:foo="),
         "typed equals prefix was not admitted: {recent:?}"
     );
     exit_and_wait(&mut session);
