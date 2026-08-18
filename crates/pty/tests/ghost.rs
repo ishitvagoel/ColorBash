@@ -258,6 +258,8 @@ fn ctrl_x_ctrl_n_cycles_to_older_prefix_match() {
             .filter(|command| *command == "echo MBX_GHST:two")
             .count(),
         1,
+        "newest match was admitted after cycling away: {recent:?}"
+    );
     exit_and_wait(&mut session);
 }
 
