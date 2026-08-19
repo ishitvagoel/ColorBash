@@ -2,7 +2,8 @@
 
 Status: `complete` for Left / backward-char (2026-08-18). Home, Up, and
 backward-word are recorded in `docs/ghst-002-home-up-motion-plan.md`.
-Kill-ring isolation remains. Do **not** mark `GHST-004` complete.
+Kill-ring isolation is recorded in `docs/ghst-002-kill-ring-plan.md`. Do **not**
+mark `GHST-004` complete.
 
 ## Why this slice
 

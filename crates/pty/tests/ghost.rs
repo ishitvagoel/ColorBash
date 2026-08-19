@@ -2,7 +2,7 @@
 mod common;
 
 use common::*;
-use mbx_pty::{visible_contains, visible_text};
+use mbx_pty::{WinSize, visible_contains, visible_text};
 use std::time::Duration;
 
 const RIGHT: &[u8] = b"\x1b[C";
@@ -469,5 +469,69 @@ fn enter_discard_does_not_pollute_kill_ring() {
     wait_all(&mut session, &["MBX_GHST:a\n", "> "]);
     send_keys(&mut session, CTRL_Y);
     assert_no_output(&mut session, "pha");
+    exit_and_wait(&mut session);
+}
+
+#[test]
+fn resize_with_active_suffix_enter_runs_typed_prefix() {
+    let home = TempHome::new("ghst-r1");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let mut session = spawn_history_shell(home.path(), &ghost_env(data_home_s, histfile_s, &[]));
+    wait_for(&mut session, "> ");
+    record_echo(&mut session, "alpha");
+    wait_for_count(&mbx_bin(), &data_home, 1);
+
+    session
+        .write_str("echo MBX_GHST:a", deadline(2))
+        .expect("type prefix");
+    wait_all(&mut session, &["echo MBX_GHST:alpha"]);
+    session
+        .resize(WinSize { rows: 16, cols: 64 })
+        .expect("resize");
+    assert_no_output(&mut session, "MBX_GHST:alpha\n");
+    session.write_str("\n", deadline(2)).expect("enter");
+    let output = wait_all(&mut session, &["MBX_GHST:a\n", "> "]);
+    assert!(
+        !visible_contains(&output, "MBX_GHST:alpha\n"),
+        "unaccepted ghost executed after resize: {:?}",
+        visible_text(&output)
+    );
+    exit_and_wait(&mut session);
+}
+
+#[test]
+fn space_separated_prefix_shows_suffix_and_enter_runs_typed_bytes() {
+    let home = TempHome::new("ghst-q1");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let mut session = spawn_history_shell(home.path(), &ghost_env(data_home_s, histfile_s, &[]));
+    wait_for(&mut session, "> ");
+    type_line(&mut session, "echo MBX_GHST:alpha beta");
+    wait_all(&mut session, &["MBX_GHST:alpha beta\n", "> "]);
+    wait_for_count(&mbx_bin(), &data_home, 1);
+
+    session
+        .write_str("echo MBX_GHST:alp", deadline(2))
+        .expect("type spaced prefix");
+    wait_all(&mut session, &["echo MBX_GHST:alpha beta"]);
+    assert_no_output(&mut session, "MBX_GHST:alpha beta\n");
+    session.write_str("\n", deadline(2)).expect("enter");
+    let output = wait_all(&mut session, &["MBX_GHST:alp\n", "> "]);
+    assert!(
+        !visible_contains(&output, "MBX_GHST:alpha beta\n"),
+        "unaccepted spaced ghost executed: {:?}",
+        visible_text(&output)
+    );
+    wait_for_count(&mbx_bin(), &data_home, 2);
+    let recent = sidecar_commands(&mbx_bin(), &data_home);
+    assert!(
+        recent.iter().any(|command| command == "echo MBX_GHST:alp"),
+        "spaced typed prefix was not admitted: {recent:?}"
+    );
     exit_and_wait(&mut session);
 }
