@@ -19,6 +19,7 @@ These slices have working code you can exercise in an interactive shell:
 | Ranked-accept chord | Default `Ctrl-X Ctrl-A` after wrapped Tab | Replaces current word with ranked candidate; Tab stays stock |
 | Git completion kinds | Wrap `git` or `mbx_comp_git` fixture | Additive `ref`/`flag`/`file`; no Git subprocess |
 | Fuzzy history search | `MBX_HISTORY=1` then `mbx history search fuzzy TEXT` | Ranks a bounded recent pool |
+| History ghost suffix | `MBX_HISTORY=1` and `MBX_GHOST=1` | Suggestion after the cursor on ASCII printables in emacs and vi-insert; Enter runs the typed prefix; Right accepts all; Left / Home / Up / Ctrl-Left dismiss; Alt-F / Ctrl-Right accept one word (emacs); Ctrl-Right in vi-insert; Ctrl-X Ctrl-N / Ctrl-P cycle matches |
 
 ## What remains
 
@@ -26,7 +27,7 @@ These MVP features are **not** implemented for interactive use:
 
 | Feature | Why it is waiting |
 | --- | --- |
-| Ghost suggestions | No after-every-key Readline decoration hook |
+| Ghost dim / live paint | Opt-in suffix ghost exists (ADR 0010); dim after-every-key styling does not |
 | Completion popup | Overlay unproven; ranked-accept chord exists |
 | Syntax highlighting | Same continuous-decoration leftover |
 | Enhanced Ctrl+R | Same leftover; explicit search UI not built |
@@ -194,6 +195,23 @@ Press Tab (stock insertion), then `Ctrl-X Ctrl-A` to replace the current word
 with the top-ranked candidate. If the chord is already bound, MBX leaves it
 alone unless `MBX_COMP_ACCEPT_OVERRIDE=1`.
 
+### 8. History ghost suffix (opt-in)
+
+```bash
+MBX_HISTORY=1 MBX_GHOST=1 bash --noprofile --norc
+source /absolute/path/to/ColorBash/bash/init.bash
+echo unique-ghost-alpha
+```
+
+Type `echo unique-ghost-a` and pause. The rest of the previous command should
+appear after the cursor. Enter runs only what you typed. Right Arrow then Enter
+accepts the full suggestion. Left Arrow dismisses the suggestion and moves
+into the typed prefix. Home and Ctrl-P do the same before their stock motion.
+Alt-F or Ctrl-Right accepts one word in emacs;
+Ctrl-Right does in vi-insert (`set -o vi`). Ctrl-X Ctrl-N
+and Ctrl-X Ctrl-P cycle other prefix matches. The suffix is ordinary command
+text, not dim paint.
+
 ## Prototype controls
 
 ```bash
@@ -208,6 +226,13 @@ MBX_PRODUCTION_CONTEXT=1        # show the prominent production state
 MBX_ENABLE_DURATION_TIMING=1    # opt in only when no DEBUG trap is already used
 MBX_HISTORY=1                   # opt in to the local history sidecar
 MBX_HISTORY_EXCLUDE='git *'     # colon-separated glob exclusions
+MBX_GHOST=1                     # opt-in history suffix after the cursor (needs MBX_HISTORY=1)
+MBX_GHOST_OVERRIDE=1            # overwrite occupied ghost self-insert keys
+MBX_GHOST_LIMIT=8               # max prefix matches collected for cycling (1-8)
+MBX_GHOST_DELETE_KEYSEQ='\C-x\C-d' # delete-char helper used by Enter while a suffix is shown
+MBX_GHOST_ACCEPT_KEYSEQ='\C-x\C-m' # accept-line helper used by that Enter macro
+MBX_GHOST_NEXT_KEYSEQ='\C-x\C-n'   # cycle to the next prefix match
+MBX_GHOST_PREV_KEYSEQ='\C-x\C-p'   # cycle to the previous prefix match
 MBX_EDITOR_INSERT_TOKEN=hello   # text inserted by Ctrl-X Ctrl-Y
 MBX_EDITOR_INSERT_KEYSEQ='\C-x\C-y'
 MBX_EDITOR_OVERRIDE=1           # overwrite an occupied insert chord

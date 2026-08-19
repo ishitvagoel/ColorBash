@@ -827,4 +827,197 @@ assert_eq '2025-01-01T00:00:00Z' "$REPLY" 'the civil-date conversion is wrong'
 _mbx_history_iso_utc 1786808647
 assert_eq '2026-08-15T15:44:07Z' "$REPLY" 'the civil-date conversion drifted'
 
+# Opt-in inline ghost (ADR 0010): suffix after POINT, never auto-executes.
+source "$ROOT/bash/ghost.bash"
+[[ $(<"$ROOT/bash/ghost.bash") != *set\ -euo\ pipefail* ]] || \
+    fail 'ghost.bash must not enable errexit/nounset/pipefail in the sourced module'
+if grep -Fq -- 'eval --' "$ROOT/bash/ghost.bash"; then
+    fail 'ghost.bash must not eval the line; Enter uses accept-line (M-041)'
+fi
+ghost_stub_dir=$(mktemp -d)
+cat >"$ghost_stub_dir/mbx" <<'EOF'
+#!/bin/bash
+printf '%s\n' 'echo MBX_GHST:alpha'
+EOF
+chmod +x "$ghost_stub_dir/mbx"
+MBX_BIN=$ghost_stub_dir/mbx
+MBX_GHOST=1
+MBX_HISTORY=1
+READLINE_LINE=
+READLINE_POINT=0
+READLINE_KEYSEQ=e
+_mbx_ghost_self_insert
+assert_eq 'echo MBX_GHST:alpha' "$READLINE_LINE" \
+    'ghost should extend the typed prefix with a sidecar match'
+assert_eq 1 "$READLINE_POINT" 'ghost should keep the cursor on the typed prefix'
+assert_eq 1 "${_MBX_GHOST_HAS:-missing}" 'ghost should mark an active suffix'
+_mbx_ghost_strip
+assert_eq 'e' "$READLINE_LINE" 'ghost strip should restore the typed prefix'
+assert_eq 0 "${_MBX_GHOST_HAS:-missing}" 'ghost strip should clear the suffix flag'
+READLINE_LINE='echo MBX_GHST:alpha'
+READLINE_POINT=1
+_MBX_GHOST_HAS=1
+_mbx_ghost_forward
+assert_eq 19 "$READLINE_POINT" 'ghost accept should move the cursor to the end'
+assert_eq 0 "${_MBX_GHOST_HAS:-missing}" 'ghost accept should clear the suffix flag'
+READLINE_LINE='echo MBX_GHST:one two'
+READLINE_POINT=15
+_MBX_GHOST_HAS=1
+_MBX_GHOST_POINT=15
+_mbx_ghost_forward_word
+assert_eq 17 "$READLINE_POINT" 'word-accept should land after the current word'
+assert_eq 1 "${_MBX_GHOST_HAS:-missing}" 'word-accept should keep a remaining suffix'
+assert_eq 17 "${_MBX_GHOST_POINT:-missing}" 'word-accept should advance the accepted prefix'
+_mbx_ghost_forward_word
+assert_eq 21 "$READLINE_POINT" 'second word-accept should reach the end'
+assert_eq 0 "${_MBX_GHOST_HAS:-missing}" 'last word-accept should clear the suffix flag'
+MBX_HISTORY=0
+READLINE_LINE=
+READLINE_POINT=0
+READLINE_KEYSEQ=e
+_MBX_GHOST_HAS=0
+_mbx_ghost_self_insert
+assert_eq 'e' "$READLINE_LINE" 'history-off ghost should insert the typed character only'
+if _mbx_ghost_usable_match 'e' $'echo \033bad'; then
+    fail 'ghost accepted a match containing an escape'
+fi
+cat >"$ghost_stub_dir/mbx" <<'EOF'
+#!/bin/bash
+printf '%s\n' 'echo first extra' 'echo second extra'
+EOF
+MBX_HISTORY=1
+MBX_GHOST=1
+READLINE_LINE=
+READLINE_POINT=0
+READLINE_KEYSEQ=e
+_MBX_GHOST_HAS=0
+_mbx_ghost_self_insert
+assert_eq 'echo first extra' "$READLINE_LINE" \
+    'ghost should show the newest prefix match first'
+assert_eq 1 "$READLINE_POINT" 'ghost cycle should keep the cursor on the typed prefix'
+assert_eq 2 "${#_MBX_GHOST_CANDIDATES[@]}" 'ghost should collect multiple prefix matches'
+assert_eq 0 "${_MBX_GHOST_INDEX:-missing}" 'ghost should start on the newest match'
+_mbx_ghost_cycle_next
+assert_eq 'echo second extra' "$READLINE_LINE" \
+    'ghost cycle next should show the older prefix match'
+assert_eq 1 "$READLINE_POINT" 'ghost cycle next should restore the typed prefix point'
+assert_eq 1 "${_MBX_GHOST_INDEX:-missing}" 'ghost cycle next should advance the index'
+_mbx_ghost_cycle_next
+assert_eq 'echo first extra' "$READLINE_LINE" \
+    'ghost cycle next should wrap to the newest match'
+assert_eq 0 "${_MBX_GHOST_INDEX:-missing}" 'ghost cycle next should wrap the index'
+_mbx_ghost_cycle_prev
+assert_eq 'echo second extra' "$READLINE_LINE" \
+    'ghost cycle prev should wrap to the oldest collected match'
+assert_eq 1 "${_MBX_GHOST_INDEX:-missing}" 'ghost cycle prev should wrap the index'
+_mbx_ghost_quoted_keyseq '='
+assert_eq '"="' "$REPLY" 'equals should use a quoted bind keyseq'
+_mbx_ghost_quoted_keyseq '"'
+assert_eq '"\""' "$REPLY" 'double-quote should use a Readline escaped keyseq'
+_mbx_ghost_quoted_keyseq '\'
+assert_eq '"\\"' "$REPLY" 'backslash should use a Readline escaped keyseq'
+_mbx_ghost_quoted_keyseq '\C-h'
+assert_eq '"\C-h"' "$REPLY" 'control keyseq should keep its Readline form'
+_mbx_ghost_quoted_keyseq '$'
+assert_eq '"$"' "$REPLY" 'dollar should use a quoted bind keyseq'
+_mbx_ghost_quoted_keyseq '`'
+assert_eq '"`"' "$REPLY" 'backtick should match the bind -p quoted keyseq'
+cat >"$ghost_stub_dir/mbx" <<'EOF'
+#!/bin/bash
+printf '%s\n' 'echo foo=bar'
+EOF
+READLINE_LINE='echo foo'
+READLINE_POINT=8
+READLINE_KEYSEQ='='
+_MBX_GHOST_HAS=0
+_mbx_ghost_self_insert
+assert_eq 'echo foo=bar' "$READLINE_LINE" \
+    'ghost should extend a prefix that ends with equals'
+assert_eq 9 "$READLINE_POINT" 'equals insert should keep the cursor on the typed prefix'
+READLINE_LINE='echo MBX_GHST:alpha'
+READLINE_POINT=15
+_MBX_GHOST_HAS=1
+_MBX_GHOST_POINT=15
+_mbx_ghost_backward
+assert_eq 'echo MBX_GHST:a' "$READLINE_LINE" \
+    'ghost Left should restore the typed prefix without the suffix'
+assert_eq 14 "$READLINE_POINT" 'ghost Left should move one character into the typed prefix'
+assert_eq 0 "${_MBX_GHOST_HAS:-missing}" 'ghost Left should clear the suffix flag'
+READLINE_LINE='echo MBX_GHST:alpha'
+READLINE_POINT=15
+_MBX_GHOST_HAS=1
+_MBX_GHOST_POINT=15
+_mbx_ghost_beginning
+assert_eq 'echo MBX_GHST:a' "$READLINE_LINE" \
+    'ghost Home should restore the typed prefix without the suffix'
+assert_eq 0 "$READLINE_POINT" 'ghost Home should move to the beginning of the typed prefix'
+assert_eq 0 "${_MBX_GHOST_HAS:-missing}" 'ghost Home should clear the suffix flag'
+READLINE_LINE='echo MBX_GHST:one two'
+READLINE_POINT=17
+_MBX_GHOST_HAS=1
+_MBX_GHOST_POINT=17
+_mbx_ghost_backward_word
+assert_eq 'echo MBX_GHST:one' "$READLINE_LINE" \
+    'ghost backward-word should restore the typed prefix without the suffix'
+assert_eq 14 "$READLINE_POINT" 'ghost backward-word should land before the remaining word'
+assert_eq 0 "${_MBX_GHOST_HAS:-missing}" 'ghost backward-word should clear the suffix flag'
+history -c
+history -s 'echo MBX_GHST:alpha'
+history -s 'echo MBX_GHST:beta'
+_MBX_GHOST_HIST_OFFSET=0
+_mbx_ghost_previous_history
+assert_eq 'echo MBX_GHST:beta' "$READLINE_LINE" \
+    'ghost Up should load the newest history row after stripping a suffix'
+assert_eq 1 "${_MBX_GHOST_HIST_OFFSET:-missing}" 'ghost Up should advance the history offset'
+_MBX_GHOST_DELETE_KEYSEQ='\C-x\C-d'
+_MBX_GHOST_ACCEPT_KEYSEQ='\C-x\C-m'
+_mbx_ghost_enter_delete_macro 4
+macro_four=$REPLY
+[[ $macro_four == *'\C-x\C-d'* ]] || fail 'Enter macro should use reserved delete-char helper'
+[[ $macro_four == *kill-line* ]] && fail 'Enter macro must not reference kill-line'
+_mbx_ghost_enter_delete_macro 2
+macro_two=$REPLY
+(( ${#macro_four} - ${#macro_two} == 16 )) || \
+    fail 'Enter macro length should track suffix byte count'
+_MBX_GHOST_BOUND=1
+_MBX_GHOST_WRAP_CTRL_J=0
+_MBX_GHOST_VI_BOUND=0
+_MBX_GHOST_ENTER_ARMED=0
+ghost_macro=
+_mbx_ghost_arm_enter_keymap() {
+    ghost_macro=$3
+    return 0
+}
+_mbx_ghost_disarm_enter_keymap() {
+    return 0
+}
+_mbx_ghost_show 'echo MBX_GHST:alpha' 'echo MBX_GHST:a'
+assert_eq 1 "${_MBX_GHOST_ENTER_ARMED:-missing}" 'ghost show should arm Enter for an active suffix'
+macro_after_alpha=$ghost_macro
+_mbx_ghost_show 'echo MBX_GHST:ab' 'echo MBX_GHST:a'
+(( ${#ghost_macro} < ${#macro_after_alpha} )) || \
+    fail 'ghost show should rebuild Enter macro when suffix length changes'
+_MBX_GHOST_ENTER_ARMED=1
+_MBX_GHOST_VI_BOUND=1
+_MBX_GHOST_WRAP_CTRL_J=0
+_MBX_GHOST_VI_WRAP_CTRL_J=1
+_mbx_ghost_disarm_enter_keymap() {
+    if [[ $1 == emacs ]]; then
+        return 0
+    fi
+    return 1
+}
+_mbx_ghost_disarm_enter || true
+assert_eq 0 "${_MBX_GHOST_ENTER_ARMED:-missing}" \
+    'partial keymap disarm must still clear ENTER_ARMED (M-044)'
+source "$ROOT/bash/ghost.bash"
+set -m
+_mbx_ghost_query 'e' || true
+[[ $- == *m* ]] || fail 'ghost query must restore monitor mode after a lookup'
+set +m
+rm -rf "$ghost_stub_dir"
+unset MBX_BIN MBX_GHOST MBX_HISTORY READLINE_LINE READLINE_POINT READLINE_KEYSEQ \
+    _MBX_GHOST_HAS _MBX_GHOST_POINT _MBX_GHOST_INDEX _MBX_GHOST_TYPED_LEN \
+    _MBX_GHOST_CANDIDATES
+
 printf 'PASS: focused Bash module contracts\n'

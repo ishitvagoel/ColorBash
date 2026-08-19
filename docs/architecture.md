@@ -10,8 +10,9 @@ The implemented prototype is the hybrid Bash/Rust prompt path plus the Phase 3A
 history sidecar. Interactive Bash calls a native helper, receives presentation
 data, and continues to execute commands with ordinary Bash semantics. When
 explicitly enabled, Bash also observes admitted history and enqueues records
-without modifying `.bash_history`. Ghost suggestions, completion UI, live
-highlighting, and enhanced Ctrl+R remain gated.
+without modifying `.bash_history`. Completion UI, live highlighting, and a
+type-to-filter Ctrl+R overlay remain gated. Opt-in inline ghost (ADR 0010) is
+a suffix after the cursor, not dim after-every-key paint.
 
 ## System boundary
 
@@ -56,6 +57,7 @@ bash/
   fallback.bash      Bash-only prompt renderer
   hooks.bash         PROMPT_COMMAND and optional DEBUG integration
   history.bash       opt-in admitted-entry observation and MBX2 RECORD send
+  ghost.bash         opt-in inline history ghost suffix (ADR 0010)
 
 crates/protocol/     dependency-free MBX1 wire model and PromptFlags value type
 crates/cli/src/
@@ -425,8 +427,15 @@ Ctrl+Z, resize, `stty -g` restoration, multiline continuation, narrow wrap,
 resize-mid-line, and wide/combining glyph round trips (`docs/research/
 multiline-width-pty.md`), and the Bash history admission corpus
 (`docs/research/bash-history-admission.md`). The opt-in history sidecar is
-implemented; `G2` is complete and write-ack percentiles are `deferred`. Provider expansion and
-highlighting remain gated by unproven continuous decoration
-(`docs/g3-gate-close-plan.md`). `COMP-004` popup policy records no GUI overlay;
-ranked-accept `bind -x` evidence is complete (`docs/comp-004-ranked-accept-plan.md`).
+implemented; `G2` is complete and write-ack percentiles are `deferred`. Live
+highlighting remains gated by unproven continuous decoration
+(`docs/g3-gate-close-plan.md`). Opt-in inline ghost is ADR 0010
+(`bash/ghost.bash`; suffix after `READLINE_POINT`; Enter uses a Readline
+delete-char + accept-line macro while a suffix is active; ASCII printables that
+are stock `self-insert` are wrapped on emacs and vi-insert; `\ef` / Ctrl-Right
+accept one word in emacs; Left / `\C-b` dismiss an unaccepted suffix;
+Home / Up / backward-word strip before their stock motion;
+`\C-x\C-n` / `\C-x\C-p` cycle prefix matches). `COMP-004`
+popup policy records no GUI overlay; ranked-accept `bind -x` evidence is complete
+(`docs/comp-004-ranked-accept-plan.md`).
 `G3` explicit `bind -x` evidence is complete.

@@ -35,7 +35,7 @@ trap cleanup EXIT INT TERM
 env PS1='' PS2='' TERM=dumb bash --noprofile --norc -i \
     <"$ROOT/tests/bash/corpus.bash" >"$baseline_log" 2>&1
 env MBX_TEST_ROOT="$ROOT" MBX_BIN="$MBX_TEST_BIN" MBX_COLOR=never MBX_ICONS=never \
-    TERM=dumb bash --noprofile --rcfile "$ROOT/tests/bash/interactive.rc" -i \
+    MBX_GHOST= MBX_HISTORY= TERM=dumb bash --noprofile --rcfile "$ROOT/tests/bash/interactive.rc" -i \
     <"$ROOT/tests/bash/corpus.bash" >"$enhanced_log" 2>&1
 
 grep -o 'MBX_TEST:[^[:cntrl:]]*' "$baseline_log" >"$baseline_markers"

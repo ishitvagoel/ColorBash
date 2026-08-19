@@ -751,3 +751,101 @@ to prevent recurrence, not to assign blame.
   `ranked_accept_refuses_stale_unrelated_word` in
   `crates/pty/tests/completion_harness.rs`.
 
+## M-040 — Default ghost strip chord collided with stock Readline
+
+- Discovered: 2026-08-17
+- Status: Fixed
+- Failed assumption: `\C-xg` was a free emacs chord because it is not a
+  `Ctrl-X Ctrl-` control pair.
+- Impact: stock emacs binds `\C-xg` to `glob-list-expansions`. Ghost install
+  treated the strip chord as occupied, skipped every self-insert wrap, and
+  `_MBX_GHOST_BOUND` stayed `0`. Typing worked through stock `self-insert`
+  with no suffix.
+- Correction: ghost no longer uses a bind -x strip chord. Helper chords are
+  inspected on stock emacs (`bind -p`): default kill-line `\C-x\C-k` and
+  accept-line `\C-x\C-m`. G-5 asserts `_MBX_GHOST_BOUND=1` on a default
+  ghost+history install. A letter suffix such as `\C-xg` / `\C-xj` is not
+  used because those collide with stock functions or wrapped `self-insert`.
+- Prevention: before choosing a default chord, inspect `bind -p` on stock
+  emacs. Occupied-skip that aborts the whole installer must have a
+  default-install bound assertion.
+- Evidence: `bash/ghost.bash`, `default_install_sets_bound_flag` in
+  `crates/pty/tests/ghost.rs` (`_MBX_GHOST_BOUND`, `_MBX_GHOST_CYCLE_BOUND`, and
+  `_MBX_GHOST_VI_BOUND`), and ADR 0010.
+
+## M-041 — bind -x inside a keyseq macro drops remaining keys
+
+- Discovered: 2026-08-17
+- Status: Fixed
+- Failed assumption: `"\C-m": "\C-x\C-n\C-j"` could run a bind -x strip
+  function and then stock `accept-line`.
+- Impact: Readline discards keys after a bind -x step. Enter either kept the
+  unaccepted suffix (G-1 executed the full suggestion) or required `eval` of
+  `READLINE_LINE`, which is out of scope and skips `accept-line` / sidecar
+  admission / prompt hooks.
+- Correction: while a suffix is active, `\C-m` and `\C-j` (newline / `icrnl`
+  Enter) are a Readline-only macro: reserved `kill-line` from point, then
+  reserved `accept-line`. The line is not evaluated from bind -x. G-1 asserts
+  sidecar admission of the typed prefix.
+- Prevention: never chain bind -x with later macro keys. Enter and other
+  accept paths must remain Readline functions unless an ADR records a
+  different execution owner.
+- Evidence: `_mbx_ghost_arm_enter` in `bash/ghost.bash`;
+  `typing_shows_suffix_and_enter_runs_typed_prefix` in
+  `crates/pty/tests/ghost.rs`; ADR 0010.
+
+## M-042 — Ghost install wrapped printables in piped interactive Bash
+
+- Discovered: 2026-08-17
+- Status: Fixed
+- Failed assumption: `$-` containing `i` was enough to treat the session as an
+  editor that can wrap `self-insert`.
+- Impact: `bash -i < corpus` with inherited `MBX_GHOST=1` wrapped letters.
+  Prefix matches from earlier corpus lines leaked into later `MBX_TEST`
+  markers and failed the compatibility comparison.
+- Correction: ghost install requires a tty on stdin. The smoke corpus pins
+  `MBX_GHOST` and `MBX_HISTORY` off so parent environment cannot enable it.
+- Prevention: opt-in editor wrapping must require a tty, not only
+  interactive `$-`. Semantic corpus tests must pin feature flags they do not
+  intend to exercise.
+- Evidence: `_mbx_ghost_install` in `bash/ghost.bash`; `tests/bash/smoke.bash`.
+
+## M-043 — Appending a PTY test truncated a prior assert
+
+- Discovered: 2026-08-18
+- Status: Fixed
+- Failed assumption: replacing a function's trailing `exit_and_wait` plus
+  closing brace was unique enough to insert a new test.
+- Impact: the older-match `assert_eq!` in the ghost cycling PTY test lost its
+  message and closing delimiter, so `mbx-pty` test `ghost` failed to compile.
+- Correction: restore the full assertion, then append the remaining-printables
+  test after the complete function.
+- Prevention: when inserting after a test, include a unique assertion message
+  in the match context, not only a repeated `exit_and_wait` trailer.
+- Evidence: `ctrl_x_ctrl_n_cycles_to_older_prefix_match` in
+  `crates/pty/tests/ghost.rs`; compile failure on `dc4d78d`.
+
+## M-044 — Ghost Enter armed flag survived a partial keymap disarm
+
+- Discovered: 2026-08-18
+- Status: Fixed
+- Failed assumption: `_mbx_ghost_disarm_enter` could return after a successful
+  emacs disarm and a failed vi-insert disarm without clearing
+  `_MBX_GHOST_ENTER_ARMED`, and wrapping printables before Enter helpers was
+  safe because helper `can_wrap` had already succeeded.
+- Impact: emacs Enter could already be stock `accept-line` while the armed
+  flag stayed set, so the next arm skipped and a suffix could be submitted.
+  If printables wrapped and a later helper bind failed, `_MBX_GHOST_BOUND`
+  stayed 0, `arm_enter` was a no-op success, and stock Enter executed the
+  unaccepted suffix.
+- Correction: disarm always clears `_MBX_GHOST_ENTER_ARMED` after attempting
+  both keymaps. Emacs install binds kill-line / accept-line helpers before
+  printables. When `_MBX_GHOST_BOUND=1`, `_mbx_ghost_show` keeps a suffix only
+  if Enter is actually armed.
+- Prevention: never show an inline suffix unless the Enter macro is armed.
+  Bind accept helpers before wrapping `self-insert`. Armed flags must clear
+  even when a secondary keymap bind fails.
+- Evidence: `_mbx_ghost_disarm_enter` / `_mbx_ghost_install` /
+  `_mbx_ghost_show` in `bash/ghost.bash`; module contract for partial disarm
+  in `tests/bash/modules.bash`.
+
