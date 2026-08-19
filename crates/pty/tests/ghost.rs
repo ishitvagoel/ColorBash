@@ -535,3 +535,37 @@ fn space_separated_prefix_shows_suffix_and_enter_runs_typed_bytes() {
     );
     exit_and_wait(&mut session);
 }
+
+#[test]
+fn ps2_continuation_ghost_enter_runs_typed_prefix() {
+    let home = TempHome::new("ghst-m1");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let mut session = spawn_history_shell(
+        home.path(),
+        &ghost_env(data_home_s, histfile_s, &[("PS2", "CONT> ")]),
+    );
+    wait_for(&mut session, "> ");
+    record_echo(&mut session, "cont");
+    wait_for_count(&mbx_bin(), &data_home, 1);
+
+    session
+        .write_str("echo one \\\n", deadline(2))
+        .expect("open continuation");
+    wait_for(&mut session, "CONT> ");
+    session
+        .write_str("echo MBX_GHST:c", deadline(2))
+        .expect("type continuation prefix");
+    wait_all(&mut session, &["CONT> echo MBX_GHST:cont"]);
+    assert_no_output(&mut session, "one echo MBX_GHST:cont\n");
+    session.write_str("\n", deadline(2)).expect("enter");
+    let output = wait_all(&mut session, &["one echo MBX_GHST:c\n", "> "]);
+    assert!(
+        !visible_contains(&output, "one echo MBX_GHST:cont\n"),
+        "unaccepted PS2 ghost executed: {:?}",
+        visible_text(&output)
+    );
+    exit_and_wait(&mut session);
+}
