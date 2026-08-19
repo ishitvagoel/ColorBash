@@ -969,6 +969,34 @@ _mbx_ghost_previous_history
 assert_eq 'echo MBX_GHST:beta' "$READLINE_LINE" \
     'ghost Up should load the newest history row after stripping a suffix'
 assert_eq 1 "${_MBX_GHOST_HIST_OFFSET:-missing}" 'ghost Up should advance the history offset'
+_MBX_GHOST_DELETE_KEYSEQ='\C-x\C-d'
+_MBX_GHOST_ACCEPT_KEYSEQ='\C-x\C-m'
+_mbx_ghost_enter_delete_macro 4
+macro_four=$REPLY
+[[ $macro_four == *'\C-x\C-d'* ]] || fail 'Enter macro should use reserved delete-char helper'
+[[ $macro_four == *kill-line* ]] && fail 'Enter macro must not reference kill-line'
+_mbx_ghost_enter_delete_macro 2
+macro_two=$REPLY
+(( ${#macro_four} - ${#macro_two} == 16 )) || \
+    fail 'Enter macro length should track suffix byte count'
+_MBX_GHOST_BOUND=1
+_MBX_GHOST_WRAP_CTRL_J=0
+_MBX_GHOST_VI_BOUND=0
+_MBX_GHOST_ENTER_ARMED=0
+ghost_macro=
+_mbx_ghost_arm_enter_keymap() {
+    ghost_macro=$3
+    return 0
+}
+_mbx_ghost_disarm_enter_keymap() {
+    return 0
+}
+_mbx_ghost_show 'echo MBX_GHST:alpha' 'echo MBX_GHST:a'
+assert_eq 1 "${_MBX_GHOST_ENTER_ARMED:-missing}" 'ghost show should arm Enter for an active suffix'
+macro_after_alpha=$ghost_macro
+_mbx_ghost_show 'echo MBX_GHST:ab' 'echo MBX_GHST:a'
+(( ${#ghost_macro} < ${#macro_after_alpha} )) || \
+    fail 'ghost show should rebuild Enter macro when suffix length changes'
 _MBX_GHOST_ENTER_ARMED=1
 _MBX_GHOST_VI_BOUND=1
 _MBX_GHOST_WRAP_CTRL_J=0

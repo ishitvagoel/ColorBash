@@ -1,7 +1,7 @@
 # GHST-002 leftover: Home / Up / backward-word dismiss (H-1–U-2)
 
 Status: `complete` for Home, Up, and backward-word (2026-08-19). Kill-ring
-isolation remains. Do **not** mark `GHST-004` complete.
+isolation is `docs/ghst-002-kill-ring-plan.md`. Do **not** mark `GHST-004` complete.
 
 ## Why this slice
 
@@ -13,7 +13,7 @@ expansion, not `kill-line`), then apply the stock motion.
 | Rank | Item | Why not now |
 | --- | --- | --- |
 | 1 | Home / Up / backward-word (this plan) | Named ADR 0010 leftover after Left. |
-| — | Kill-ring isolation | Enter still uses reserved `kill-line`; later leftover. |
+| — | Kill-ring isolation | Recorded in `docs/ghst-002-kill-ring-plan.md`. |
 | — | Dim / highlighting | After-every-key paint still unproven. |
 
 ## Goal

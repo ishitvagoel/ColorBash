@@ -229,7 +229,7 @@ MBX_HISTORY_EXCLUDE='git *'     # colon-separated glob exclusions
 MBX_GHOST=1                     # opt-in history suffix after the cursor (needs MBX_HISTORY=1)
 MBX_GHOST_OVERRIDE=1            # overwrite occupied ghost self-insert keys
 MBX_GHOST_LIMIT=8               # max prefix matches collected for cycling (1-8)
-MBX_GHOST_KILL_KEYSEQ='\C-x\C-k'   # kill-line helper used by Enter while a suffix is shown
+MBX_GHOST_DELETE_KEYSEQ='\C-x\C-d' # delete-char helper used by Enter while a suffix is shown
 MBX_GHOST_ACCEPT_KEYSEQ='\C-x\C-m' # accept-line helper used by that Enter macro
 MBX_GHOST_NEXT_KEYSEQ='\C-x\C-n'   # cycle to the next prefix match
 MBX_GHOST_PREV_KEYSEQ='\C-x\C-p'   # cycle to the previous prefix match

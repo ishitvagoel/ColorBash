@@ -431,7 +431,7 @@ implemented; `G2` is complete and write-ack percentiles are `deferred`. Live
 highlighting remains gated by unproven continuous decoration
 (`docs/g3-gate-close-plan.md`). Opt-in inline ghost is ADR 0010
 (`bash/ghost.bash`; suffix after `READLINE_POINT`; Enter uses a Readline
-kill-line + accept-line macro while a suffix is active; ASCII printables that
+delete-char + accept-line macro while a suffix is active; ASCII printables that
 are stock `self-insert` are wrapped on emacs and vi-insert; `\ef` / Ctrl-Right
 accept one word in emacs; Left / `\C-b` dismiss an unaccepted suffix;
 Home / Up / backward-word strip before their stock motion;

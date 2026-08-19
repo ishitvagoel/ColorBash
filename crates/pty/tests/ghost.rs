@@ -8,6 +8,7 @@ use std::time::Duration;
 const RIGHT: &[u8] = b"\x1b[C";
 const LEFT: &[u8] = b"\x1b[D";
 const CTRL_P: &[u8] = b"\x10";
+const CTRL_Y: &[u8] = b"\x19";
 const META_F: &[u8] = b"\x1bf";
 const CTRL_X_CTRL_N: &[u8] = b"\x18\x0e";
 
@@ -400,7 +401,7 @@ fn left_arrow_dismisses_suffix_and_enter_runs_typed_prefix() {
     );
     assert!(
         !visible_contains(&output, "MBX_GHST:\n"),
-        "Left left Enter armed so kill-line dropped the last typed character: {:?}",
+        "Left left Enter armed so discard macro dropped the last typed character: {:?}",
         visible_text(&output)
     );
     wait_for_count(&mbx_bin(), &data_home, 2);
@@ -444,5 +445,29 @@ fn ctrl_p_loads_history_after_dismissing_suffix() {
         2,
         "history-loaded beta was not admitted through accept-line: {recent:?}"
     );
+    exit_and_wait(&mut session);
+}
+
+#[test]
+fn enter_discard_does_not_pollute_kill_ring() {
+    let home = TempHome::new("ghst-k2");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let mut session = spawn_history_shell(home.path(), &ghost_env(data_home_s, histfile_s, &[]));
+    wait_for(&mut session, "> ");
+    record_echo(&mut session, "alpha");
+    wait_for_count(&mbx_bin(), &data_home, 1);
+
+    session
+        .write_str("echo MBX_GHST:a", deadline(2))
+        .expect("type prefix");
+    wait_all(&mut session, &["echo MBX_GHST:alpha"]);
+    assert_no_output(&mut session, "MBX_GHST:alpha\n");
+    session.write_str("\n", deadline(2)).expect("enter");
+    wait_all(&mut session, &["MBX_GHST:a\n", "> "]);
+    send_keys(&mut session, CTRL_Y);
+    assert_no_output(&mut session, "pha");
     exit_and_wait(&mut session);
 }

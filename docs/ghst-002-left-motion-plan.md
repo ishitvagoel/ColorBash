@@ -17,7 +17,7 @@ without executing it.
 | --- | --- | --- |
 | 1 | Left / `\C-b` strip (this plan) | Named ADR 0010 leftover; no overlay. |
 | — | Home / Up / backward-word | Same class of unwrapped motion; later leftover. |
-| — | Kill-ring isolation | Enter still uses reserved `kill-line`; later leftover. |
+| — | Kill-ring isolation | Recorded in `docs/ghst-002-kill-ring-plan.md`. |
 | — | Dim / highlighting | After-every-key paint still unproven. |
 
 ## Goal

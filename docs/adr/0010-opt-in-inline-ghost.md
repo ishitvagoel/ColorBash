@@ -34,11 +34,11 @@ experiments.
    / Ctrl-X Ctrl-P cycle other exact-prefix rows without accepting them.
    Left / `\C-b` / `\eOD` strip an unaccepted suffix then `backward-char`.
    Home / `\C-a` / CSI Home, Up / `\C-p` / CSI Up, and backward-word strip
-   first as well. Kill-ring isolation stays a later leftover.
+   first as well. Enter discards unaccepted suffix bytes without `kill-line`.
 4. Enter (`\C-m`) and newline (`\C-j`, when it is stock `accept-line`) stay
    `accept-line` except while a suffix is active. Then both are a Readline-only
-   macro: reserved kill-line (default `\C-x\C-k`) from point, then reserved
-   accept-line (default `\C-x\C-m`). Terminals often deliver Enter as `\n`
+   macro: repeated reserved `delete-char` (default `\C-x\C-d`, bounded by suffix
+   length / 256), then reserved accept-line (default `\C-x\C-m`). Terminals often deliver Enter as `\n`
    (`\C-j`) via `icrnl`. `bind -x` cannot be chained in a keyseq macro because
    remaining keys are dropped (M-041). Do not `eval` the line. Occupied helper
    chords skip install. Do not use `\C-xg` or a letter suffix that ghost also
@@ -51,9 +51,8 @@ experiments.
    Readline quoted keyseqs. vi-insert uses the same helpers; `\ef` is not
    bound there because ESC is `vi-movement-mode`. Prefix-match cycling uses
    unbound `\C-x\C-n` / `\C-x\C-p`. Left / `\C-b` dismiss an unaccepted suffix.
-   Home / Up / backward-word dismiss before their stock motion. Kill-ring
-   isolation remains a later leftover.
-   Do not steal Tab, `\C-r`, `\C-g`, `\C-x\C-r`, or `\C-x\C-s`.
+   Home / Up / backward-word dismiss before their stock motion. Enter discards
+   the suffix with bounded `delete-char` steps. Do not steal Tab, `\C-r`, `\C-g`, `\C-x\C-r`, or `\C-x\C-s`.
 
 ## Alternatives
 
@@ -77,5 +76,5 @@ GUI overlays stay blocked.
 PTY evidence in `crates/pty/tests/ghost.rs` and module contracts in
 `tests/bash/modules.bash`. Plans: `docs/ghst-002-inline-ghost-plan.md`,
 `docs/ghst-002-printables-plan.md`, `docs/ghst-002-vi-insert-plan.md`,
-`docs/ghst-002-left-motion-plan.md`, `docs/ghst-002-home-up-motion-plan.md`, `docs/ghst-003-word-accept-plan.md`,
-`docs/ghst-003-cycle-plan.md`.
+`docs/ghst-002-left-motion-plan.md`, `docs/ghst-002-home-up-motion-plan.md`, `docs/ghst-002-kill-ring-plan.md`,
+`docs/ghst-003-word-accept-plan.md`, `docs/ghst-003-cycle-plan.md`.

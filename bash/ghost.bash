@@ -2,14 +2,15 @@
 # Opt-in inline ghost suffix (ADR 0010). Suggestion lives after READLINE_POINT.
 # `\C-xg` is glob-list-expansions (M-040). Enter is not bind -x: a -x step in a
 # keyseq macro drops the remaining keys (M-041), so an active suffix arms a
-# Readline-only kill-line + accept-line macro on `\C-m` and `\C-j` instead.
+# Readline-only delete-char + accept-line macro on `\C-m` and `\C-j` instead.
 # Cycle next/prev default to unbound `\C-x\C-n` / `\C-x\C-p` (not `\en`/`\ep`).
 # Remaining ASCII printables use Readline quoted keyseqs so `"` / `\` bind.
 # vi-insert is wrapped after emacs; ESC is vi-movement-mode so `\ef` is not.
 # Left / `\C-b` strip an unaccepted suffix then backward-char (Home stays later).
 # Home / Up / backward-word use the same strip-first dismiss policy.
-_MBX_GHOST_KILL_DEFAULT_KEYSEQ='\C-x\C-k'
 _MBX_GHOST_ACCEPT_DEFAULT_KEYSEQ='\C-x\C-m'
+_MBX_GHOST_DELETE_DEFAULT_KEYSEQ='\C-x\C-d'
+_MBX_GHOST_SUFFIX_MAX=256
 _MBX_GHOST_NEXT_DEFAULT_KEYSEQ='\C-x\C-n'
 _MBX_GHOST_PREV_DEFAULT_KEYSEQ='\C-x\C-p'
 _MBX_GHOST_HAS=0
@@ -24,8 +25,26 @@ _MBX_GHOST_INDEX=0
 _MBX_GHOST_TYPED_LEN=0
 _MBX_GHOST_HIST_OFFSET=0
 _MBX_GHOST_CANDIDATES=()
-_MBX_GHOST_KILL_KEYSEQ=$_MBX_GHOST_KILL_DEFAULT_KEYSEQ
+_MBX_GHOST_DELETE_KEYSEQ=$_MBX_GHOST_DELETE_DEFAULT_KEYSEQ
 _MBX_GHOST_ACCEPT_KEYSEQ=$_MBX_GHOST_ACCEPT_DEFAULT_KEYSEQ
+
+_mbx_ghost_enter_delete_macro() {
+    local n=${1:-0}
+    local i macro=''
+    local max=${_MBX_GHOST_SUFFIX_MAX:-256}
+    if ((n < 1)); then
+        REPLY=
+        return 0
+    fi
+    if ((n > max)); then
+        n=$max
+    fi
+    for ((i = 0; i < n; i++)); do
+        macro+="${_MBX_GHOST_DELETE_KEYSEQ}"
+    done
+    macro+="${_MBX_GHOST_ACCEPT_KEYSEQ}"
+    REPLY=$macro
+}
 
 _mbx_ghost_disarm_enter_keymap() {
     local keymap=$1
@@ -58,16 +77,22 @@ _mbx_ghost_disarm_enter() {
             status=1
     fi
     # Always clear the flag so a later arm can retry. Returning before this
-    # left emacs disarmed while Enter stayed the kill-line macro (M-044).
+    # left emacs disarmed while Enter stayed the discard macro (M-044).
     _MBX_GHOST_ENTER_ARMED=0
     return "$status"
 }
 
 _mbx_ghost_arm_enter() {
+    local suffix_len=${1:-0}
     local macro
     [[ ${_MBX_GHOST_BOUND:-0} == 1 ]] || return 0
-    [[ ${_MBX_GHOST_ENTER_ARMED:-0} == 1 ]] && return 0
-    macro="${_MBX_GHOST_KILL_KEYSEQ}${_MBX_GHOST_ACCEPT_KEYSEQ}"
+    ((suffix_len > 0)) || return 0
+    if [[ ${_MBX_GHOST_ENTER_ARMED:-0} == 1 ]]; then
+        _mbx_ghost_disarm_enter || return 1
+    fi
+    _mbx_ghost_enter_delete_macro "$suffix_len" || return 1
+    macro=$REPLY
+    [[ -n $macro ]] || return 1
     _mbx_ghost_arm_enter_keymap emacs "${_MBX_GHOST_WRAP_CTRL_J:-0}" "$macro" || \
         return 1
     if [[ ${_MBX_GHOST_VI_BOUND:-0} == 1 ]]; then
@@ -247,7 +272,10 @@ _mbx_ghost_show() {
     _MBX_GHOST_HAS=1
     _MBX_GHOST_POINT=$point
     if [[ ${_MBX_GHOST_BOUND:-0} == 1 ]]; then
-        if ! _mbx_ghost_arm_enter || [[ ${_MBX_GHOST_ENTER_ARMED:-0} != 1 ]]; then
+        local suffix_len=$((${#match} - point))
+        _mbx_ghost_disarm_enter || true
+        if ! _mbx_ghost_arm_enter "$suffix_len" || \
+            [[ ${_MBX_GHOST_ENTER_ARMED:-0} != 1 ]]; then
             READLINE_LINE=$typed
             READLINE_POINT=$point
             _mbx_ghost_reset_state
@@ -525,13 +553,13 @@ _mbx_ghost_bind_x_stock() {
 }
 
 _mbx_ghost_install_vi() {
-    local kill_key=$1
+    local delete_key=$1
     local accept_key=$2
     local next_key=$3
     local prev_key=$4
     local chars=$5
     _MBX_GHOST_VI_WRAP_CTRL_J=0
-    _mbx_ghost_can_wrap "$kill_key" vi-insert kill-line || return 1
+    _mbx_ghost_can_wrap "$delete_key" vi-insert delete-char || return 1
     _mbx_ghost_can_wrap "$accept_key" vi-insert accept-line || return 1
     _mbx_ghost_stock_fn '\C-m' vi-insert
     if [[ $REPLY != accept-line ]] || _mbx_ghost_keyseq_has_x '\C-m' vi-insert; then
@@ -542,7 +570,7 @@ _mbx_ghost_install_vi() {
         _MBX_GHOST_VI_WRAP_CTRL_J=1
     fi
     [[ ${_MBX_GHOST_VI_WRAP_CTRL_J:-0} == 1 ]] || return 1
-    _mbx_ghost_bind_fn vi-insert "$kill_key" kill-line kill-line || return 1
+    _mbx_ghost_bind_fn vi-insert "$delete_key" delete-char delete-char || return 1
     _mbx_ghost_bind_fn vi-insert "$accept_key" accept-line accept-line || return 1
     _mbx_ghost_bind_self_chars vi-insert "$chars" || return 1
     _mbx_ghost_bind_x vi-insert '\C-h' _mbx_ghost_backspace backward-delete-char || true
@@ -561,10 +589,10 @@ _mbx_ghost_install_vi() {
         true
     _mbx_ghost_bind_x_stock vi-insert '\e[1;5C' _mbx_ghost_forward_word forward-word || \
         true
-    if [[ -n $next_key && $next_key != "$kill_key" && $next_key != "$accept_key" ]]; then
+    if [[ -n $next_key && $next_key != "$delete_key" && $next_key != "$accept_key" ]]; then
         _mbx_ghost_bind_x vi-insert "$next_key" _mbx_ghost_cycle_next '' || true
     fi
-    if [[ -n $prev_key && $prev_key != "$kill_key" && $prev_key != "$accept_key" && $prev_key != "$next_key" ]]; then
+    if [[ -n $prev_key && $prev_key != "$delete_key" && $prev_key != "$accept_key" && $prev_key != "$next_key" ]]; then
         _mbx_ghost_bind_x vi-insert "$prev_key" _mbx_ghost_cycle_prev '' || true
     fi
 }
@@ -599,16 +627,20 @@ _mbx_ghost_install() {
         _MBX_GHOST_INSTALLED=1
         return 0
     fi
-    local kill_key=${MBX_GHOST_KILL_KEYSEQ:-$_MBX_GHOST_KILL_DEFAULT_KEYSEQ}
+    local delete_key=${MBX_GHOST_DELETE_KEYSEQ:-$_MBX_GHOST_DELETE_DEFAULT_KEYSEQ}
     local accept_key=${MBX_GHOST_ACCEPT_KEYSEQ:-$_MBX_GHOST_ACCEPT_DEFAULT_KEYSEQ}
     local next_key=${MBX_GHOST_NEXT_KEYSEQ:-$_MBX_GHOST_NEXT_DEFAULT_KEYSEQ}
     local prev_key=${MBX_GHOST_PREV_KEYSEQ:-$_MBX_GHOST_PREV_DEFAULT_KEYSEQ}
     local chars=$'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _-.:/!#$%&()*+,;<=>?@[]^{|}~\'"`\\'
-    [[ -n $kill_key && -n $accept_key ]] || {
+    [[ -n $delete_key && -n $accept_key ]] || {
         _MBX_GHOST_INSTALLED=1
         return 0
     }
-    _mbx_ghost_can_wrap "$kill_key" emacs kill-line || {
+    if [[ $delete_key == "$accept_key" ]]; then
+        _MBX_GHOST_INSTALLED=1
+        return 0
+    fi
+    _mbx_ghost_can_wrap "$delete_key" emacs delete-char || {
         _MBX_GHOST_INSTALLED=1
         return 0
     }
@@ -629,13 +661,9 @@ _mbx_ghost_install() {
         _MBX_GHOST_INSTALLED=1
         return 0
     fi
-    if [[ $kill_key == "$accept_key" ]]; then
-        _MBX_GHOST_INSTALLED=1
-        return 0
-    fi
     # Bind Enter helpers before printables. Wrapping self-insert first and then
-    # failing a helper left suffixes visible with stock accept-line (M-044).
-    _mbx_ghost_bind_fn emacs "$kill_key" kill-line kill-line || {
+    # failing the helper left suffixes visible with stock accept-line (M-044).
+    _mbx_ghost_bind_fn emacs "$delete_key" delete-char delete-char || {
         _MBX_GHOST_INSTALLED=1
         return 0
     }
@@ -643,7 +671,7 @@ _mbx_ghost_install() {
         _MBX_GHOST_INSTALLED=1
         return 0
     }
-    _MBX_GHOST_KILL_KEYSEQ=$kill_key
+    _MBX_GHOST_DELETE_KEYSEQ=$delete_key
     _MBX_GHOST_ACCEPT_KEYSEQ=$accept_key
     _mbx_ghost_bind_self_chars emacs "$chars" || {
         _MBX_GHOST_INSTALLED=1
@@ -672,16 +700,16 @@ _mbx_ghost_install() {
     _mbx_ghost_bind_x emacs '\ef' _mbx_ghost_forward_word forward-word || true
     _mbx_ghost_bind_x emacs '\e[1;5C' _mbx_ghost_forward_word forward-word || true
     _mbx_ghost_bind_x emacs '\e[5C' _mbx_ghost_forward_word forward-word || true
-    if [[ -n $next_key && $next_key != "$kill_key" && $next_key != "$accept_key" ]]; then
+    if [[ -n $next_key && $next_key != "$delete_key" && $next_key != "$accept_key" ]]; then
         if _mbx_ghost_bind_x emacs "$next_key" _mbx_ghost_cycle_next ''; then
             _MBX_GHOST_CYCLE_BOUND=1
         fi
     fi
-    if [[ -n $prev_key && $prev_key != "$kill_key" && $prev_key != "$accept_key" && $prev_key != "$next_key" ]]; then
+    if [[ -n $prev_key && $prev_key != "$delete_key" && $prev_key != "$accept_key" && $prev_key != "$next_key" ]]; then
         _mbx_ghost_bind_x emacs "$prev_key" _mbx_ghost_cycle_prev '' || true
     fi
     _MBX_GHOST_BOUND=1
-    if _mbx_ghost_install_vi "$kill_key" "$accept_key" "$next_key" "$prev_key" "$chars"; then
+    if _mbx_ghost_install_vi "$delete_key" "$accept_key" "$next_key" "$prev_key" "$chars"; then
         _MBX_GHOST_VI_BOUND=1
     fi
     _MBX_GHOST_INSTALLED=1
