@@ -77,4 +77,5 @@ PTY evidence in `crates/pty/tests/ghost.rs` and module contracts in
 `tests/bash/modules.bash`. Plans: `docs/ghst-002-inline-ghost-plan.md`,
 `docs/ghst-002-printables-plan.md`, `docs/ghst-002-vi-insert-plan.md`,
 `docs/ghst-002-left-motion-plan.md`, `docs/ghst-002-home-up-motion-plan.md`, `docs/ghst-002-kill-ring-plan.md`, `docs/ghst-004-multiline-resize-plan.md`,
+`docs/ghst-004-no-execution-plan.md`,
 `docs/ghst-003-word-accept-plan.md`, `docs/ghst-003-cycle-plan.md`.
