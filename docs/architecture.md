@@ -434,6 +434,7 @@ highlighting remains gated by unproven continuous decoration
 kill-line + accept-line macro while a suffix is active; ASCII printables that
 are stock `self-insert` are wrapped on emacs and vi-insert; `\ef` / Ctrl-Right
 accept one word in emacs; Left / `\C-b` dismiss an unaccepted suffix;
+Home / Up / backward-word strip before their stock motion;
 `\C-x\C-n` / `\C-x\C-p` cycle prefix matches). `COMP-004`
 popup policy records no GUI overlay; ranked-accept `bind -x` evidence is complete
 (`docs/comp-004-ranked-accept-plan.md`).

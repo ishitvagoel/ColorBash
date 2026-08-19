@@ -33,7 +33,8 @@ experiments.
    `\ef` / Ctrl-Right `forward-word` for one alphanumeric word). Ctrl-X Ctrl-N
    / Ctrl-X Ctrl-P cycle other exact-prefix rows without accepting them.
    Left / `\C-b` / `\eOD` strip an unaccepted suffix then `backward-char`.
-   Home, Up, and backward-word stay unwrapped.
+   Home / `\C-a` / CSI Home, Up / `\C-p` / CSI Up, and backward-word strip
+   first as well. Kill-ring isolation stays a later leftover.
 4. Enter (`\C-m`) and newline (`\C-j`, when it is stock `accept-line`) stay
    `accept-line` except while a suffix is active. Then both are a Readline-only
    macro: reserved kill-line (default `\C-x\C-k`) from point, then reserved
@@ -50,15 +51,17 @@ experiments.
    Readline quoted keyseqs. vi-insert uses the same helpers; `\ef` is not
    bound there because ESC is `vi-movement-mode`. Prefix-match cycling uses
    unbound `\C-x\C-n` / `\C-x\C-p`. Left / `\C-b` dismiss an unaccepted suffix.
-   Home, Up, backward-word, and kill-ring isolation remain later leftovers.
+   Home / Up / backward-word dismiss before their stock motion. Kill-ring
+   isolation remains a later leftover.
    Do not steal Tab, `\C-r`, `\C-g`, `\C-x\C-r`, or `\C-x\C-s`.
 
 ## Alternatives
 
 - Paint dim text after `bind -x` returns: Readline redisplays and erases it.
-- Rebind Home / Up / backward-word and vi-command: deferred. Left /
-  backward-char is wrapped on emacs and vi-insert. ASCII printables that
-  are stock `self-insert` are wrapped on emacs and vi-insert.
+- Rebind vi-command: deferred. Left / backward-char, Home, Up, and
+  backward-word are wrapped on emacs and vi-insert where stock motion is
+  replaceable. ASCII printables that are stock `self-insert` are wrapped on
+  emacs and vi-insert.
 - Custom editor (Strategy B): still unjustified (ADR 0003).
 - Default-on ghost: rejected; wrapping `self-insert` must be explicit.
 
@@ -74,5 +77,5 @@ GUI overlays stay blocked.
 PTY evidence in `crates/pty/tests/ghost.rs` and module contracts in
 `tests/bash/modules.bash`. Plans: `docs/ghst-002-inline-ghost-plan.md`,
 `docs/ghst-002-printables-plan.md`, `docs/ghst-002-vi-insert-plan.md`,
-`docs/ghst-002-left-motion-plan.md`, `docs/ghst-003-word-accept-plan.md`,
+`docs/ghst-002-left-motion-plan.md`, `docs/ghst-002-home-up-motion-plan.md`, `docs/ghst-003-word-accept-plan.md`,
 `docs/ghst-003-cycle-plan.md`.

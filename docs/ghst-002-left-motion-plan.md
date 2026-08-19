@@ -1,7 +1,8 @@
 # GHST-002 leftover: Left dismisses an unaccepted suffix (L-1–L-3)
 
-Status: `complete` for Left / backward-char (2026-08-18). Home, Up, backward-word,
-and kill-ring isolation remain. Do **not** mark `GHST-004` complete.
+Status: `complete` for Left / backward-char (2026-08-18). Home, Up, and
+backward-word are recorded in `docs/ghst-002-home-up-motion-plan.md`.
+Kill-ring isolation remains. Do **not** mark `GHST-004` complete.
 
 ## Why this slice
 

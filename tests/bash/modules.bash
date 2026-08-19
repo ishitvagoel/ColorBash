@@ -943,6 +943,32 @@ assert_eq 'echo MBX_GHST:a' "$READLINE_LINE" \
     'ghost Left should restore the typed prefix without the suffix'
 assert_eq 14 "$READLINE_POINT" 'ghost Left should move one character into the typed prefix'
 assert_eq 0 "${_MBX_GHOST_HAS:-missing}" 'ghost Left should clear the suffix flag'
+READLINE_LINE='echo MBX_GHST:alpha'
+READLINE_POINT=15
+_MBX_GHOST_HAS=1
+_MBX_GHOST_POINT=15
+_mbx_ghost_beginning
+assert_eq 'echo MBX_GHST:a' "$READLINE_LINE" \
+    'ghost Home should restore the typed prefix without the suffix'
+assert_eq 0 "$READLINE_POINT" 'ghost Home should move to the beginning of the typed prefix'
+assert_eq 0 "${_MBX_GHOST_HAS:-missing}" 'ghost Home should clear the suffix flag'
+READLINE_LINE='echo MBX_GHST:one two'
+READLINE_POINT=17
+_MBX_GHOST_HAS=1
+_MBX_GHOST_POINT=17
+_mbx_ghost_backward_word
+assert_eq 'echo MBX_GHST:one' "$READLINE_LINE" \
+    'ghost backward-word should restore the typed prefix without the suffix'
+assert_eq 14 "$READLINE_POINT" 'ghost backward-word should land before the remaining word'
+assert_eq 0 "${_MBX_GHOST_HAS:-missing}" 'ghost backward-word should clear the suffix flag'
+history -c
+history -s 'echo MBX_GHST:alpha'
+history -s 'echo MBX_GHST:beta'
+_MBX_GHOST_HIST_OFFSET=0
+_mbx_ghost_previous_history
+assert_eq 'echo MBX_GHST:beta' "$READLINE_LINE" \
+    'ghost Up should load the newest history row after stripping a suffix'
+assert_eq 1 "${_MBX_GHOST_HIST_OFFSET:-missing}" 'ghost Up should advance the history offset'
 _MBX_GHOST_ENTER_ARMED=1
 _MBX_GHOST_VI_BOUND=1
 _MBX_GHOST_WRAP_CTRL_J=0

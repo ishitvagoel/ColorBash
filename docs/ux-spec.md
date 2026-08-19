@@ -104,8 +104,8 @@ Ghost suggestions, completion menus, interactive history search, highlighting,
 multiline guides, and command palettes remain design requirements, not prototype
 claims. An opt-in history ghost (`MBX_GHOST=1` with `MBX_HISTORY=1`, ADR 0010)
 can show a sidecar prefix match after the cursor; Enter runs only the typed
-prefix. Right accepts the full row; Left dismisses it; Alt-F / Ctrl-Right
-accept one word; Ctrl-X Ctrl-N / Ctrl-P cycle other prefix matches. It is not
+prefix. Right accepts the full row; Left, Home, and Up dismiss it; Alt-F /
+Ctrl-Right accept one word; Ctrl-X Ctrl-N / Ctrl-P cycle other prefix matches. It is not
 dim after-every-key paint. The opt-in sidecar can store and
 query history from the CLI. Each later feature must insert or propose ordinary
 Bash text and must never auto-execute. The Readline research and ADR 0003 define

@@ -7,7 +7,7 @@
 
 - Last reviewed: 2026-08-18 UTC
 - Current milestone: Phase 3A sidecar implemented; `G0` and `G2` complete; `G1` accepted
-- Active workstream: `GHST-002` Left dismiss recorded; highlighting/overlay blocked on unproven continuous decoration
+- Active workstream: `GHST-002` Home/Up/backward-word recorded; kill-ring isolation remains; highlighting/overlay blocked on unproven continuous decoration
 - Next decision gate: continuous-decoration leftover (blocks highlighting / overlay)
 - Editor-facing work: opt-in ghost suffix is unblocked (ADR 0010). Highlighting and GUI overlay stay blocked on after-every-key paint.
 - Timing policy: unmet percentile targets are `deferred` and do not block
@@ -444,8 +444,8 @@ the roadmap cannot make that scope change by itself.
 ### Phase 4 — Ghost suggestions
 
 Status: `validation`. Opt-in suffix ghost is recorded (ADR 0010). Word-accept,
-cycling, remaining printables, vi-insert, and Left dismiss are recorded. Dim
-paint, async lookup, Home/Up motion, and kill-ring isolation remain.
+cycling, remaining printables, vi-insert, Left dismiss, and Home/Up/backward-word
+are recorded. Dim paint, async lookup, and kill-ring isolation remain.
 
 After the gates pass, implement asynchronous ranked-history lookup with generation
 IDs, stale-result rejection, inline rendering, full/word acceptance, cycling, and
@@ -456,7 +456,7 @@ keystroke.
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
 | `GHST-001` | Async ranked query with generation IDs and cancellation | `blocked` | async IPC ADR decision |
-| `GHST-002` | Inline ghost rendering with stale-result rejection | `validation` | ADR 0010; G-1–G-6 in `bash/ghost.bash`, `crates/pty/tests/ghost.rs`, `tests/bash/modules.bash`; `docs/ghst-002-inline-ghost-plan.md`; remaining printables P-1–P-3 (`docs/ghst-002-printables-plan.md`); vi-insert V-1–V-3 (`docs/ghst-002-vi-insert-plan.md`); Left dismiss L-1–L-3 (`docs/ghst-002-left-motion-plan.md`); Enter is a Readline kill-line + accept-line macro (M-041); helpers bind before printables and partial disarm clears the armed flag (M-044); dim paint, Home/Up, kill-ring, and async stale-rejection leftovers remain |
+| `GHST-002` | Inline ghost rendering with stale-result rejection | `validation` | ADR 0010; G-1–G-6 in `bash/ghost.bash`, `crates/pty/tests/ghost.rs`, `tests/bash/modules.bash`; `docs/ghst-002-inline-ghost-plan.md`; remaining printables P-1–P-3 (`docs/ghst-002-printables-plan.md`); vi-insert V-1–V-3 (`docs/ghst-002-vi-insert-plan.md`); Left dismiss L-1–L-3 (`docs/ghst-002-left-motion-plan.md`); Home/Up/backward-word H-1/W-4/U-2 (`docs/ghst-002-home-up-motion-plan.md`); Enter is a Readline kill-line + accept-line macro (M-041); helpers bind before printables and partial disarm clears the armed flag (M-044); dim paint, kill-ring, and async stale-rejection leftovers remain |
 | `GHST-003` | Full/word acceptance and suggestion cycling | `complete` | Right/`\C-f` full accept in G-2; `\ef` / Ctrl-Right word-accept in W-1–W-3 (`docs/ghst-003-word-accept-plan.md`); `\C-x\C-n` / `\C-x\C-p` cycling in C-1–C-3 (`docs/ghst-003-cycle-plan.md`) |
 | `GHST-004` | Multiline, resize, exact-byte, no-execution, and latency evidence | `blocked` | `PTY-001` matrix leftovers |
 
@@ -565,10 +565,11 @@ percentile leftovers are `deferred` and must not block product slices
 (`docs/latency-budget-deferral.md`).
 
 1. `GHST-003` full/word accept and cycling are recorded. Remaining ghost
-   printables, vi-insert wrapping, and Left dismiss are recorded
-   (`docs/ghst-002-printables-plan.md`; `docs/ghst-002-vi-insert-plan.md`;
-   `docs/ghst-002-left-motion-plan.md`). Home / Up / kill-ring isolation remain.
-   Do not mark `GHST-004` complete. Do not start highlighting or overlay.
+   printables, vi-insert wrapping, Left dismiss, and Home/Up/backward-word are
+   recorded (`docs/ghst-002-printables-plan.md`; `docs/ghst-002-vi-insert-plan.md`;
+   `docs/ghst-002-left-motion-plan.md`; `docs/ghst-002-home-up-motion-plan.md`).
+   Kill-ring isolation remains. Do not mark `GHST-004` complete. Do not start
+   highlighting or overlay.
    `COMP-004` stays `discovery`. Do not mark `COMP-004` or `COMP-005` complete.
 2. Next named leftovers are `HIST-010` / `GIT-003` and remaining `SRCH-003`
    work on other branches. Do not duplicate those PRs. Dim ghost paint stays
@@ -712,3 +713,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-18 | Recorded vi-insert ghost wrapping (`docs/ghst-002-vi-insert-plan.md`; V-1–V-3). Same Enter macro on vi-insert; do not bind `\ef`. Do not mark `GHST-004` complete. Do not start highlighting or overlay. |
 | 2026-08-18 | Recorded ghost Left dismiss (`docs/ghst-002-left-motion-plan.md`; L-1–L-3). Left / `\C-b` strip then backward-char. Home / Up / kill-ring isolation remain. Do not mark `GHST-004` complete. Do not start highlighting or overlay. |
 | 2026-08-18 | Fixed ghost Enter armed-flag / helper-before-printable install (M-044). Do not mark `GHST-004` complete. |
+| 2026-08-19 | Recorded ghost Home/Up/backward-word dismiss (`docs/ghst-002-home-up-motion-plan.md`; H-1/W-4/U-2). Kill-ring isolation remains. Do not mark `GHST-004` complete. Do not start highlighting or overlay. |
