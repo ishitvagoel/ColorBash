@@ -1,7 +1,8 @@
 # GHST-002 leftover: Home / Up / backward-word dismiss (H-1–U-2)
 
-Status: `complete` for Home, Up, and backward-word (2026-08-19). Kill-ring
-isolation is `docs/ghst-002-kill-ring-plan.md`. Do **not** mark `GHST-004` complete.
+Status: `complete` for Home, Up, and backward-word (2026-08-19). Down is
+`docs/ghst-002-down-motion-plan.md`. Kill-ring isolation is
+`docs/ghst-002-kill-ring-plan.md`. Do **not** mark `GHST-004` complete.
 
 ## Why this slice
 
@@ -30,7 +31,7 @@ expansion, not `kill-line`), then apply the stock motion.
 ## Out of scope (hard)
 
 - Dim ANSI, GUI overlay, syntax highlighting
-- Down / forward-history
+- Down / forward-history (recorded in `docs/ghst-002-down-motion-plan.md`)
 - Replacing Enter `kill-line` (kill-ring isolation)
 - Rebinding Tab, `\C-r`, `\C-g`, `\C-x\C-r`, `\C-x\C-s`
 - `eval` from bind -x

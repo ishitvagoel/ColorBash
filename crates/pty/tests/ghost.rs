@@ -11,6 +11,7 @@ const BRACKETED_PASTE_END: &[u8] = b"\x1b[201~";
 const RIGHT: &[u8] = b"\x1b[C";
 const LEFT: &[u8] = b"\x1b[D";
 const CTRL_P: &[u8] = b"\x10";
+const CTRL_N: &[u8] = b"\x0e";
 const CTRL_Y: &[u8] = b"\x19";
 const META_F: &[u8] = b"\x1bf";
 const CTRL_X_CTRL_N: &[u8] = b"\x18\x0e";
@@ -457,6 +458,44 @@ fn ctrl_p_loads_history_after_dismissing_suffix() {
             .count(),
         2,
         "history-loaded beta was not admitted through accept-line: {recent:?}"
+    );
+    exit_and_wait(&mut session);
+}
+
+#[test]
+fn ctrl_n_restores_typed_prefix_after_ctrl_p() {
+    let home = TempHome::new("ghst-d2");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let mut session = spawn_history_shell(home.path(), &ghost_env(data_home_s, histfile_s, &[]));
+    wait_for(&mut session, "> ");
+    record_echo(&mut session, "alpha");
+    record_echo(&mut session, "beta");
+    wait_for_count(&mbx_bin(), &data_home, 2);
+
+    session
+        .write_str("echo MBX_GHST:b", deadline(2))
+        .expect("type prefix");
+    wait_all(&mut session, &["echo MBX_GHST:beta"]);
+    send_keys(&mut session, CTRL_P);
+    wait_all(&mut session, &["echo MBX_GHST:beta"]);
+    send_keys(&mut session, CTRL_N);
+    wait_all(&mut session, &["echo MBX_GHST:b"]);
+    assert_no_output(&mut session, "MBX_GHST:beta\n");
+    session.write_str("\n", deadline(2)).expect("enter");
+    let output = wait_all(&mut session, &["MBX_GHST:b\n", "> "]);
+    assert!(
+        !visible_contains(&output, "MBX_GHST:beta\n"),
+        "Down left history row instead of typed prefix: {:?}",
+        visible_text(&output)
+    );
+    wait_for_count(&mbx_bin(), &data_home, 3);
+    let recent = sidecar_commands(&mbx_bin(), &data_home);
+    assert!(
+        recent.iter().any(|command| command == "echo MBX_GHST:b"),
+        "typed prefix after Up/Down was not admitted: {recent:?}"
     );
     exit_and_wait(&mut session);
 }

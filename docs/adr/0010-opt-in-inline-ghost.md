@@ -33,8 +33,8 @@ experiments.
    `\ef` / Ctrl-Right `forward-word` for one alphanumeric word). Ctrl-X Ctrl-N
    / Ctrl-X Ctrl-P cycle other exact-prefix rows without accepting them.
    Left / `\C-b` / `\eOD` strip an unaccepted suffix then `backward-char`.
-   Home / `\C-a` / CSI Home, Up / `\C-p` / CSI Up, and backward-word strip
-   first as well. Enter discards unaccepted suffix bytes without `kill-line`.
+   Home / `\C-a` / CSI Home, Up / `\C-p` / CSI Up, Down / `\C-n` / CSI Down, and
+   backward-word strip first as well. Enter discards unaccepted suffix bytes without `kill-line`.
 4. Enter (`\C-m`) and newline (`\C-j`, when it is stock `accept-line`) stay
    `accept-line` except while a suffix is active. Then both are a Readline-only
    macro: repeated reserved `delete-char` (default `\C-x\C-d`, bounded by suffix
@@ -51,7 +51,7 @@ experiments.
    Readline quoted keyseqs. vi-insert uses the same helpers; `\ef` is not
    bound there because ESC is `vi-movement-mode`. Prefix-match cycling uses
    unbound `\C-x\C-n` / `\C-x\C-p`. Left / `\C-b` dismiss an unaccepted suffix.
-   Home / Up / backward-word dismiss before their stock motion. Enter discards
+   Home / Up / Down / backward-word dismiss before their stock motion. Enter discards
    the suffix with bounded `delete-char` steps. Do not steal Tab, `\C-r`, `\C-g`, `\C-x\C-r`, or `\C-x\C-s`.
 
 ## Alternatives
@@ -76,6 +76,6 @@ GUI overlays stay blocked.
 PTY evidence in `crates/pty/tests/ghost.rs` and module contracts in
 `tests/bash/modules.bash`. Plans: `docs/ghst-002-inline-ghost-plan.md`,
 `docs/ghst-002-printables-plan.md`, `docs/ghst-002-vi-insert-plan.md`,
-`docs/ghst-002-left-motion-plan.md`, `docs/ghst-002-home-up-motion-plan.md`, `docs/ghst-002-kill-ring-plan.md`, `docs/ghst-004-multiline-resize-plan.md`,
+`docs/ghst-002-left-motion-plan.md`, `docs/ghst-002-home-up-motion-plan.md`, `docs/ghst-002-down-motion-plan.md`, `docs/ghst-002-kill-ring-plan.md`, `docs/ghst-004-multiline-resize-plan.md`,
 `docs/ghst-004-no-execution-plan.md`,
 `docs/ghst-003-word-accept-plan.md`, `docs/ghst-003-cycle-plan.md`.

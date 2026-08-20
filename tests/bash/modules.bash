@@ -964,11 +964,39 @@ assert_eq 0 "${_MBX_GHOST_HAS:-missing}" 'ghost backward-word should clear the s
 history -c
 history -s 'echo MBX_GHST:alpha'
 history -s 'echo MBX_GHST:beta'
+READLINE_LINE='echo MBX_GHST:alpha'
+READLINE_POINT=15
+_MBX_GHOST_HAS=1
+_MBX_GHOST_POINT=15
 _MBX_GHOST_HIST_OFFSET=0
+_MBX_GHOST_HIST_CURRENT=
 _mbx_ghost_previous_history
 assert_eq 'echo MBX_GHST:beta' "$READLINE_LINE" \
     'ghost Up should load the newest history row after stripping a suffix'
 assert_eq 1 "${_MBX_GHOST_HIST_OFFSET:-missing}" 'ghost Up should advance the history offset'
+assert_eq 'echo MBX_GHST:a' "${_MBX_GHOST_HIST_CURRENT-}" \
+    'ghost Up should remember the stripped typed prefix for Down'
+_mbx_ghost_next_history
+assert_eq 'echo MBX_GHST:a' "$READLINE_LINE" \
+    'ghost Down should restore the remembered typed prefix'
+assert_eq 0 "${_MBX_GHOST_HIST_OFFSET:-missing}" 'ghost Down should clear the history offset'
+history -c
+history -s 'echo MBX_GHST:alpha'
+history -s 'echo MBX_GHST:beta'
+READLINE_LINE='echo MBX_GHST:a'
+READLINE_POINT=15
+_MBX_GHOST_HAS=0
+_MBX_GHOST_HIST_OFFSET=0
+_MBX_GHOST_HIST_CURRENT=
+_mbx_ghost_previous_history
+_mbx_ghost_previous_history
+assert_eq 'echo MBX_GHST:alpha' "$READLINE_LINE" \
+    'ghost Up twice should load the older history row'
+assert_eq 2 "${_MBX_GHOST_HIST_OFFSET:-missing}" 'ghost Up twice should set offset 2'
+_mbx_ghost_next_history
+assert_eq 'echo MBX_GHST:beta' "$READLINE_LINE" \
+    'ghost Down from offset 2 should load the newer history row'
+assert_eq 1 "${_MBX_GHOST_HIST_OFFSET:-missing}" 'ghost Down should decrement the history offset'
 _MBX_GHOST_DELETE_KEYSEQ='\C-x\C-d'
 _MBX_GHOST_ACCEPT_KEYSEQ='\C-x\C-m'
 _mbx_ghost_enter_delete_macro 4

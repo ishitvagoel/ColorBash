@@ -7,7 +7,7 @@
 
 - Last reviewed: 2026-08-18 UTC
 - Current milestone: Phase 3A sidecar implemented; `G0` and `G2` complete; `G1` accepted
-- Active workstream: `GHST-004` partial PTY evidence (resize, exact bytes, PS2, no-execution); `GHST-002` dim paint and async stale-rejection remain blocked; highlighting/overlay blocked on unproven continuous decoration
+- Active workstream: `GHST-002` Down dismiss + `GHST-004` no-execution recorded; dim paint and async stale-rejection remain blocked; highlighting/overlay blocked on unproven continuous decoration
 - Next decision gate: continuous-decoration leftover (blocks highlighting / overlay)
 - Editor-facing work: opt-in ghost suffix is unblocked (ADR 0010). Highlighting and GUI overlay stay blocked on after-every-key paint.
 - Timing policy: unmet percentile targets are `deferred` and do not block
@@ -444,9 +444,10 @@ the roadmap cannot make that scope change by itself.
 ### Phase 4 — Ghost suggestions
 
 Status: `validation`. Opt-in suffix ghost is recorded (ADR 0010). Word-accept,
-cycling, remaining printables, vi-insert, Left dismiss, Home/Up/backward-word,
+cycling, remaining printables, vi-insert, Left dismiss, Home/Up/Down/backward-word,
 and kill-ring isolation are recorded. Dim paint and async lookup remain.
-Partial `GHST-004` PTY evidence is in `docs/ghst-004-multiline-resize-plan.md`.
+Partial `GHST-004` PTY evidence is in `docs/ghst-004-multiline-resize-plan.md`
+and `docs/ghst-004-no-execution-plan.md`.
 
 After the gates pass, implement asynchronous ranked-history lookup with generation
 IDs, stale-result rejection, inline rendering, full/word acceptance, cycling, and
@@ -457,7 +458,7 @@ keystroke.
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
 | `GHST-001` | Async ranked query with generation IDs and cancellation | `blocked` | async IPC ADR decision |
-| `GHST-002` | Inline ghost rendering with stale-result rejection | `validation` | ADR 0010; G-1–G-6 in `bash/ghost.bash`, `crates/pty/tests/ghost.rs`, `tests/bash/modules.bash`; `docs/ghst-002-inline-ghost-plan.md`; remaining printables P-1–P-3 (`docs/ghst-002-printables-plan.md`); vi-insert V-1–V-3 (`docs/ghst-002-vi-insert-plan.md`); Left dismiss L-1–L-3 (`docs/ghst-002-left-motion-plan.md`); Home/Up/backward-word H-1/W-4/U-2 (`docs/ghst-002-home-up-motion-plan.md`); kill-ring isolation K-1–K-3 (`docs/ghst-002-kill-ring-plan.md`); Enter is a Readline delete-char + accept-line macro (M-041); helpers bind before printables and partial disarm clears the armed flag (M-044); dim paint and async stale-rejection leftovers remain |
+| `GHST-002` | Inline ghost rendering with stale-result rejection | `validation` | ADR 0010; G-1–G-6 in `bash/ghost.bash`, `crates/pty/tests/ghost.rs`, `tests/bash/modules.bash`; `docs/ghst-002-inline-ghost-plan.md`; remaining printables P-1–P-3 (`docs/ghst-002-printables-plan.md`); vi-insert V-1–V-3 (`docs/ghst-002-vi-insert-plan.md`); Left dismiss L-1–L-3 (`docs/ghst-002-left-motion-plan.md`); Home/Up/backward-word H-1/W-4/U-2 (`docs/ghst-002-home-up-motion-plan.md`); Down D-1–D-2 (`docs/ghst-002-down-motion-plan.md`); kill-ring isolation K-1–K-3 (`docs/ghst-002-kill-ring-plan.md`); Enter is a Readline delete-char + accept-line macro (M-041); helpers bind before printables and partial disarm clears the armed flag (M-044); dim paint and async stale-rejection leftovers remain |
 | `GHST-003` | Full/word acceptance and suggestion cycling | `complete` | Right/`\C-f` full accept in G-2; `\ef` / Ctrl-Right word-accept in W-1–W-3 (`docs/ghst-003-word-accept-plan.md`); `\C-x\C-n` / `\C-x\C-p` cycling in C-1–C-3 (`docs/ghst-003-cycle-plan.md`) |
 | `GHST-004` | Multiline, resize, exact-byte, no-execution, and latency evidence | `validation` | R-1/Q-1/M-1 in `docs/ghst-004-multiline-resize-plan.md`; C-1/B-1 in `docs/ghst-004-no-execution-plan.md`; `crates/pty/tests/ghost.rs`; latency matrix remains |
 
@@ -569,6 +570,7 @@ percentile leftovers are `deferred` and must not block product slices
    printables, vi-insert wrapping, Left dismiss, and Home/Up/backward-word are
    recorded (`docs/ghst-002-printables-plan.md`; `docs/ghst-002-vi-insert-plan.md`;
    `docs/ghst-002-left-motion-plan.md`; `docs/ghst-002-home-up-motion-plan.md`;
+   `docs/ghst-002-home-up-motion-plan.md`; `docs/ghst-002-down-motion-plan.md`;
    `docs/ghst-002-kill-ring-plan.md`). Partial `GHST-004` resize/exact-byte/PS2
    evidence is in `docs/ghst-004-multiline-resize-plan.md` (R-1/Q-1/M-1) and
    `docs/ghst-004-no-execution-plan.md` (C-1/B-1). Dim paint and async
@@ -719,3 +721,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-18 | Fixed ghost Enter armed-flag / helper-before-printable install (M-044). Do not mark `GHST-004` complete. |
 | 2026-08-19 | Recorded partial ghost `GHST-004` resize/quoted PTY evidence (`docs/ghst-004-multiline-resize-plan.md`; R-1/Q-1). Multiline PS2 and latency matrix remain. Do not mark `GHST-004` complete. |
 | 2026-08-19 | Recorded ghost `GHST-004` no-execution PTY evidence (`docs/ghst-004-no-execution-plan.md`; C-1/B-1). Latency matrix remains `deferred`. Do not mark `GHST-004` complete. |
+| 2026-08-20 | Recorded ghost Down / forward-history dismiss (`docs/ghst-002-down-motion-plan.md`; D-1–D-2). Dim paint and async stale-rejection remain blocked. Do not mark `GHST-004` complete. |

@@ -7,7 +7,7 @@
 # Remaining ASCII printables use Readline quoted keyseqs so `"` / `\` bind.
 # vi-insert is wrapped after emacs; ESC is vi-movement-mode so `\ef` is not.
 # Left / `\C-b` strip an unaccepted suffix then backward-char (Home stays later).
-# Home / Up / backward-word use the same strip-first dismiss policy.
+# Home / Up / Down / backward-word use the same strip-first dismiss policy.
 _MBX_GHOST_ACCEPT_DEFAULT_KEYSEQ='\C-x\C-m'
 _MBX_GHOST_DELETE_DEFAULT_KEYSEQ='\C-x\C-d'
 _MBX_GHOST_SUFFIX_MAX=256
@@ -24,6 +24,7 @@ _MBX_GHOST_VI_WRAP_CTRL_J=0
 _MBX_GHOST_INDEX=0
 _MBX_GHOST_TYPED_LEN=0
 _MBX_GHOST_HIST_OFFSET=0
+_MBX_GHOST_HIST_CURRENT=
 _MBX_GHOST_CANDIDATES=()
 _MBX_GHOST_DELETE_KEYSEQ=$_MBX_GHOST_DELETE_DEFAULT_KEYSEQ
 _MBX_GHOST_ACCEPT_KEYSEQ=$_MBX_GHOST_ACCEPT_DEFAULT_KEYSEQ
@@ -116,6 +117,7 @@ _mbx_ghost_reset_state() {
 
 _mbx_ghost_reset_hist_offset() {
     _MBX_GHOST_HIST_OFFSET=0
+    _MBX_GHOST_HIST_CURRENT=
 }
 
 _mbx_ghost_clear() {
@@ -401,12 +403,42 @@ _mbx_ghost_previous_history() {
     if [[ ${_MBX_GHOST_HAS:-0} == 1 ]]; then
         _mbx_ghost_strip
     fi
+    if ((${_MBX_GHOST_HIST_OFFSET:-0} == 0)); then
+        _MBX_GHOST_HIST_CURRENT=${READLINE_LINE-}
+    fi
     offset=$((${_MBX_GHOST_HIST_OFFSET:-0} + 1))
     _mbx_ghost_history_entry "$offset" || return 0
     entry=$REPLY
     READLINE_LINE=$entry
     READLINE_POINT=${#READLINE_LINE}
     _MBX_GHOST_HIST_OFFSET=$offset
+    _mbx_ghost_reset_state
+    _mbx_ghost_disarm_enter || true
+}
+
+_mbx_ghost_next_history() {
+    local offset entry
+
+    if [[ ${_MBX_GHOST_HAS:-0} == 1 ]]; then
+        _mbx_ghost_strip
+    fi
+    offset=${_MBX_GHOST_HIST_OFFSET:-0}
+    if ((offset <= 0)); then
+        return 0
+    fi
+    offset=$((offset - 1))
+    _MBX_GHOST_HIST_OFFSET=$offset
+    if ((offset == 0)); then
+        READLINE_LINE=${_MBX_GHOST_HIST_CURRENT-}
+        READLINE_POINT=${#READLINE_LINE}
+        _mbx_ghost_reset_state
+        _mbx_ghost_disarm_enter || true
+        return 0
+    fi
+    _mbx_ghost_history_entry "$offset" || return 0
+    entry=$REPLY
+    READLINE_LINE=$entry
+    READLINE_POINT=${#READLINE_LINE}
     _mbx_ghost_reset_state
     _mbx_ghost_disarm_enter || true
 }
@@ -585,6 +617,8 @@ _mbx_ghost_install_vi() {
         true
     _mbx_ghost_bind_x vi-insert '\e[A' _mbx_ghost_previous_history previous-history || \
         true
+    _mbx_ghost_bind_x vi-insert '\eOB' _mbx_ghost_next_history next-history || true
+    _mbx_ghost_bind_x vi-insert '\e[B' _mbx_ghost_next_history next-history || true
     _mbx_ghost_bind_x_stock vi-insert '\e[1;5D' _mbx_ghost_backward_word backward-word || \
         true
     _mbx_ghost_bind_x_stock vi-insert '\e[1;5C' _mbx_ghost_forward_word forward-word || \
@@ -694,6 +728,9 @@ _mbx_ghost_install() {
         true
     _mbx_ghost_bind_x emacs '\e[A' _mbx_ghost_previous_history previous-history || \
         true
+    _mbx_ghost_bind_x emacs '\C-n' _mbx_ghost_next_history next-history || true
+    _mbx_ghost_bind_x emacs '\eOB' _mbx_ghost_next_history next-history || true
+    _mbx_ghost_bind_x emacs '\e[B' _mbx_ghost_next_history next-history || true
     _mbx_ghost_bind_x emacs '\eb' _mbx_ghost_backward_word backward-word || true
     _mbx_ghost_bind_x emacs '\e[1;5D' _mbx_ghost_backward_word backward-word || true
     _mbx_ghost_bind_x emacs '\e[5D' _mbx_ghost_backward_word backward-word || true
