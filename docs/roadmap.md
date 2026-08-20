@@ -125,7 +125,6 @@ Not implemented:
 
 - enhanced Ctrl+R overlay, completion UI, or live highlighting;
 - opt-in inline ghost is implemented (ADR 0010); dim after-every-key paint is not;
-- repository-context history fields are implemented (`HIST-010`);
 - arbitrary key-injection coverage (Tab, arrows, Ctrl+R), the release platform
   matrix, or remaining `G0` platform-matrix evidence;
 - prompt-boundary write-ack percentile budget (correctness recorded; p95 miss
