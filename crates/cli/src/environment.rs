@@ -67,6 +67,10 @@ fn apply_color_capability(flags: &mut PromptFlags, term: &str, colorterm: Option
     }
 }
 
+pub fn git_discovery_disabled() -> bool {
+    env::var("MBX_DISABLE_GIT").is_ok_and(|value| value == "1")
+}
+
 fn prompt_flags(stdout_is_terminal: bool) -> PromptFlags {
     let mut flags = PromptFlags::empty();
     if color_disabled(stdout_is_terminal) {
@@ -83,7 +87,7 @@ fn prompt_flags(stdout_is_terminal: bool) -> PromptFlags {
     if env::var("MBX_PRODUCTION_CONTEXT").is_ok_and(|value| value == "1") {
         flags.insert(FLAG_PRODUCTION);
     }
-    if env::var("MBX_DISABLE_GIT").is_ok_and(|value| value == "1") {
+    if git_discovery_disabled() {
         flags.insert(FLAG_DISABLE_GIT);
     }
     let term = env::var("TERM").unwrap_or_default();

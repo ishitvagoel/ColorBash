@@ -48,6 +48,9 @@ MBX2<TAB>request-id<TAB>ERROR<TAB>kind
 
 - `RECORD` is the only data message in the Phase 3A slice; search remains a
   direct CLI operation and does not travel over the wire.
+- Repository root/branch are **not** RECORD fields. The helper writer may
+  enrich stored rows from `start_cwd` after ACK (`HIST-010`); the wire layout
+  stays ten data fields.
 - `history-number` is the list number from `history 1` for the newest admitted
   entry, or `-` when absent. It is diagnostic only and is not `HISTCMD`.
 - `ERROR` carries a typed kind (`invalid`, `queue_full`, `storage`) and never

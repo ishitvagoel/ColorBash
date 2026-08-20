@@ -1,7 +1,11 @@
 use crate::VERSION;
 use crate::cli::{self, CliCommand, HistoryCommand, ServeTarget};
-use crate::history::{HistoryControl, HistoryPolicy, HistorySearch};
+use crate::environment;
+use crate::history::{HistoryControl, HistoryError, HistoryPolicy, HistorySearch};
 use crate::prompt::PromptRendering;
+use crate::provider::{
+    GitRepositoryStatusProvider, NullRepositoryContextProvider, RepositoryContextProvider,
+};
 use crate::service::ProtocolService;
 use crate::storage::{QueuedHistoryStore, default_store_path};
 use crate::telemetry::trace_duration;
@@ -31,9 +35,7 @@ pub fn execute(command: CliCommand, renderer: &dyn PromptRendering) -> Result<()
                 if policy.disabled() {
                     None
                 } else {
-                    let store =
-                        QueuedHistoryStore::open_default(crate::history::DEFAULT_QUEUE_CAPACITY)
-                            .map_err(|error| error.to_string())?;
+                    let store = open_capture_store().map_err(|error| error.to_string())?;
                     Some(Box::new(crate::history_service::HistoryService::new(
                         Box::new(store),
                         Box::new(policy),
@@ -111,6 +113,22 @@ fn execute_history(command: HistoryCommand) -> Result<(), String> {
                     .map_err(|error| error.to_string())?,
             )
         }
+        HistoryCommand::SearchRepo { repo_root, limit } => {
+            let store = open_history_store()?;
+            print_entries(
+                store
+                    .by_repo(&repo_root, limit)
+                    .map_err(|error| error.to_string())?,
+            )
+        }
+        HistoryCommand::SearchBranch { repo_branch, limit } => {
+            let store = open_history_store()?;
+            print_entries(
+                store
+                    .by_branch(&repo_branch, limit)
+                    .map_err(|error| error.to_string())?,
+            )
+        }
         HistoryCommand::SearchFuzzy { needle, limit } => {
             let store = open_history_store()?;
             print_entries(
@@ -119,15 +137,29 @@ fn execute_history(command: HistoryCommand) -> Result<(), String> {
                     .map_err(|error| error.to_string())?,
             )
         }
+        HistoryCommand::SearchFailed { limit } => {
+            let store = open_history_store()?;
+            print_entries(store.failed(limit).map_err(|error| error.to_string())?)
+        }
     }
 }
 
-fn open_history_store() -> Result<QueuedHistoryStore, String> {
-    QueuedHistoryStore::open(
+fn open_capture_store() -> Result<QueuedHistoryStore, HistoryError> {
+    let context: Box<dyn RepositoryContextProvider> = if environment::git_discovery_disabled() {
+        Box::new(NullRepositoryContextProvider)
+    } else {
+        Box::new(GitRepositoryStatusProvider::default())
+    };
+    QueuedHistoryStore::open_with_context(
         &default_store_path(),
         crate::history::DEFAULT_QUEUE_CAPACITY,
+        context,
     )
-    .map_err(|error| error.to_string())
+}
+
+fn open_history_store() -> Result<QueuedHistoryStore, String> {
+    QueuedHistoryStore::open_default(crate::history::DEFAULT_QUEUE_CAPACITY)
+        .map_err(|error| error.to_string())
 }
 
 fn print_entries(entries: Vec<crate::history::HistoryEntry>) -> Result<(), String> {

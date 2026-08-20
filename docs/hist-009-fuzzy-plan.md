@@ -16,5 +16,5 @@ prefix / substring / subsequence scores. No editor UI. Do not log command text.
 
 ## Remaining
 
-`HIST-010` repository context still needs the `GIT-003` consumer pair.
+`HIST-010` repository context is complete (`docs/hist-010-git-003-plan.md`).
 Fuzzy is UI-free; it does not unblock ghost or Ctrl+R.

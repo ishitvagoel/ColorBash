@@ -7,8 +7,8 @@
 
 - Last reviewed: 2026-08-18 UTC
 - Current milestone: Phase 3A sidecar implemented; `G0` and `G2` complete; `G1` accepted
-- Active workstream: `GHST-002` Down dismiss + `GHST-004` no-execution recorded; dim paint and async stale-rejection remain blocked; highlighting/overlay blocked on unproven continuous decoration
-- Next decision gate: continuous-decoration leftover (blocks highlighting / overlay)
+- Active workstream: `HIST-010` / `GIT-003` landing on main; `GHST-002`/`GHST-004` validation leftovers remain (dim paint, async stale-rejection, latency deferred); highlighting/overlay blocked on unproven continuous decoration
+- Next decision gate: async feature IPC ADR (unblocks `GHST-001`); continuous-decoration leftover (blocks highlighting / overlay)
 - Editor-facing work: opt-in ghost suffix is unblocked (ADR 0010). Highlighting and GUI overlay stay blocked on after-every-key paint.
 - Timing policy: unmet percentile targets are `deferred` and do not block
   product development (`docs/latency-budget-deferral.md`)
@@ -101,10 +101,11 @@ Implemented foundation:
   render deadline;
 - a fixed-spec Git provider with capped acquisition, a 50-ms refresh deadline,
   typed failure diagnostics, and a bounded one-second warm cache;
-- an opt-in SQLite history sidecar with schema v2 (forward-only from v1), WAL, `0700`/`0600`
+- an opt-in SQLite history sidecar with schema v3 (forward-only from v1/v2), WAL, `0700`/`0600`
   permissions, retention, exclusions, path/count/clear/delete controls, and
-  deterministic recent/prefix/cwd queries; capture remains off unless
-  `MBX_HISTORY=1`;
+  deterministic recent/prefix/cwd/repo queries plus bounded fuzzy ranking;
+  capture remains off unless `MBX_HISTORY=1`; nullable `repo_root`/`repo_branch`
+  are writer-enriched from absolute `start_cwd`;
 - Rust unit tests plus Bash module, protocol-integration, compatibility smoke,
   and genuine PTY driver/foundation/history suites; and
 - architecture, UX, compatibility, protocol, research, benchmark, and ADR
@@ -122,9 +123,9 @@ recorded a green run on `origin/main` at commit
 
 Not implemented:
 
-- fuzzy history ranking or repository-context history fields;
 - enhanced Ctrl+R overlay, completion UI, or live highlighting;
 - opt-in inline ghost is implemented (ADR 0010); dim after-every-key paint is not;
+- repository-context history fields are implemented (`HIST-010`);
 - arbitrary key-injection coverage (Tab, arrows, Ctrl+R), the release platform
   matrix, or remaining `G0` platform-matrix evidence;
 - prompt-boundary write-ack percentile budget (correctness recorded; p95 miss
@@ -257,11 +258,11 @@ Passed when:
 - storage failure or queue saturation stays inside the accepted prompt-side
   budget and never breaks the shell.
 
-`G2` is the Phase 3A gate. It permits history-driven editor experiments but does
-not mark full Phase 3 complete; full completion also requires the later fuzzy
-ranking and repository-context deliverables identified in that phase.
+`G2` is the Phase 3A gate. It permits history-driven editor experiments.
+Full Phase 3 also required fuzzy ranking (`HIST-009`) and repository context
+(`HIST-010`); both are complete.
 It requires `HIST-002` through `HIST-008` plus `HIST-011`, `HIST-012`, and
-`HIST-013`; `HIST-009` and `HIST-010` remain full-phase exit work.
+`HIST-013`; `HIST-009` and `HIST-010` are complete.
 
 ### G3 — Editor integration feasibility
 
@@ -318,11 +319,11 @@ latency budgets.
 | 0 | Research / architecture | `complete` | `G0` complete; `HRD-001` macOS remains release-matrix work |
 | 1 | Bootstrap | `complete` | CI linked; broader lifecycle tracing deferred |
 | 2 | Prompt | `complete` | capability/width/wrap recorded; `PRM-004` percentiles `deferred` |
-| 3 | History | `complete` | Phase 3A / `G2` complete; `HIST-009` complete; `HIST-010` remains; write-ack percentiles `deferred` |
-| 4 | Ghost suggestions | `validation` | ADR 0010 opt-in suffix; Left dismiss recorded; async/dim leftovers remain |
+| 3 | History | `complete` | Phase 3A / `G2` complete; `HIST-009` and `HIST-010` complete; write-ack percentiles `deferred` |
+| 4 | Ghost suggestions | `validation` | ADR 0010 opt-in suffix; motion/kill-ring/no-exec recorded; async/dim leftovers remain |
 | 5 | Completion | `validation` | `G4` / `COMP-001` / `COMP-002` / `COMP-003` complete; `COMP-004` in `discovery` (no overlay); `GIT-004` complete |
 | 6 | Syntax highlighting | `blocked` | unproven continuous decoration; intentionally after search/ghost/completion evidence |
-| 7 | Git/provider expansion | `discovery` | bounded prompt subset exists; richer capabilities await a consumer |
+| 7 | Git/provider expansion | `validation` | prompt status plus history root/branch; upstream/remotes/tags unauthorized |
 | 8 | Enhanced Ctrl+R | `blocked` | unproven continuous decoration leftover |
 | 9 | Release hardening | `not-started` | feature gates and full compatibility matrix |
 
@@ -384,7 +385,7 @@ Outcome: an adaptive, semantic, safe prompt that remains fast under failure.
 | `PRM-003` | End-to-end deadline, capped Git acquisition, and warm cache | `complete` | one Bash deadline, capped 50-ms Git refresh, 128-entry/1-s cache, failure tests, and `docs/benchmarks/2026-08-15-solid-hardening.md` |
 | `PRM-004` | Full prompt p50/p95/p99 benchmark matrix | `deferred` | controlled warm-Git case recorded; remaining matrix deferred (`docs/latency-budget-deferral.md`) |
 | `PRM-005` | Real PTY prompt, wrap, signal, resize, and restoration tests | `complete` | lifecycle, helper failure, Ctrl+C/Z, resize, `stty -g`, multiline, narrow wrap, and wide-glyph coverage |
-| `PRM-006` | Decide opt-in duration policy or explicit preexec adapter | `validation` | `docs/prm-006-duration-plan.md`; D-1–D-4 in `tests/bash/smoke.bash`; remain opt-in; do not compose `DEBUG` |
+| `PRM-006` | Decide opt-in duration policy or explicit preexec adapter | `complete` | `docs/prm-006-duration-plan.md`; D-1–D-4 in `tests/bash/smoke.bash`; remain opt-in; do not compose `DEBUG`; `G3`/`G4` complete |
 | `PRM-007` | Give native and fallback adapters one explicit input/safety contract and shared hostile-state corpus | `complete` | explicit four-field context, shared C0/DEL/expansion corpus, production precedence, and SSH-only test |
 | `PRM-008` | Preserve raw additive prompt flags across coprocess, per-call, and fallback paths | `complete` | raw `--flags` CLI boundary plus coprocess/per-call/fallback unknown-bit tests |
 | `PRM-009` | Reassess semantic composition versus typed PS1 encoding and validated theme styles | `discovery` | wait for `PRM-002` or a second renderer; avoid a speculative abstraction |
@@ -394,8 +395,8 @@ Exit condition: prompt requirements of `G0`.
 ### Phase 3 — History
 
 Status: `complete` for the UI-free Phase 3A / `G2` slice (2026-08-16).
-`HIST-009` fuzzy ranking is `complete`. `HIST-010` remains full-phase exit
-work. Write-ack percentiles are `deferred` (`docs/history-g2-write-ack-deferral.md`).
+`HIST-009` fuzzy ranking and `HIST-010` repository context are `complete`.
+Write-ack percentiles are `deferred` (`docs/history-g2-write-ack-deferral.md`).
 
 Outcome: an opt-in, local sidecar that records Bash-approved history metadata and
 provides bounded search without modifying `.bash_history`, without synchronous
@@ -431,13 +432,13 @@ accept or revise these details before implementation:
 | `HIST-006` | Implement SQLite schema, migrations, permissions, retention, and writer | `complete` | `crates/cli/src/storage.rs` schema v1, WAL, `0700`/`0600`, retention prune, batched writer |
 | `HIST-011` | Implement exclusions, no-log policy, disable/path/clear/delete controls | `complete` | `crates/cli/src/policy.rs` plus `mbx history path|count|clear|delete` and env controls |
 | `HIST-007` | Add opt-in Bash observation and bounded protocol ingestion | `complete` | `bash/history.bash`, MBX2 RECORD ingestion, PTY recording/invariance tests, seeded 100k corpus, hostile inertness, query p95, concurrent-writer contention, prompt-boundary write-ack correctness, WAL crash/corrupt recovery, WAL/SHM `0600` never-more-permissive, many-match prefix covering index, writer idle-flush for live readers, 100k-row v1→v2 migration (`crates/cli/src/corpus.rs`), and foreign-user open (`docs/history-g2-foreign-user-plan.md`; F-1–F-4 in `crates/cli/src/storage.rs`); write-ack percentile leftover `deferred` (`docs/history-g2-write-ack-deferral.md`) |
-| `HIST-008` | Add recent, exact-prefix, cwd queries and deterministic ranking | `complete` | `mbx history search recent|prefix|cwd` with bounded limits and NOCASE prefix index |
+| `HIST-008` | Add recent, exact-prefix, cwd queries and deterministic ranking | `complete` | `mbx history search recent|prefix|cwd|failed` with bounded limits and NOCASE prefix index; failed leftover in `docs/hist-010-cli-filters-plan.md` |
 | `HIST-009` | Add bounded fuzzy ranking | `complete` | `docs/hist-009-fuzzy-plan.md`; `mbx history search fuzzy`; scores over the most recent 256 rows; `crates/cli/src/history.rs`, `storage.rs` |
-| `HIST-010` | Add repository context | `blocked` | history-scoped `GIT-003` root/branch provider subset |
+| `HIST-010` | Add repository context | `complete` | `docs/hist-010-git-003-plan.md`; schema v3; writer enrich from `start_cwd`; `mbx history search repo` / `search branch`; PTY `admitted_commands_record_repository_root_and_are_searchable_by_repo`; CLI leftovers in `docs/hist-010-cli-filters-plan.md` |
 
 Exit conditions: `G1` before capture can be enabled; `G2` before history-driven
 editor UI; full Phase 3 completion additionally requires `HIST-009` and
-`HIST-010`. Deferring either beyond the MVP requires an accepted scope/ADR
+`HIST-010` (both complete). Deferring either beyond the MVP requires an accepted scope/ADR
 decision and corresponding reconciliation of the authoritative product brief;
 the roadmap cannot make that scope change by itself.
 
@@ -505,13 +506,14 @@ Exit condition: `HLT-003`.
 
 ### Phase 7 — Git and provider expansion
 
-Status: `discovery`; a synchronous prompt-status subset was pulled forward.
+Status: `validation`; prompt status plus history-scoped root/branch exist.
+Upstream/branches/remotes/tags remain unauthorized until a later consumer.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
 | `GIT-001` | Typed prompt repository-status provider | `complete` | `crates/cli/src/provider.rs`, ADR 0007, and provider substitution/degradation tests |
 | `GIT-002` | Deadline, capped acquisition, TTL cache, refresh, invalidation | `complete` | ADR 0007, provider outcome/process/cache tests, and `docs/benchmarks/2026-08-15-solid-hardening.md` |
-| `GIT-003` | Repository root/branch context, then upstream/branches/remotes/tags | `blocked` | `HIST-010` is the first scoped consumer; no expansion is authorized yet |
+| `GIT-003` | Repository root/branch context, then upstream/branches/remotes/tags | `complete` | root/branch subset for `HIST-010` (`docs/hist-010-git-003-plan.md`); upstream/remotes/tags unauthorized |
 | `GIT-004` | Structured completion metadata/ranking | `complete` | `docs/git-004-kinds-plan.md`; git/ref/flag/file kinds beside `COMPREPLY`; `mbx_comp_git` fixture; no Git subprocess |
 | `GIT-005` | General provider capabilities/SDK | `deferred` | post-MVP evidence; ADR 0007 update required |
 
@@ -535,7 +537,7 @@ only when their indexed fields are reliable.
 | --- | --- | --- | --- |
 | `SRCH-001` | Configurable bounded history-search action and result view | `blocked` | unproven continuous decoration |
 | `SRCH-002` | Cancel restoration and exact insertion without execution | `blocked` | `SRCH-001`, `PTY-001` |
-| `SRCH-003` | Metadata filters, 100k-row latency, signal, and terminal-state evidence | `blocked` | `SRCH-002`; repository filters also need `HIST-010` |
+| `SRCH-003` | Metadata filters, 100k-row latency, signal, and terminal-state evidence | `blocked` | `SRCH-002`; CLI `search failed` / `search repo` / `search branch` exist; interactive filters still need the Ctrl+R UI |
 
 Exit condition: `SRCH-003`.
 
@@ -566,21 +568,17 @@ Exit condition: `G5` after every `HRD-*` item is complete.
 percentile leftovers are `deferred` and must not block product slices
 (`docs/latency-budget-deferral.md`).
 
-1. `GHST-003` full/word accept and cycling are recorded. Remaining ghost
-   printables, vi-insert wrapping, Left dismiss, and Home/Up/backward-word are
-   recorded (`docs/ghst-002-printables-plan.md`; `docs/ghst-002-vi-insert-plan.md`;
-   `docs/ghst-002-left-motion-plan.md`; `docs/ghst-002-home-up-motion-plan.md`;
-   `docs/ghst-002-home-up-motion-plan.md`; `docs/ghst-002-down-motion-plan.md`;
-   `docs/ghst-002-kill-ring-plan.md`). Partial `GHST-004` resize/exact-byte/PS2
-   evidence is in `docs/ghst-004-multiline-resize-plan.md` (R-1/Q-1/M-1) and
-   `docs/ghst-004-no-execution-plan.md` (C-1/B-1). Dim paint and async
-   stale-rejection remain blocked (decoration hook / IPC ADR). Latency matrix is
-   `deferred`. Do not mark `GHST-004` complete. Do not start highlighting or overlay.
+1. `HIST-010` / `GIT-003` repository context and CLI filters (`search repo` /
+   `search branch` / `search failed`) are on the landing branch. `PRM-006` is
+   `complete`. Ghost Strategy A is recorded; dim paint and async stale-rejection
+   remain blocked (decoration hook / IPC ADR). `GHST-004` latency is `deferred`.
+   Do not mark `GHST-004` complete. Do not start highlighting or overlay.
    `COMP-004` stays `discovery`. Do not mark `COMP-004` or `COMP-005` complete.
-2. Next named leftovers are `HIST-010` / `GIT-003` and remaining `SRCH-003`
-   work on other branches. Do not duplicate those PRs. Dim ghost paint stays
-   blocked on unproven after-every-key decoration.
-3. `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
+2. Remaining `SRCH-003` work is on other branches; do not duplicate those PRs.
+   Interactive repo/failed filters need the Strategy A search path once `HIST-010`
+   is on `main`.
+3. Next decision gate for ghost async is an MBX2 feature-IPC ADR (`GHST-001`).
+   `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
    slice on FND-001 SHA refresh or percentile benches unless a functional
    prompt-path defect is proven.
 
@@ -712,6 +710,8 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-16 | Ranked-accept replaces the current word when it is a prefix of `_MBX_COMP_RANKED_REPLY` (M-039). Stale unrelated words are refused. Snapshot clears at the next prompt. |
 | 2026-08-16 | Completed `GIT-004` Git completion kinds (`docs/git-004-kinds-plan.md`). `COMP-001` / `COMP-002` move to `complete` (G4 evidence; 5 ms `deferred`). |
 | 2026-08-16 | Completed `HIST-009` bounded fuzzy search (`docs/hist-009-fuzzy-plan.md`; `mbx history search fuzzy`). `HIST-010` remains. |
+| 2026-08-16 | Completed `HIST-010` / `GIT-003` repository root/branch on history rows (`docs/hist-010-git-003-plan.md`). Schema v3; MBX2 unchanged; writer enrich; `mbx history search repo`. Overlay stays unproven. |
+| 2026-08-16 | Completed HIST-010 CLI filter leftovers and `PRM-006` gate close (`docs/hist-010-cli-filters-plan.md`; `search branch`, `search failed`). `PRM-006` moves to `complete`. Overlay stays unproven. `SRCH-003` stays `blocked`. |
 | 2026-08-17 | Recorded opt-in inline ghost (`docs/ghst-002-inline-ghost-plan.md`; ADR 0010; G-1–G-6). Suffix after `READLINE_POINT`; Enter is a Readline kill-line + accept-line macro while a suffix is active (M-041). Do not mark `GHST-004` complete. Do not start highlighting or overlay. |
 | 2026-08-17 | Recorded ghost word-accept (`docs/ghst-003-word-accept-plan.md`; W-1–W-3). `\ef` / Ctrl-Right advance one alphanumeric word. Cycling remains. Do not mark `GHST-003` or `GHST-004` complete. |
 | 2026-08-17 | Recorded ghost cycling (`docs/ghst-003-cycle-plan.md`; C-1–C-3). `\C-x\C-n` / `\C-x\C-p` cycle prefix matches. `GHST-003` moves to `complete`. Do not mark `GHST-004` complete. Do not start highlighting or overlay. |
@@ -722,3 +722,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-19 | Recorded partial ghost `GHST-004` resize/quoted PTY evidence (`docs/ghst-004-multiline-resize-plan.md`; R-1/Q-1). Multiline PS2 and latency matrix remain. Do not mark `GHST-004` complete. |
 | 2026-08-19 | Recorded ghost `GHST-004` no-execution PTY evidence (`docs/ghst-004-no-execution-plan.md`; C-1/B-1). Latency matrix remains `deferred`. Do not mark `GHST-004` complete. |
 | 2026-08-20 | Recorded ghost Down / forward-history dismiss (`docs/ghst-002-down-motion-plan.md`; D-1–D-2). Dim paint and async stale-rejection remain blocked. Do not mark `GHST-004` complete. |
+| 2026-08-20 | Landed `HIST-010` / `GIT-003` + CLI filters onto main after ghost (`docs/hist-010-git-003-plan.md`; `docs/hist-010-cli-filters-plan.md`). Unblocks interactive repo/failed search consumers. |

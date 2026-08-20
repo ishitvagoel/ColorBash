@@ -17,5 +17,6 @@ Tab bytes stay stock. Do not wrap real `git` on default install (M-037).
 
 ## Remaining
 
-Overlay stays unproven. `GIT-003` / `HIST-010` remain a paired leftover.
+Overlay stays unproven. `GIT-003` / `HIST-010` repository root/branch on history
+rows is complete (`docs/hist-010-git-003-plan.md`).
 `GIT-005` stays post-MVP.

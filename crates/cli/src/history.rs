@@ -6,8 +6,10 @@ pub const DEFAULT_RETENTION_DAYS: u64 = 90;
 pub const DEFAULT_QUERY_LIMIT: usize = 50;
 pub const MAX_QUERY_LIMIT: usize = 500;
 pub const MAX_COMMAND_BYTES: usize = 64 * 1024;
-pub const SCHEMA_VERSION: i64 = 2;
+pub const SCHEMA_VERSION: i64 = 3;
 pub const FUZZY_CANDIDATE_LIMIT: usize = 256;
+pub const MAX_REPO_ROOT_BYTES: usize = 4096;
+pub const MAX_REPO_BRANCH_BYTES: usize = 256;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HistoryEntry {
@@ -21,6 +23,8 @@ pub struct HistoryEntry {
     pub duration_ms: Option<u64>,
     pub host: String,
     pub user: String,
+    pub repo_root: Option<String>,
+    pub repo_branch: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -114,7 +118,32 @@ pub trait HistorySearch: Send + Sync {
     fn recent(&self, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError>;
     fn exact_prefix(&self, prefix: &str, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError>;
     fn by_cwd(&self, cwd: &str, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError>;
+    fn by_repo(&self, repo_root: &str, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError>;
+    fn by_branch(&self, repo_branch: &str, limit: usize)
+    -> Result<Vec<HistoryEntry>, HistoryError>;
     fn fuzzy(&self, needle: &str, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError>;
+    fn failed(&self, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError>;
+}
+
+/// Accepts an absolute filesystem path for stored repository root metadata.
+pub fn sanitize_repo_root(value: &str) -> Option<String> {
+    sanitize_untrusted_field(value, MAX_REPO_ROOT_BYTES).filter(|root| root.starts_with('/'))
+}
+
+/// Accepts a Git branch or detached-HEAD name for stored repository metadata.
+pub fn sanitize_repo_branch(value: &str) -> Option<String> {
+    sanitize_untrusted_field(value, MAX_REPO_BRANCH_BYTES)
+}
+
+fn sanitize_untrusted_field(value: &str, max_bytes: usize) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed.len() > max_bytes {
+        return None;
+    }
+    if trimmed.bytes().any(|byte| byte < 0x20 || byte == 0x7f) {
+        return None;
+    }
+    Some(trimmed.to_owned())
 }
 
 /// Scores `command` against `needle` for bounded fuzzy ranking (HIST-009).
@@ -155,7 +184,7 @@ pub trait HistoryControl: Send + Sync {
 
 #[cfg(test)]
 mod tests {
-    use super::fuzzy_score;
+    use super::{fuzzy_score, sanitize_repo_branch, sanitize_repo_root};
 
     #[test]
     fn fuzzy_score_orders_exact_prefix_substring_then_subsequence() {
@@ -165,5 +194,34 @@ mod tests {
         assert_eq!(fuzzy_score("gst", "git status"), 50);
         assert_eq!(fuzzy_score("xyz", "git status"), 0);
         assert_eq!(fuzzy_score("", "git"), 0);
+    }
+
+    #[test]
+    fn sanitize_repo_fields_reject_relative_control_and_oversize() {
+        assert_eq!(
+            sanitize_repo_root("/workspace/repo"),
+            Some("/workspace/repo".to_owned())
+        );
+        assert_eq!(sanitize_repo_root("relative"), None);
+        assert_eq!(sanitize_repo_root("/tmp/\x1bunsafe"), None);
+        assert_eq!(sanitize_repo_root(""), None);
+        assert_eq!(
+            sanitize_repo_root(&format!(
+                "/{}",
+                "a".repeat(crate::history::MAX_REPO_ROOT_BYTES)
+            )),
+            None
+        );
+        assert_eq!(
+            sanitize_repo_branch("hist-branch"),
+            Some("hist-branch".to_owned())
+        );
+        assert_eq!(
+            sanitize_repo_branch("feature/auth"),
+            Some("feature/auth".to_owned())
+        );
+        assert_eq!(sanitize_repo_branch("HEAD"), Some("HEAD".to_owned()));
+        assert_eq!(sanitize_repo_branch("bad\nbranch"), None);
+        assert_eq!(sanitize_repo_branch(""), None);
     }
 }

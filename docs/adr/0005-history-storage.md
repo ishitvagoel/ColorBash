@@ -84,9 +84,14 @@ and exit-flush behavior. This ADR binds the sidecar to that observed authority.
 | `duration_ms` | integer or NULL | NULL when timing is disabled or unknown |
 | `host` | text | hostname |
 | `user` | text | username |
+| `repo_root` | text or NULL | worktree toplevel from trusted Git lookup at write time; NULL when Git is disabled, the cwd is not a repository, lookup fails, or the row predates schema v3 |
+| `repo_branch` | text or NULL | branch or detached `HEAD` name from the same lookup; NULL when root is absent or the ref cannot be read |
 
 `status`/`duration_ms` attach at the prompt boundary after completion; an entry
 whose status cannot be attributed drops per the ambiguity rule.
+`repo_root`/`repo_branch` are **not** MBX2 fields. The writer enriches them
+from absolute `start_cwd` using the ADR 0007 Git adapter, outside the SQLite
+transaction. Failure never drops the history row.
 
 ### 5. Storage, permissions, and lifecycle
 
@@ -105,12 +110,12 @@ whose status cannot be attributed drops per the ambiguity rule.
 
 ### 6. Schema, versioning, and migrations
 
-- SQLite schema v1 with forward-only migrations to v2 (`PRAGMA user_version`);
-  applied by the writer before use. See ADR 0008 for the v2 covering prefix
-  index.
+- SQLite schema v1 with forward-only migrations to v3 (`PRAGMA user_version`);
+  v2 added the covering prefix index (ADR 0008); v3 adds nullable
+  `repo_root`/`repo_branch` for `HIST-010`. Applied by the writer before use.
 - Indexes: `(completed_at DESC)`, `(command_text COLLATE NOCASE)` prefix
   support, `(command_text COLLATE NOCASE, completed_at DESC, event_sequence DESC)`
-  covering prefix support (v2), `(start_cwd)`, and the unique
+  covering prefix support (v2), `(start_cwd)`, `(repo_root)` (v3), and the unique
   `(session_id, event_sequence)`.
 - The schema stores values only through parameterized statements; command text
   is inert data, never SQL or terminal control.
@@ -169,8 +174,9 @@ whose status cannot be attributed drops per the ambiguity rule.
   and therefore become **MBX2**, per the boundary already stated in
   `docs/protocol.md`.
 - MBX2 RECORD framing is specified in `docs/protocol-mbx2.md` and implemented
-  for Phase 3A ingestion. The existing coprocess/socket transports and their
-  bounds remain the framing baseline. Later MBX2 kinds are a later revision.
+  for Phase 3A ingestion. Repository context is stored by the writer and is not
+  an MBX2 field. The existing coprocess/socket transports and their bounds
+  remain the framing baseline. Later MBX2 kinds are a later revision.
 
 ### 10. Sequencing
 
@@ -227,6 +233,9 @@ whose status cannot be attributed drops per the ambiguity rule.
   F-1–F-4 in `crates/cli/src/storage.rs`); write-ack percentile leftover
   `deferred` (WSL and cloud remeasure miss preserved; budget not weakened);
   and command-text-free diagnostics.
+- `HIST-010` / `GIT-003` root/branch evidence: schema v3, writer enrichment
+  outside the SQLite transaction, `mbx history search repo`, and PTY capture
+  (`docs/hist-010-git-003-plan.md`).
 - Every claim in this ADR maps to a test in `HIST-005`–`HIST-008`,
-  `HIST-011`–`HIST-013`. `G2` is complete with the write-ack percentile
+  `HIST-011`–`HIST-013`, plus `HIST-010` repository context. `G2` is complete with the write-ack percentile
   leftover deferred.

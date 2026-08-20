@@ -121,8 +121,11 @@ The important production dependency direction is toward abstractions:
   transport-independent `PromptContext` before calling the renderer.
 - the repository segment accepts `RepositoryStatusProvider` and does not spawn
   Git itself.
+- history capture accepts `RepositoryContextProvider` for optional root/branch
+  enrichment at write time; CLI search does not spawn Git.
 - `lib.rs` constructs `GitRepositoryStatusProvider` and injects it into the
-  standard renderer.
+  standard renderer. `app.rs` injects the same adapter (or a null provider when
+  `MBX_DISABLE_GIT=1`) into the history writer.
 - history CLI and MBX2 handling depend on `HistoryPolicy`, `HistoryRecorder`,
   `HistorySearch`, and `HistoryControl`; `app.rs` opens the store only after
   `MBX_HISTORY=1` is established.
@@ -165,6 +168,7 @@ The main extension and test seams are:
 | prompt rendering | `PromptRendering` | `PromptRenderer`; service tests inject a stub renderer |
 | prompt composition | `PromptSegmentProvider` list | ordered built-in segments or injected providers |
 | repository state | `RepositoryStatusProvider` | Git adapter or an in-memory static provider |
+| repository root/branch | `RepositoryContextProvider` | same Git adapter, a null provider, or a test substitute |
 | history policy | `HistoryPolicy` | `EnvironmentHistoryPolicy` or allow/deny substitutes |
 | history record | `HistoryRecorder` | `QueuedHistoryStore` or recording substitutes |
 | history search | `HistorySearch` | SQLite reader or in-memory substitutes |
@@ -329,12 +333,15 @@ helper drops enhancement data only and must not block prompt construction.
 The helper opens `$XDG_DATA_HOME/mbx/history.sqlite3` (falling back to
 `$HOME/.local/share/mbx/history.sqlite3`) with directory mode `0700` and file
 mode `0600`. A bounded in-process queue acknowledges enqueue; a per-session
-writer commits schema v2 in WAL mode (forward-only migration from v1; see ADR
-0008), idle-flushes partial batches when the queue is empty while keeping
+writer commits schema v3 in WAL mode (forward-only migration from v1/v2; v2 is
+ADR 0008, v3 adds nullable `repo_root`/`repo_branch`), idle-flushes partial batches when the queue is empty while keeping
 `WRITER_BATCH_SIZE=32` for busy ingest, applies retention after full batches
 and shutdown, and treats `(session_id, event_sequence)` as the idempotency key.
 `ACK` means the record was accepted by the queue, not that SQLite has committed.
-Search is a direct CLI operation (`mbx history search recent|prefix|cwd`), not
+The writer may enrich `repo_root`/`repo_branch` from absolute `start_cwd` using
+the ADR 0007 Git adapter **before** `BEGIN IMMEDIATE`; timeout, disable, or
+absence leave NULLs and still insert the row. Search is a direct CLI operation
+(`mbx history search recent|prefix|cwd|repo|branch|fuzzy|failed`), not
 an MBX2 query.
 `path`, `count`, `clear`, and `delete` are the privacy controls. Command text
 never enters traces.
@@ -405,7 +412,7 @@ highlighting:
    `docs/g4-gate-close-plan.md`, and COMP-003 K-1–K-4 typed metadata in
    `docs/comp-003-metadata-plan.md`);
 6. duration timing remains opt-in; do not compose unknown `DEBUG` traps
-   (`docs/prm-006-duration-plan.md`).
+   (`docs/prm-006-duration-plan.md`; `PRM-006` complete).
 
 The stock-completion adapter (`bash/completion.bash`, ADR 0006) keeps `COMPREPLY`
 insertion authoritative and records additive `_MBX_COMP_KINDS` / `_MBX_COMP_DESCS`

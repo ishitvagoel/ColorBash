@@ -1,14 +1,18 @@
 use crate::history::{
     HistoryControl, HistoryEntry, HistoryError, HistoryErrorKind, HistoryRecorder, HistorySearch,
-    SCHEMA_VERSION,
+    SCHEMA_VERSION, sanitize_repo_branch, sanitize_repo_root,
+};
+use crate::provider::{
+    NullRepositoryContextProvider, RepositoryContext, RepositoryContextProvider,
 };
 use crate::telemetry::trace_message;
+use std::collections::HashMap;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, SyncSender, TryRecvError, TrySendError};
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use rusqlite::OpenFlags;
 
@@ -17,6 +21,8 @@ const FILE_MODE: u32 = 0o600;
 const BUSY_TIMEOUT_MS: u64 = 100;
 const MIGRATE_BUSY_DEADLINE_MS: u64 = 2_000;
 const WRITER_BATCH_SIZE: usize = 32;
+const REPO_CONTEXT_CACHE_CAPACITY: usize = 128;
+const REPO_CONTEXT_CACHE_TTL: Duration = Duration::from_secs(1);
 
 const SCHEMA_V1: &str = "
 CREATE TABLE IF NOT EXISTS history (
@@ -42,20 +48,29 @@ CREATE INDEX IF NOT EXISTS history_prefix_completed
     ON history (command_text COLLATE NOCASE, completed_at DESC, event_sequence DESC);
 ";
 
+const SCHEMA_V3_COLUMNS: &str = "
+ALTER TABLE history ADD COLUMN repo_root TEXT;
+ALTER TABLE history ADD COLUMN repo_branch TEXT;
+CREATE INDEX IF NOT EXISTS history_repo_root ON history (repo_root);
+";
+
+const HISTORY_COLUMNS: &str = "session_id, event_sequence, history_number, command_text, \
+     start_cwd, completed_at, status, duration_ms, host, user, repo_root, repo_branch";
+
 const EXACT_PREFIX_SQL: &str = "SELECT session_id, event_sequence, history_number, command_text, \
-     start_cwd, completed_at, status, duration_ms, host, user \
+     start_cwd, completed_at, status, duration_ms, host, user, repo_root, repo_branch \
      FROM history INDEXED BY history_prefix_completed \
      WHERE command_text COLLATE NOCASE LIKE ?1 \
      ORDER BY completed_at DESC, event_sequence DESC LIMIT ?2";
 
 const EXACT_PREFIX_ESCAPE_SQL: &str = "SELECT session_id, event_sequence, history_number, \
-     command_text, start_cwd, completed_at, status, duration_ms, host, user \
+     command_text, start_cwd, completed_at, status, duration_ms, host, user, repo_root, repo_branch \
      FROM history INDEXED BY history_prefix_completed \
      WHERE command_text COLLATE NOCASE LIKE ?1 ESCAPE '\\' \
      ORDER BY completed_at DESC, event_sequence DESC LIMIT ?2";
 
 enum QueueMessage {
-    Write(HistoryEntry),
+    Write(Box<HistoryEntry>),
     Shutdown,
 }
 
@@ -86,11 +101,47 @@ impl QueuedHistoryStore {
         )
     }
 
+    pub fn open_with_context(
+        path: &Path,
+        queue_capacity: usize,
+        context: Box<dyn RepositoryContextProvider>,
+    ) -> Result<Self, HistoryError> {
+        Self::open_with_limits_and_context(
+            path,
+            queue_capacity,
+            env_u64(
+                "MBX_HISTORY_RETENTION_ROWS",
+                crate::history::DEFAULT_RETENTION_ROWS,
+            ),
+            env_u64(
+                "MBX_HISTORY_RETENTION_DAYS",
+                crate::history::DEFAULT_RETENTION_DAYS,
+            ),
+            context,
+        )
+    }
+
     pub(crate) fn open_with_limits(
         path: &Path,
         queue_capacity: usize,
         max_rows: u64,
         retention_days: u64,
+    ) -> Result<Self, HistoryError> {
+        Self::open_with_limits_and_context(
+            path,
+            queue_capacity,
+            max_rows,
+            retention_days,
+            Box::new(NullRepositoryContextProvider),
+        )
+    }
+
+    pub(crate) fn open_with_limits_and_context(
+        path: &Path,
+        queue_capacity: usize,
+        max_rows: u64,
+        retention_days: u64,
+        context: Box<dyn RepositoryContextProvider>,
     ) -> Result<Self, HistoryError> {
         let store_path = path.to_path_buf();
         create_store_dir(&store_path)?;
@@ -100,7 +151,7 @@ impl QueuedHistoryStore {
             max_rows,
             retention_days,
         };
-        let writer = thread::spawn(move || writer_loop(receiver, connection, settings));
+        let writer = thread::spawn(move || writer_loop(receiver, connection, settings, context));
         Ok(Self {
             sender,
             store_path,
@@ -150,8 +201,10 @@ fn writer_loop(
     receiver: Receiver<QueueMessage>,
     connection: rusqlite::Connection,
     settings: WriterSettings,
+    context: Box<dyn RepositoryContextProvider>,
 ) {
     let mut pending = 0usize;
+    let mut repo_cache = RepoContextCache::default();
     loop {
         let message = if pending == 0 {
             match receiver.recv() {
@@ -182,6 +235,9 @@ fn writer_loop(
         };
         match message {
             QueueMessage::Write(entry) => {
+                // Enrich outside the SQLite transaction so Git cannot hold the
+                // writer lock (M-032). Timeout/absence still insert the row.
+                let entry = enrich_repo_context(*entry, context.as_ref(), &mut repo_cache);
                 if pending == 0
                     && execute_batch_with_lock_retry_until(
                         &connection,
@@ -235,7 +291,7 @@ impl Drop for QueuedHistoryStore {
 impl HistoryRecorder for QueuedHistoryStore {
     fn record(&self, entry: HistoryEntry) -> Result<(), HistoryError> {
         crate::history::validate_entry(&entry)?;
-        match self.sender.try_send(QueueMessage::Write(entry)) {
+        match self.sender.try_send(QueueMessage::Write(Box::new(entry))) {
             Ok(()) => Ok(()),
             Err(TrySendError::Full(_)) => Err(HistoryError::new(
                 HistoryErrorKind::QueueFull,
@@ -254,9 +310,10 @@ impl HistorySearch for QueuedHistoryStore {
         let connection = open_read_connection(&self.store_path)?;
         query(
             &connection,
-            "SELECT session_id, event_sequence, history_number, command_text, start_cwd, \
-             completed_at, status, duration_ms, host, user \
-             FROM history ORDER BY completed_at DESC, event_sequence DESC LIMIT ?1",
+            &format!(
+                "SELECT {HISTORY_COLUMNS} \
+                 FROM history ORDER BY completed_at DESC, event_sequence DESC LIMIT ?1"
+            ),
             &[limit.to_string()],
         )
     }
@@ -280,11 +337,42 @@ impl HistorySearch for QueuedHistoryStore {
         let connection = open_read_connection(&self.store_path)?;
         query(
             &connection,
-            "SELECT session_id, event_sequence, history_number, command_text, start_cwd, \
-             completed_at, status, duration_ms, host, user \
-             FROM history WHERE start_cwd = ?1 \
-             ORDER BY completed_at DESC, event_sequence DESC LIMIT ?2",
+            &format!(
+                "SELECT {HISTORY_COLUMNS} \
+                 FROM history WHERE start_cwd = ?1 \
+                 ORDER BY completed_at DESC, event_sequence DESC LIMIT ?2"
+            ),
             &[cwd.to_owned(), limit.to_string()],
+        )
+    }
+
+    fn by_repo(&self, repo_root: &str, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError> {
+        let connection = open_read_connection(&self.store_path)?;
+        query(
+            &connection,
+            &format!(
+                "SELECT {HISTORY_COLUMNS} \
+                 FROM history WHERE repo_root = ?1 \
+                 ORDER BY completed_at DESC, event_sequence DESC LIMIT ?2"
+            ),
+            &[repo_root.to_owned(), limit.to_string()],
+        )
+    }
+
+    fn by_branch(
+        &self,
+        repo_branch: &str,
+        limit: usize,
+    ) -> Result<Vec<HistoryEntry>, HistoryError> {
+        let connection = open_read_connection(&self.store_path)?;
+        query(
+            &connection,
+            &format!(
+                "SELECT {HISTORY_COLUMNS} \
+                 FROM history WHERE repo_branch = ?1 \
+                 ORDER BY completed_at DESC, event_sequence DESC LIMIT ?2"
+            ),
+            &[repo_branch.to_owned(), limit.to_string()],
         )
     }
 
@@ -301,6 +389,19 @@ impl HistorySearch for QueuedHistoryStore {
         });
         pool.truncate(limit);
         Ok(pool)
+    }
+
+    fn failed(&self, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError> {
+        let connection = open_read_connection(&self.store_path)?;
+        query(
+            &connection,
+            &format!(
+                "SELECT {HISTORY_COLUMNS} \
+                 FROM history WHERE status != 0 \
+                 ORDER BY completed_at DESC, event_sequence DESC LIMIT ?1"
+            ),
+            &[limit.to_string()],
+        )
     }
 }
 
@@ -516,6 +617,9 @@ fn try_migrate(connection: &rusqlite::Connection) -> Result<(), rusqlite::Error>
         if version < 2 {
             connection.execute_batch(SCHEMA_V2_INDEX)?;
         }
+        if version < 3 {
+            connection.execute_batch(SCHEMA_V3_COLUMNS)?;
+        }
         connection.execute(&format!("PRAGMA user_version = {SCHEMA_VERSION}"), [])?;
         Ok(())
     })();
@@ -573,8 +677,8 @@ fn insert(connection: &rusqlite::Connection, entry: &HistoryEntry) -> Result<(),
         .execute(
             "INSERT OR IGNORE INTO history \
              (session_id, event_sequence, history_number, command_text, start_cwd, \
-              completed_at, status, duration_ms, host, user) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+              completed_at, status, duration_ms, host, user, repo_root, repo_branch) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             rusqlite::params![
                 entry.session_id,
                 entry.event_sequence,
@@ -586,10 +690,84 @@ fn insert(connection: &rusqlite::Connection, entry: &HistoryEntry) -> Result<(),
                 entry.duration_ms,
                 entry.host,
                 entry.user,
+                entry.repo_root,
+                entry.repo_branch,
             ],
         )
         .map_err(history_error(HistoryErrorKind::Write))?;
     Ok(())
+}
+
+#[derive(Default)]
+struct RepoContextCache {
+    entries: HashMap<String, (Instant, Option<RepositoryContext>)>,
+}
+
+impl RepoContextCache {
+    fn get(&self, cwd: &str) -> Option<Option<RepositoryContext>> {
+        let (recorded_at, value) = self.entries.get(cwd)?;
+        if recorded_at.elapsed() < REPO_CONTEXT_CACHE_TTL {
+            Some(value.clone())
+        } else {
+            None
+        }
+    }
+
+    fn insert(&mut self, cwd: String, value: Option<RepositoryContext>) {
+        if REPO_CONTEXT_CACHE_CAPACITY == 0 {
+            return;
+        }
+        if !self.entries.contains_key(&cwd) && self.entries.len() >= REPO_CONTEXT_CACHE_CAPACITY {
+            if let Some(oldest) = self
+                .entries
+                .iter()
+                .min_by_key(|(_, (recorded_at, _))| *recorded_at)
+                .map(|(key, _)| key.clone())
+            {
+                self.entries.remove(&oldest);
+            }
+        }
+        self.entries.insert(cwd, (Instant::now(), value));
+    }
+}
+
+fn enrich_repo_context(
+    mut entry: HistoryEntry,
+    provider: &dyn RepositoryContextProvider,
+    cache: &mut RepoContextCache,
+) -> HistoryEntry {
+    if entry.repo_root.is_some() || entry.repo_branch.is_some() {
+        return sanitize_entry_repo_fields(entry);
+    }
+    if !Path::new(&entry.start_cwd).is_absolute() {
+        return entry;
+    }
+    let resolved = if let Some(cached) = cache.get(&entry.start_cwd) {
+        cached
+    } else {
+        let looked_up = provider
+            .context(Path::new(&entry.start_cwd))
+            .unwrap_or_default();
+        cache.insert(entry.start_cwd.clone(), looked_up.clone());
+        looked_up
+    };
+    if let Some(context) = resolved {
+        entry.repo_root = sanitize_repo_root(&context.root);
+        entry.repo_branch = context.branch.as_deref().and_then(sanitize_repo_branch);
+        if entry.repo_root.is_none() {
+            entry.repo_branch = None;
+        }
+    }
+    entry
+}
+
+fn sanitize_entry_repo_fields(mut entry: HistoryEntry) -> HistoryEntry {
+    entry.repo_root = entry.repo_root.as_deref().and_then(sanitize_repo_root);
+    entry.repo_branch = entry.repo_branch.as_deref().and_then(sanitize_repo_branch);
+    if entry.repo_root.is_none() {
+        entry.repo_branch = None;
+    }
+    entry
 }
 
 fn prune(connection: &rusqlite::Connection, settings: &WriterSettings) -> Result<(), HistoryError> {
@@ -686,6 +864,8 @@ fn query(
                 duration_ms: row.get(7)?,
                 host: row.get(8)?,
                 user: row.get(9)?,
+                repo_root: row.get(10)?,
+                repo_branch: row.get(11)?,
             })
         })
         .map_err(history_error(HistoryErrorKind::Read))?;
@@ -755,6 +935,8 @@ mod tests {
             duration_ms: None,
             host: "host".to_owned(),
             user: "user".to_owned(),
+            repo_root: None,
+            repo_branch: None,
         }
     }
 
@@ -915,6 +1097,9 @@ mod tests {
                 let _ = store.recent(10);
                 let _ = store.exact_prefix("cmd", 5);
                 let _ = store.by_cwd("/w", 5);
+                let _ = store.by_repo("/w", 5);
+                let _ = store.by_branch("main", 5);
+                let _ = store.failed(5);
                 thread::yield_now();
             }
         });
@@ -1019,6 +1204,7 @@ mod tests {
         assert_eq!(tables, 1);
         assert_eq!(index_count(&connection, "history_prefix"), 1);
         assert_eq!(index_count(&connection, "history_prefix_completed"), 1);
+        assert_eq!(index_count(&connection, "history_repo_root"), 1);
         drop(connection);
         drop(dir);
     }
@@ -1781,9 +1967,10 @@ mod tests {
         let version: i64 = connection
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 2);
+        assert_eq!(version, SCHEMA_VERSION);
         assert_eq!(index_count(&connection, "history_prefix"), 1);
         assert_eq!(index_count(&connection, "history_prefix_completed"), 1);
+        assert_eq!(index_count(&connection, "history_repo_root"), 1);
         assert_eq!(count_rows(&path), 1);
         assert_eq!(
             QueuedHistoryStore::open(&path, 8)
@@ -1809,9 +1996,242 @@ mod tests {
         let version: i64 = connection
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 2);
+        assert_eq!(version, SCHEMA_VERSION);
         assert_eq!(index_count(&connection, "history_prefix"), 1);
         assert_eq!(index_count(&connection, "history_prefix_completed"), 1);
+        assert_eq!(index_count(&connection, "history_repo_root"), 1);
+        drop(dir);
+    }
+
+    #[test]
+    fn schema_v2_store_migrates_to_v3_repo_columns() {
+        let (dir, path) = temp_store("v2v3");
+        {
+            let connection = rusqlite::Connection::open(&path).unwrap();
+            connection
+                .execute_batch("PRAGMA journal_mode=WAL;")
+                .unwrap();
+            connection.execute_batch(SCHEMA_V1).unwrap();
+            connection.execute_batch(SCHEMA_V2_INDEX).unwrap();
+            connection.execute("PRAGMA user_version = 2", []).unwrap();
+            connection
+                .execute(
+                    "INSERT OR IGNORE INTO history \
+                     (session_id, event_sequence, history_number, command_text, start_cwd, \
+                      completed_at, status, duration_ms, host, user) \
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                    rusqlite::params![
+                        "s1",
+                        1u64,
+                        1i64,
+                        "git status",
+                        "/w",
+                        "2026-08-16T16:00:00Z",
+                        0i32,
+                        None::<u64>,
+                        "host",
+                        "user",
+                    ],
+                )
+                .unwrap();
+        }
+        let store = QueuedHistoryStore::open(&path, 8).unwrap();
+        drop(store);
+        let connection = rusqlite::Connection::open(&path).unwrap();
+        let version: i64 = connection
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, SCHEMA_VERSION);
+        assert_eq!(index_count(&connection, "history_repo_root"), 1);
+        let migrated = QueuedHistoryStore::open(&path, 8)
+            .unwrap()
+            .recent(1)
+            .unwrap();
+        assert_eq!(migrated[0].command_text, "git status");
+        assert_eq!(migrated[0].repo_root, None);
+        assert_eq!(migrated[0].repo_branch, None);
+        drop(dir);
+    }
+
+    struct StaticContextProvider {
+        calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+        result: Result<Option<RepositoryContext>, crate::provider::ProviderError>,
+    }
+
+    impl RepositoryContextProvider for StaticContextProvider {
+        fn context(
+            &self,
+            _cwd: &Path,
+        ) -> Result<Option<RepositoryContext>, crate::provider::ProviderError> {
+            self.calls
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            self.result.clone()
+        }
+    }
+
+    #[test]
+    fn writer_enriches_from_context_provider_and_caches_cwd() {
+        let (dir, path) = temp_store("enrich");
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        {
+            let store = QueuedHistoryStore::open_with_context(
+                &path,
+                8,
+                Box::new(StaticContextProvider {
+                    calls: std::sync::Arc::clone(&calls),
+                    result: Ok(Some(RepositoryContext {
+                        root: "/repo/root".to_owned(),
+                        branch: Some("hist-branch".to_owned()),
+                    })),
+                }),
+            )
+            .unwrap();
+            enqueue(
+                &store,
+                entry("s1", 1, "echo one", "/work", "2026-08-16T16:00:00Z"),
+            );
+            enqueue(
+                &store,
+                entry("s1", 2, "echo two", "/work", "2026-08-16T16:00:01Z"),
+            );
+        }
+        assert_eq!(calls.load(std::sync::atomic::Ordering::Relaxed), 1);
+        let store = QueuedHistoryStore::open(&path, 8).unwrap();
+        let rows = store.recent(2).unwrap();
+        assert_eq!(rows[0].command_text, "echo two");
+        assert_eq!(rows[0].repo_root.as_deref(), Some("/repo/root"));
+        assert_eq!(rows[0].repo_branch.as_deref(), Some("hist-branch"));
+        assert_eq!(rows[1].repo_root.as_deref(), Some("/repo/root"));
+        let by_repo = store.by_repo("/repo/root", 10).unwrap();
+        assert_eq!(by_repo.len(), 2);
+        let by_branch = store.by_branch("hist-branch", 10).unwrap();
+        assert_eq!(by_branch.len(), 2);
+        drop(dir);
+    }
+
+    #[test]
+    fn by_branch_matches_exact_name_newest_first() {
+        let (dir, path) = temp_store("by-branch");
+        {
+            let store = QueuedHistoryStore::open(&path, 32).unwrap();
+            let mut main_old = entry("s1", 1, "echo main-old", "/w", "2026-08-16T16:00:00Z");
+            main_old.repo_root = Some("/repo/root".to_owned());
+            main_old.repo_branch = Some("main".to_owned());
+            store.record(main_old).unwrap();
+            let mut hist_old = entry("s1", 2, "echo hist-old", "/w", "2026-08-16T16:00:01Z");
+            hist_old.repo_root = Some("/repo/root".to_owned());
+            hist_old.repo_branch = Some("hist-branch".to_owned());
+            store.record(hist_old).unwrap();
+            let mut hist_new = entry("s1", 3, "echo hist-new", "/w", "2026-08-16T16:00:02Z");
+            hist_new.repo_root = Some("/other/root".to_owned());
+            hist_new.repo_branch = Some("hist-branch".to_owned());
+            store.record(hist_new).unwrap();
+            store
+                .record(entry("s1", 4, "echo none", "/w", "2026-08-16T16:00:03Z"))
+                .unwrap();
+        }
+        let store = QueuedHistoryStore::open(&path, 32).unwrap();
+        let rows = store.by_branch("hist-branch", 10).unwrap();
+        assert_eq!(
+            rows.iter()
+                .map(|row| row.command_text.as_str())
+                .collect::<Vec<_>>(),
+            ["echo hist-new", "echo hist-old"]
+        );
+        let limited = store.by_branch("hist-branch", 1).unwrap();
+        assert_eq!(limited.len(), 1);
+        assert_eq!(limited[0].command_text, "echo hist-new");
+        assert!(store.by_branch("missing", 10).unwrap().is_empty());
+        drop(dir);
+    }
+
+    #[test]
+    fn failed_returns_nonzero_status_newest_first() {
+        let (dir, path) = temp_store("failed");
+        {
+            let store = QueuedHistoryStore::open(&path, 32).unwrap();
+            let mut first = entry("s1", 1, "false", "/w", "2026-08-15T10:00:00Z");
+            first.status = 1;
+            store.record(first).unwrap();
+            store
+                .record(entry("s1", 2, "true", "/w", "2026-08-15T10:00:01Z"))
+                .unwrap();
+            let mut third = entry("s1", 3, "exit 2", "/w", "2026-08-15T10:00:02Z");
+            third.status = 2;
+            store.record(third).unwrap();
+            let mut fourth = entry("s1", 4, "old-fail", "/w", "2026-08-15T09:59:00Z");
+            fourth.status = 127;
+            store.record(fourth).unwrap();
+        }
+        let store = QueuedHistoryStore::open(&path, 32).unwrap();
+        let rows = store.failed(10).unwrap();
+        assert_eq!(
+            rows.iter()
+                .map(|row| row.command_text.as_str())
+                .collect::<Vec<_>>(),
+            ["exit 2", "false", "old-fail"]
+        );
+        assert!(rows.iter().all(|row| row.status != 0));
+        let limited = store.failed(2).unwrap();
+        assert_eq!(limited.len(), 2);
+        assert_eq!(limited[0].command_text, "exit 2");
+        assert_eq!(limited[1].command_text, "false");
+        drop(dir);
+    }
+
+    #[test]
+    fn writer_keeps_the_row_when_context_lookup_fails() {
+        let (dir, path) = temp_store("enrich-fail");
+        {
+            let store = QueuedHistoryStore::open_with_context(
+                &path,
+                8,
+                Box::new(StaticContextProvider {
+                    calls: std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+                    result: Err(crate::provider::ProviderError::message("timeout")),
+                }),
+            )
+            .unwrap();
+            enqueue(
+                &store,
+                entry("s1", 1, "echo keep", "/work", "2026-08-16T16:00:00Z"),
+            );
+        }
+        let store = QueuedHistoryStore::open(&path, 8).unwrap();
+        let rows = store.recent(1).unwrap();
+        assert_eq!(rows[0].command_text, "echo keep");
+        assert_eq!(rows[0].repo_root, None);
+        assert_eq!(rows[0].repo_branch, None);
+        drop(dir);
+    }
+
+    #[test]
+    fn writer_preserves_prefilled_repo_fields_without_lookup() {
+        let (dir, path) = temp_store("enrich-pref");
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        {
+            let store = QueuedHistoryStore::open_with_context(
+                &path,
+                8,
+                Box::new(StaticContextProvider {
+                    calls: std::sync::Arc::clone(&calls),
+                    result: Ok(Some(RepositoryContext {
+                        root: "/ignored".to_owned(),
+                        branch: Some("ignored".to_owned()),
+                    })),
+                }),
+            )
+            .unwrap();
+            let mut prefilled = entry("s1", 1, "echo pref", "/work", "2026-08-16T16:00:00Z");
+            prefilled.repo_root = Some("/explicit/root".to_owned());
+            prefilled.repo_branch = Some("explicit".to_owned());
+            enqueue(&store, prefilled);
+        }
+        assert_eq!(calls.load(std::sync::atomic::Ordering::Relaxed), 0);
+        let store = QueuedHistoryStore::open(&path, 8).unwrap();
+        let rows = store.recent(1).unwrap();
+        assert_eq!(rows[0].repo_root.as_deref(), Some("/explicit/root"));
+        assert_eq!(rows[0].repo_branch.as_deref(), Some("explicit"));
         drop(dir);
     }
 
