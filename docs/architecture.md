@@ -343,7 +343,8 @@ The writer may enrich `repo_root`/`repo_branch` from absolute `start_cwd` using
 the ADR 0007 Git adapter **before** `BEGIN IMMEDIATE`; timeout, disable, or
 absence leave NULLs and still insert the row. Search is a direct CLI operation
 (`mbx history search recent|prefix|cwd|repo|branch|fuzzy|failed`), not
-an MBX2 query.
+an MBX2 query today. ADR 0011 accepts future MBX2 QUERY/RESULT/CANCEL for
+async feature lookups (`GHST-001`); sync CLI search remains for operator tools.
 `path`, `count`, `clear`, and `delete` are the privacy controls. Command text
 never enters traces.
 

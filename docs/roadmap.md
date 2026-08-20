@@ -6,10 +6,10 @@
 > intended program and are not a status tracker.
 
 - Last reviewed: 2026-08-25 UTC
-- Current milestone: Phase 3 sidecar and Strategy A ghost are on main; `G0`–`G4` complete
-- Active workstream: ADR 0011 (draft PR #40) then MBX2 QUERY wire (draft PR #41); rebase Strategy A search (draft PR #37)
-- Next decision gate: land ADR 0011 to unblock `GHST-001`. Continuous decoration **defers** highlighting and GUI overlay only; it does not block Strategy A `bind -x` or suffix-in-buffer work
-- Editor-facing work: opt-in ghost suffix is on main (ADR 0010). Strategy A history search is `ready`. Highlighting, dim paint, and GUI overlays are `deferred` from this MVP (G5 revisit)
+- Current milestone: Phase 3 sidecar and Strategy A ghost are on main; `G0`–`G4` complete; ADR 0011 accepted
+- Active workstream: MBX2 QUERY wire for `GHST-001`; then wire ghost onto QUERY; rebase Strategy A search (draft PR #37)
+- Next decision gate: implement MBX2 QUERY/RESULT/CANCEL wire. Continuous decoration **defers** highlighting and GUI overlay only
+- Editor-facing work: opt-in ghost suffix is on main (ADR 0010). Async ghost lookup is `ready` (ADR 0011). Strategy A history search is `ready`. Highlighting, dim paint, and GUI overlays are `deferred` from this MVP (G5 revisit)
 - Timing policy: unmet percentile targets are `deferred` and do not block
   product development (`docs/latency-budget-deferral.md`)
 
@@ -132,7 +132,8 @@ Not implemented:
 - live highlighting, dim after-every-key paint, or a GUI completion / Ctrl+R
   overlay (`deferred` from this Strategy A MVP; G5 revisit);
 - Strategy A history-search UI (explicit `bind -x`; draft PR #37, not on main);
-- asynchronous feature IPC (`GHST-001`; draft ADR 0011 is PR #40);
+- asynchronous feature IPC wire (`GHST-001`; ADR 0011 accepted; QUERY layout
+  remains);
 - arbitrary key-injection coverage (Tab, arrows, stock Ctrl+R), the release
   platform matrix, or remaining `G0` platform-matrix evidence; or
 - prompt-boundary write-ack percentile budget (correctness recorded; p95 miss
@@ -339,7 +340,7 @@ pass unless an ADR ratifies them.
 | 1 | Bootstrap | `complete` | CI linked; broader lifecycle tracing deferred |
 | 2 | Prompt | `complete` | capability/width/wrap recorded; `PRM-004` percentiles `deferred` |
 | 3 | History | `complete` | Phase 3A / `G2` complete; `HIST-009` and `HIST-010` complete; write-ack percentiles `deferred` |
-| 4 | Ghost suggestions | `validation` | ADR 0010 suffix on main; `GHST-001` waits on ADR 0011 (PR #40); dim paint `deferred`; do not mark `GHST-004` complete |
+| 4 | Ghost suggestions | `validation` | ADR 0010 suffix on main; ADR 0011 accepted; QUERY wire + Bash stale rejection remain; dim paint `deferred`; do not mark `GHST-004` complete |
 | 5 | Completion | `validation` | `G4` / `COMP-001`–`COMP-003` / `GIT-004` complete; `COMP-004` `discovery`; overlay `deferred`; ranked-cycle is PR #30 |
 | 6 | Syntax highlighting | `deferred` | no after-every-key paint hook (ADR 0003); G5 revisit; IDs kept |
 | 7 | Git/provider expansion | `validation` | prompt status plus history root/branch; upstream/remotes/tags unauthorized |
@@ -466,12 +467,12 @@ the roadmap cannot make that scope change by itself.
 Status: `validation`. Opt-in suffix ghost is on main (ADR 0010). Word-accept,
 cycling, remaining printables, vi-insert, Left dismiss, Home/Up/Down/backward-word,
 and kill-ring isolation are recorded. Dim after-every-key paint is `deferred`
-(not a Phase 4 exit). Async lookup is `GHST-001`, blocked only on landing
-ADR 0011 (draft PR #40). Partial `GHST-004` PTY evidence is in
+(not a Phase 4 exit). Async lookup is `GHST-001` (`ready` after ADR 0011);
+QUERY wire and Bash stale rejection remain. Partial `GHST-004` PTY evidence is in
 `docs/ghst-004-multiline-resize-plan.md` and `docs/ghst-004-no-execution-plan.md`.
 Do not mark `GHST-004` complete; the latency matrix leftover stays `deferred`.
 
-After ADR 0011 lands, implement asynchronous ranked-history lookup with generation
+Implement asynchronous ranked-history lookup with generation
 IDs, stale-result rejection, inline rendering, full/word acceptance, cycling, and
 multiline/resize behavior. Acceptance must preserve exact bytes/cursor position,
 never execute the suggestion, and perform no external command on a cache-hit
@@ -479,7 +480,7 @@ keystroke.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `GHST-001` | Async ranked query with generation IDs and cancellation | `blocked` | land ADR 0011 (draft PR #40); then QUERY wire (draft PR #41) |
+| `GHST-001` | Async ranked query with generation IDs and cancellation | `ready` | ADR 0011 accepted (`docs/adr/0011-async-feature-ipc.md`; `docs/ghst-001-async-ipc-plan.md`); wire layout + Bash stale rejection remain |
 | `GHST-002` | Inline ghost rendering with stale-result rejection | `validation` | ADR 0010; G-1–G-6 in `bash/ghost.bash`, `crates/pty/tests/ghost.rs`, `tests/bash/modules.bash`; `docs/ghst-002-inline-ghost-plan.md`; remaining printables P-1–P-3 (`docs/ghst-002-printables-plan.md`); vi-insert V-1–V-3 (`docs/ghst-002-vi-insert-plan.md`); Left dismiss L-1–L-3 (`docs/ghst-002-left-motion-plan.md`); Home/Up/backward-word H-1/W-4/U-2 (`docs/ghst-002-home-up-motion-plan.md`); Down D-1–D-2 (`docs/ghst-002-down-motion-plan.md`); kill-ring isolation K-1–K-3 (`docs/ghst-002-kill-ring-plan.md`); Enter is a Readline delete-char + accept-line macro (M-041); helpers bind before printables and partial disarm clears the armed flag (M-044); dim paint is `deferred` (not a Phase 4 exit); async stale-rejection waits on `GHST-001` |
 | `GHST-003` | Full/word acceptance and suggestion cycling | `complete` | Right/`\C-f` full accept in G-2; `\ef` / Ctrl-Right word-accept in W-1–W-3 (`docs/ghst-003-word-accept-plan.md`); `\C-x\C-n` / `\C-x\C-p` cycling in C-1–C-3 (`docs/ghst-003-cycle-plan.md`) |
 | `GHST-004` | Multiline, resize, exact-byte, no-execution, and latency evidence | `validation` | R-1/Q-1/M-1 in `docs/ghst-004-multiline-resize-plan.md`; C-1/B-1 in `docs/ghst-004-no-execution-plan.md`; `crates/pty/tests/ghost.rs`; latency matrix `deferred` (`docs/latency-budget-deferral.md`). Do not mark complete |
@@ -601,18 +602,16 @@ percentile leftovers are `deferred` and must not block product slices
 (`docs/latency-budget-deferral.md`). `HIST-010` / `GIT-003` CLI filters are
 already on `main`; do not duplicate them.
 
-1. Review and land draft PR #40 (ADR 0011 async MBX2 feature IPC). That is the
-   `GHST-001` decision. Do not rewrite the ADR from scratch.
-2. Land draft PR #41 (MBX2 `QUERY` / `RESULT` / `CANCEL` wire). A later slice
-   wires `bash/ghost.bash` onto QUERY with generation stale-rejection. Do not
-   mark `GHST-001` or `GHST-004` complete unless their exit criteria are met.
-3. Rebase draft PR #37 (Strategy A history search) onto current `main`. It
+1. Land MBX2 `QUERY` / `RESULT` / `CANCEL` wire (draft PR #41). Then wire
+   `bash/ghost.bash` onto QUERY with generation stale-rejection. Do not mark
+   `GHST-001` or `GHST-004` complete unless their exit criteria are met.
+2. Rebase draft PR #37 (Strategy A history search) onto current `main`. It
    conflicts and predates ghost plus `HIST-010`. Interactive repo/failed
    filters follow after that UI lands. Do not mark `SRCH-*` complete here.
-4. Later: rebase PR #30 ranked-cycle with chords that do **not** collide with
+3. Later: rebase PR #30 ranked-cycle with chords that do **not** collide with
    ghost `\C-x\C-n` / `\C-x\C-p`. `COMP-004` stays `discovery`. Overlay is
    `deferred`. Do not mark `COMP-004` or `COMP-005` complete.
-5. Do not start highlighting, dim paint, or a GUI overlay. Those IDs are
+4. Do not start highlighting, dim paint, or a GUI overlay. Those IDs are
    `deferred` from this MVP with G5 revisit. `HRD-001` macOS remains Phase 9 /
    `G5` host work. Close superseded draft PRs #31 (`search failed`; on main)
    and #34 (`PRM-006` already complete) when authorized. Do not spend a slice
@@ -649,9 +648,9 @@ they become `G5` release promises.
 - Completion functions depend on live shell state and `compopt`; asynchronous or
   subprocess execution can change semantics.
 - MBX1 is sequential and prompt-oriented. History RECORD uses MBX2 on the same
-  coprocess. Interactive features may still need typed results, generation IDs,
-  cancellation, and stale-response rejection as a later MBX2 revision, not an
-  MBX1 change.
+  coprocess. ADR 0011 accepts interactive QUERY/RESULT/CANCEL with generation
+  IDs and client stale rejection as an MBX2 extension; wire layout and Bash
+  rejection remain (`GHST-001`). Do not overload MBX1.
 - A single sequential coprocess can suffer head-of-line blocking.
 - Unicode scalar counts are not display widths. Combining characters, wide
   glyphs, wrapping, `SIGWINCH`, tmux, and SSH need PTY evidence.
@@ -771,4 +770,5 @@ an accepted decoration/ownership ADR.
 | 2026-08-19 | Recorded ghost `GHST-004` no-execution PTY evidence (`docs/ghst-004-no-execution-plan.md`; C-1/B-1). Latency matrix remains `deferred`. Do not mark `GHST-004` complete. |
 | 2026-08-20 | Recorded ghost Down / forward-history dismiss (`docs/ghst-002-down-motion-plan.md`; D-1–D-2). Dim paint and async stale-rejection remain blocked. Do not mark `GHST-004` complete. |
 | 2026-08-20 | Landed `HIST-010` / `GIT-003` + CLI filters onto main after ghost (`docs/hist-010-git-003-plan.md`; `docs/hist-010-cli-filters-plan.md`). Unblocks interactive repo/failed search consumers. |
-| 2026-08-25 | Reclassified blocker taxonomy: continuous decoration **defers** highlighting, dim paint, and GUI overlays (G5 revisit; IDs kept). Strategy A search (`SRCH-001`/`SRCH-002`) is `ready`; `SRCH-003` waits on landing search UI, not decoration. `GHST-001` waits only on ADR 0011 (PR #40). Immediate next work is PR #40, then #41, then rebase #37. No deliverable marked complete. |
+| 2026-08-25 | Reclassified blocker taxonomy: continuous decoration **defers** highlighting, dim paint, and GUI overlays (G5 revisit; IDs kept). Strategy A search (`SRCH-001`/`SRCH-002`) is `ready`; `SRCH-003` waits on landing search UI, not decoration. No deliverable marked complete. |
+| 2026-08-25 | Accepted ADR 0011 async feature IPC on MBX2 (`docs/adr/0011-async-feature-ipc.md`). `GHST-001` moves to `ready`. Wire implementation remains. Do not mark `GHST-001` complete. |

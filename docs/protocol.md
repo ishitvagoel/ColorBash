@@ -86,6 +86,7 @@ others.
 
 MBX1 is a foundation protocol, not a complete provider schema. History RECORD
 ingestion is specified separately as MBX2 (`docs/protocol-mbx2.md`) rather than
-by extending MBX1. Completion and later interactive features that need typed
-results, generation IDs, or cancellation remain a later MBX2 revision, not an
-MBX1 change.
+by extending MBX1. Async feature QUERY/RESULT/CANCEL with generation IDs is
+accepted in ADR 0011 as an MBX2 extension (`docs/adr/0011-async-feature-ipc.md`);
+exact field layouts land with `GHST-001` implementation. That is not an MBX1
+change.
