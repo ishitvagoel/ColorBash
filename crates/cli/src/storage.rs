@@ -305,6 +305,12 @@ impl HistoryRecorder for QueuedHistoryStore {
     }
 }
 
+impl HistoryRecorder for std::sync::Arc<QueuedHistoryStore> {
+    fn record(&self, entry: HistoryEntry) -> Result<(), HistoryError> {
+        (**self).record(entry)
+    }
+}
+
 impl HistorySearch for QueuedHistoryStore {
     fn recent(&self, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError> {
         let connection = open_read_connection(&self.store_path)?;
@@ -402,6 +408,40 @@ impl HistorySearch for QueuedHistoryStore {
             ),
             &[limit.to_string()],
         )
+    }
+}
+
+impl HistorySearch for std::sync::Arc<QueuedHistoryStore> {
+    fn recent(&self, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError> {
+        (**self).recent(limit)
+    }
+
+    fn exact_prefix(&self, prefix: &str, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError> {
+        (**self).exact_prefix(prefix, limit)
+    }
+
+    fn by_cwd(&self, cwd: &str, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError> {
+        (**self).by_cwd(cwd, limit)
+    }
+
+    fn by_repo(&self, repo_root: &str, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError> {
+        (**self).by_repo(repo_root, limit)
+    }
+
+    fn by_branch(
+        &self,
+        repo_branch: &str,
+        limit: usize,
+    ) -> Result<Vec<HistoryEntry>, HistoryError> {
+        (**self).by_branch(repo_branch, limit)
+    }
+
+    fn fuzzy(&self, needle: &str, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError> {
+        (**self).fuzzy(needle, limit)
+    }
+
+    fn failed(&self, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError> {
+        (**self).failed(limit)
     }
 }
 

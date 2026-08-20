@@ -1,20 +1,25 @@
-# MBX2 protocol — history record ingestion
+# MBX2 protocol — history record ingestion and feature queries
 
-Status: implemented for the Phase 3A RECORD slice (`HIST-007`). `G2` is
-complete. Write-ack percentiles are `deferred`
-(`docs/history-g2-write-ack-deferral.md`). Foreign-user open is recorded.
-Invariance, admission-parity, hostile inertness, 100k query p95,
-concurrent-writer contention, write-ack correctness, WAL crash/corrupt recovery,
-WAL/SHM `0600` never-more-permissive, many-match prefix covering-index, writer
-idle-flush for live reader visibility, and 100k-row v1→v2 migration evidence
-are recorded.
+Status: RECORD slice implemented (`HIST-007`). `G2` is complete. Write-ack
+percentiles are `deferred` (`docs/history-g2-write-ack-deferral.md`).
+QUERY/RESULT/CANCEL wire layouts are specified for `GHST-001`
+(`docs/adr/0011-async-feature-ipc.md`; `docs/ghst-001-query-wire-plan.md`).
+Helper QUERY handling and Bash encode/decode land with that slice; ghost stale
+rejection remains a later leftover. Sync CLI search remains available.
+
+Foreign-user open is recorded. Invariance, admission-parity, hostile inertness,
+100k query p95, concurrent-writer contention, write-ack correctness, WAL
+crash/corrupt recovery, WAL/SHM `0600` never-more-permissive, many-match prefix
+covering-index, writer idle-flush for live reader visibility, and 100k-row
+v1→v2 migration evidence are recorded.
 
 ## Purpose
 
-MBX2 carries history records from the Bash recorder to the helper's writer port.
+MBX2 carries history records from the Bash recorder to the helper's writer port,
+and interactive feature queries (generation-tagged search) on the same framing.
 It is intentionally separate from MBX1: MBX1 stays prompt-oriented with additive
-flag bits, while MBX2 carries typed, metadata-bearing records that MBX1 must
-never silently extend to carry (ADR 0005 section 9).
+flag bits, while MBX2 carries typed, metadata-bearing records and queries that
+MBX1 must never silently extend to carry (ADR 0005 section 9; ADR 0011).
 
 ## Framing
 
@@ -29,6 +34,8 @@ their bounds apply unchanged:
   count before accepting a response.
 
 ## Messages
+
+### RECORD / PING (Phase 3A)
 
 Requests:
 
@@ -46,8 +53,7 @@ MBX2<TAB>request-id<TAB>ACK
 MBX2<TAB>request-id<TAB>ERROR<TAB>kind
 ```
 
-- `RECORD` is the only data message in the Phase 3A slice; search remains a
-  direct CLI operation and does not travel over the wire.
+- `RECORD` is the ingest message; CLI search also remains a direct operation.
 - Repository root/branch are **not** RECORD fields. The helper writer may
   enrich stored rows from `start_cwd` after ACK (`HIST-010`); the wire layout
   stays ten data fields.
@@ -58,17 +64,55 @@ MBX2<TAB>request-id<TAB>ERROR<TAB>kind
 - Fields are already folded Bash-normalized text from the admission authority;
   the helper treats them as inert data and applies ADR 0005 drop rules.
 
+### QUERY / CANCEL (ADR 0011 / GHST-001)
+
+Requests:
+
+```text
+MBX2<TAB>request-id<TAB>QUERY<TAB>generation<TAB>mode<TAB>text-or-<TAB>limit
+MBX2<TAB>request-id<TAB>CANCEL<TAB>generation
+```
+
+- `generation` is a decimal u64 chosen by the client; every RESULT echoes it.
+- `mode` is one of `prefix`, `fuzzy`, `cwd`, `repo`, `branch`, `failed`,
+  `recent` (same semantics as `mbx history search …`).
+- `text` is the needle, path, repo root, or branch name. For `failed` and
+  `recent` it must be the literal `-`.
+- `limit` is a decimal usize; the helper caps it at `MAX_QUERY_LIMIT` (500).
+- `CANCEL` is best-effort. The helper may still emit a late RESULT for that
+  generation; Bash **must** ignore stale generations (client duty).
+
+Responses:
+
+```text
+MBX2<TAB>request-id<TAB>RESULT<TAB>generation<TAB>count<TAB>cmd1…cmdN
+MBX2<TAB>request-id<TAB>ACK
+MBX2<TAB>request-id<TAB>ERROR<TAB>kind
+```
+
+- One `RESULT` frame answers one `QUERY` (keeps the exchange 1:1). Exact field
+  count is `5 + count`. `count` may be `0`. Each `cmd` is percent-escaped
+  ordinary command text and must never be executed by the helper.
+- If encoding all candidates would exceed the 64 KiB payload bound, the helper
+  drops trailing candidates and reduces `count` so the frame fits.
+- `CANCEL` responds with `ACK` (stub cancel tracking is allowed).
+- Typed ERROR kinds include `invalid`, `unsupported`, `unsupported query mode`,
+  and storage kinds; never command text.
+
 ## Bounds and safety
 
-- Bash enqueues with its own bounded deadline; a full queue or expired deadline
-  drops the record with a command-text-free diagnostic counter.
+- Bash enqueues RECORD with its own bounded deadline; a full queue or expired
+  deadline drops the record with a command-text-free diagnostic counter.
 - The helper validates the entry (empty/NUL/invalid-UTF-8/oversized), applies
   exclusions, and hands it to the bounded writer queue; `ACK` confirms enqueue,
   not commit.
+- QUERY work is bounded by the same class of search budgets as the CLI. Head-of-
+  line blocking on the sequential coprocess is accepted until measured evidence
+  requires a dedicated feature FD (new ADR).
 - `PING`/`PONG` reuses the existing handshake semantics for liveness.
 
 ## Versioning
 
-The magic `MBX2` is fixed for this slice. Adding request kinds, generation IDs,
-cancellation, or stale-response rejection for interactive features is a later
-MBX2 revision, not an MBX1 change.
+The magic `MBX2` is fixed. RECORD and QUERY share framing. Exact layouts above
+are the contract for the `GHST-001` wire slice. Ghost generation stale rejection
+and async install remain separate leftovers. Not an MBX1 change.

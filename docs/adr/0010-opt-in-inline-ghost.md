@@ -68,7 +68,8 @@ experiments.
 
 Users can enable fish-style “text after the cursor” from sidecar history
 without a decoration hook. The suffix is ordinary command bytes, not styled
-ghost. Async non-blocking lookup (`GHST-001`) stays later. Highlighting and
+ghost. Async non-blocking lookup (`GHST-001`) is unblocked by ADR 0011; wire
+implementation remains. Highlighting and
 GUI overlays stay blocked.
 
 ## Validation

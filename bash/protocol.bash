@@ -285,3 +285,107 @@ _mbx_protocol_decode_history_ack() {
         ${fields[1]} == "$expected_id" && \
         ${fields[2]} == ACK ]] || return 1
 }
+
+# QUERY: request_id generation mode text-or-dash limit → REPLY wire line.
+_mbx_protocol_encode_history_query() {
+    (($# == 5)) || return 2
+
+    local request_id=$1
+    local generation=$2
+    local mode=$3
+    local text=$4
+    local limit=$5
+    local escaped_generation escaped_mode escaped_text escaped_limit
+
+    REPLY=
+    _mbx_escape_field "$generation" || return 1
+    escaped_generation=$REPLY
+    _mbx_escape_field "$mode" || return 1
+    escaped_mode=$REPLY
+    if [[ $text == '-' ]]; then
+        escaped_text='-'
+    else
+        _mbx_escape_field "$text" || return 1
+        escaped_text=$REPLY
+    fi
+    _mbx_escape_field "$limit" || return 1
+    escaped_limit=$REPLY
+    printf -v REPLY '%s\t%s\tQUERY\t%s\t%s\t%s\t%s' \
+        "$_MBX_PROTOCOL_MAGIC_HISTORY" "$request_id" \
+        "$escaped_generation" "$escaped_mode" "$escaped_text" "$escaped_limit"
+    ((${#REPLY} <= _MBX_PROTOCOL_MAX_MESSAGE_BYTES)) || {
+        REPLY=
+        return 1
+    }
+}
+
+# CANCEL: request_id generation → REPLY wire line.
+_mbx_protocol_encode_history_cancel() {
+    (($# == 2)) || return 2
+
+    local request_id=$1
+    local generation=$2
+    local escaped_generation
+
+    REPLY=
+    _mbx_escape_field "$generation" || return 1
+    escaped_generation=$REPLY
+    printf -v REPLY '%s\t%s\tCANCEL\t%s' \
+        "$_MBX_PROTOCOL_MAGIC_HISTORY" "$request_id" "$escaped_generation"
+    ((${#REPLY} <= _MBX_PROTOCOL_MAX_MESSAGE_BYTES)) || {
+        REPLY=
+        return 1
+    }
+}
+
+# RESULT: expected_id line dest_array_name → REPLY=generation; dest filled.
+_mbx_protocol_decode_history_result() {
+    (($# == 3)) || return 2
+
+    local expected_id=$1
+    local line=$2
+    local -n _mbx_result_cmds=$3
+    local -a fields=()
+    local count index decoded
+
+    REPLY=
+    _mbx_result_cmds=()
+    _mbx_protocol_validate_line "$line" || return 1
+    _mbx_protocol_split_fields "$line" fields
+    ((${#fields[@]} >= 5)) || return 1
+    [[ ${fields[0]} == "$_MBX_PROTOCOL_MAGIC_HISTORY" && \
+        ${fields[1]} == "$expected_id" && \
+        ${fields[2]} == RESULT ]] || return 1
+    _mbx_unescape_field "${fields[3]}" || return 1
+    decoded=$REPLY
+    [[ $decoded =~ ^[0-9]+$ ]] || return 1
+    REPLY=$decoded
+    _mbx_unescape_field "${fields[4]}" || return 1
+    count=$REPLY
+    [[ $count =~ ^[0-9]+$ ]] || return 1
+    ((${#fields[@]} == 5 + count)) || return 1
+    _mbx_result_cmds=()
+    for ((index = 0; index < count; index++)); do
+        _mbx_unescape_field "${fields[5 + index]}" || return 1
+        _mbx_result_cmds+=("$REPLY")
+    done
+    REPLY=$decoded
+}
+
+# ERROR: expected_id line → REPLY=kind
+_mbx_protocol_decode_history_error() {
+    (($# == 2)) || return 2
+
+    local expected_id=$1
+    local line=$2
+    local -a fields=()
+
+    REPLY=
+    _mbx_protocol_validate_line "$line" || return 1
+    _mbx_protocol_split_fields "$line" fields
+    ((${#fields[@]} == 4)) || return 1
+    [[ ${fields[0]} == "$_MBX_PROTOCOL_MAGIC_HISTORY" && \
+        ${fields[1]} == "$expected_id" && \
+        ${fields[2]} == ERROR ]] || return 1
+    _mbx_unescape_field "${fields[3]}"
+}

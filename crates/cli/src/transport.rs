@@ -116,6 +116,10 @@ fn handle_mbx2_line(line: &str, history: Option<&dyn HistoryHandler>) -> String 
         crate::history_service::HistoryResponse::Ack => {
             crate::history_service::encode_mbx2(request_id, "ACK")
         }
+        crate::history_service::HistoryResponse::Result {
+            generation,
+            commands,
+        } => crate::history_service::encode_mbx2_result(request_id, generation, &commands),
         crate::history_service::HistoryResponse::Error(kind) => {
             crate::history_service::encode_mbx2_error(request_id, &kind)
         }
@@ -345,6 +349,64 @@ mod tests {
             history.calls.lock().unwrap().as_slice(),
             &[(3, "RECORD".to_owned(), 10), (4, "PING".to_owned(), 0)]
         );
+    }
+
+    #[test]
+    fn mbx2_query_frames_encode_result_responses() {
+        use crate::history_service::HistoryResponse;
+
+        struct QueryHistory;
+
+        impl HistoryHandler for QueryHistory {
+            fn handle(&self, id: u64, kind: &str, fields: &[String]) -> HistoryResponse {
+                assert_eq!(id, 5);
+                assert_eq!(kind, "QUERY");
+                assert_eq!(fields.len(), 4);
+                HistoryResponse::Result {
+                    generation: 42,
+                    commands: vec!["git status".to_owned(), "a\tb".to_owned()],
+                }
+            }
+        }
+
+        let input = b"MBX2\t5\tQUERY\t42\tprefix\tgit\t5\n";
+        let mut reader = Cursor::new(input.to_vec());
+        let mut writer = Vec::new();
+        let handler = RecordingHandler::returning(ResponseKind::Prompt("x".to_owned()));
+        let history = QueryHistory;
+
+        serve_connection(&mut reader, &mut writer, &handler, Some(&history)).unwrap();
+
+        assert_eq!(
+            String::from_utf8(writer).unwrap(),
+            "MBX2\t5\tRESULT\t42\t2\tgit status\ta%09b\n"
+        );
+    }
+
+    #[test]
+    fn mbx2_cancel_frames_encode_ack_responses() {
+        use crate::history_service::HistoryResponse;
+
+        struct CancelHistory;
+
+        impl HistoryHandler for CancelHistory {
+            fn handle(&self, id: u64, kind: &str, fields: &[String]) -> HistoryResponse {
+                assert_eq!(id, 6);
+                assert_eq!(kind, "CANCEL");
+                assert_eq!(fields, &["99".to_owned()]);
+                HistoryResponse::Ack
+            }
+        }
+
+        let input = b"MBX2\t6\tCANCEL\t99\n";
+        let mut reader = Cursor::new(input.to_vec());
+        let mut writer = Vec::new();
+        let handler = RecordingHandler::returning(ResponseKind::Prompt("x".to_owned()));
+        let history = CancelHistory;
+
+        serve_connection(&mut reader, &mut writer, &handler, Some(&history)).unwrap();
+
+        assert_eq!(String::from_utf8(writer).unwrap(), "MBX2\t6\tACK\n");
     }
 
     #[test]
