@@ -814,6 +814,33 @@ if _mbx_protocol_decode_history_ack 5 $'MBX1\t5\tACK'; then
     fail 'an MBX1 ACK was accepted as MBX2'
 fi
 
+_mbx_protocol_encode_history_query 9 42 prefix 'git st' 5
+assert_eq 'MBX2	9	QUERY	42	prefix	git st	5' "$REPLY" \
+    'the MBX2 QUERY encoder changed the wire format'
+_mbx_protocol_encode_history_query 9 1 failed '-' 3
+assert_eq 'MBX2	9	QUERY	1	failed	-	3' "$REPLY" \
+    'failed QUERY must keep a literal dash text field'
+_mbx_protocol_encode_history_cancel 11 99
+assert_eq 'MBX2	11	CANCEL	99' "$REPLY" \
+    'the MBX2 CANCEL encoder changed the wire format'
+
+mbx_query_cmds=()
+_mbx_protocol_decode_history_result 9 $'MBX2\t9\tRESULT\t42\t2\tgit%20status\techo%09x' mbx_query_cmds || \
+    fail 'a valid MBX2 RESULT was rejected'
+assert_eq 42 "$REPLY" 'RESULT decode must return the generation in REPLY'
+assert_eq 2 ${#mbx_query_cmds[@]} 'RESULT decode must fill the destination array'
+assert_eq 'git status' "${mbx_query_cmds[0]}" 'RESULT command unescape drifted'
+assert_eq $'echo\tx' "${mbx_query_cmds[1]}" 'RESULT tab unescape drifted'
+if _mbx_protocol_decode_history_result 9 $'MBX2\t9\tRESULT\t42\t1' mbx_query_cmds; then
+    fail 'RESULT with a short field count was accepted'
+fi
+if _mbx_protocol_decode_history_result 9 $'MBX2\t9\tRESULT\t42\t1\ta\textra' mbx_query_cmds; then
+    fail 'RESULT with a trailing extra field was accepted'
+fi
+_mbx_protocol_decode_history_error 9 $'MBX2\t9\tERROR\tinvalid' || \
+    fail 'a valid MBX2 ERROR was rejected'
+assert_eq invalid "$REPLY" 'ERROR decode must return the typed kind'
+
 MBX_HISTORY_EXCLUDE='git *:ssh *'
 _mbx_history_excluded 'git status' || fail 'git exclusion did not match'
 _mbx_history_excluded 'ssh host' || fail 'ssh exclusion did not match'

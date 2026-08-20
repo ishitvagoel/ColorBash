@@ -1,13 +1,21 @@
-use crate::history::{HistoryEntry, HistoryPolicy, HistoryRecorder};
-use mbx_protocol::{MAX_MESSAGE_BYTES, unescape_field};
+use crate::history::{
+    HistoryEntry, HistoryPolicy, HistoryRecorder, HistorySearch, MAX_QUERY_LIMIT,
+};
+use mbx_protocol::{MAX_MESSAGE_BYTES, escape_field, unescape_field};
 
 pub const MBX2_MAGIC: &str = "MBX2";
 pub const RECORD_FIELD_COUNT: usize = 10;
+pub const QUERY_FIELD_COUNT: usize = 4;
+pub const CANCEL_FIELD_COUNT: usize = 1;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum HistoryResponse {
     Pong,
     Ack,
+    Result {
+        generation: u64,
+        commands: Vec<String>,
+    },
     Error(String),
 }
 
@@ -17,12 +25,21 @@ pub trait HistoryHandler: Send + Sync {
 
 pub struct HistoryService {
     recorder: Box<dyn HistoryRecorder>,
+    search: Box<dyn HistorySearch>,
     policy: Box<dyn HistoryPolicy>,
 }
 
 impl HistoryService {
-    pub fn new(recorder: Box<dyn HistoryRecorder>, policy: Box<dyn HistoryPolicy>) -> Self {
-        Self { recorder, policy }
+    pub fn new(
+        recorder: Box<dyn HistoryRecorder>,
+        search: Box<dyn HistorySearch>,
+        policy: Box<dyn HistoryPolicy>,
+    ) -> Self {
+        Self {
+            recorder,
+            search,
+            policy,
+        }
     }
 }
 
@@ -31,6 +48,8 @@ impl HistoryHandler for HistoryService {
         match kind {
             "PING" if fields.is_empty() => HistoryResponse::Pong,
             "RECORD" => handle_record(self.recorder.as_ref(), self.policy.as_ref(), fields),
+            "QUERY" => handle_query(self.search.as_ref(), fields),
+            "CANCEL" => handle_cancel(fields),
             "PING" => HistoryResponse::Error("invalid field count".to_owned()),
             _ => HistoryResponse::Error(format!("unknown MBX2 kind: {kind}")),
         }
@@ -55,6 +74,123 @@ fn handle_record(
     match recorder.record(entry) {
         Ok(()) => HistoryResponse::Ack,
         Err(error) => HistoryResponse::Error(error.kind().as_str().to_owned()),
+    }
+}
+
+fn handle_query(search: &dyn HistorySearch, fields: &[String]) -> HistoryResponse {
+    if fields.len() != QUERY_FIELD_COUNT {
+        return HistoryResponse::Error("invalid field count".to_owned());
+    }
+    let generation = match unescape_field(&fields[0])
+        .map_err(|error| error.to_string())
+        .and_then(|value| {
+            value
+                .parse::<u64>()
+                .map_err(|_| "invalid generation".to_owned())
+        }) {
+        Ok(value) => value,
+        Err(error) => return HistoryResponse::Error(error),
+    };
+    let mode = match unescape_field(&fields[1]) {
+        Ok(value) => value,
+        Err(error) => return HistoryResponse::Error(error.to_string()),
+    };
+    let text = match unescape_field(&fields[2]) {
+        Ok(value) => value,
+        Err(error) => return HistoryResponse::Error(error.to_string()),
+    };
+    let limit = match unescape_field(&fields[3])
+        .map_err(|error| error.to_string())
+        .and_then(|value| {
+            value
+                .parse::<usize>()
+                .map_err(|_| "invalid limit".to_owned())
+        }) {
+        Ok(value) => value.min(MAX_QUERY_LIMIT),
+        Err(error) => return HistoryResponse::Error(error),
+    };
+
+    let entries = match run_search(search, &mode, &text, limit) {
+        Ok(entries) => entries,
+        Err(error) => return HistoryResponse::Error(error),
+    };
+    let commands: Vec<String> = entries
+        .into_iter()
+        .map(|entry| entry.command_text)
+        .collect();
+    HistoryResponse::Result {
+        generation,
+        commands,
+    }
+}
+
+fn run_search(
+    search: &dyn HistorySearch,
+    mode: &str,
+    text: &str,
+    limit: usize,
+) -> Result<Vec<HistoryEntry>, String> {
+    let result = match mode {
+        "prefix" => {
+            if text == "-" {
+                return Err("invalid query text".to_owned());
+            }
+            search.exact_prefix(text, limit)
+        }
+        "fuzzy" => {
+            if text == "-" {
+                return Err("invalid query text".to_owned());
+            }
+            search.fuzzy(text, limit)
+        }
+        "cwd" => {
+            if text == "-" {
+                return Err("invalid query text".to_owned());
+            }
+            search.by_cwd(text, limit)
+        }
+        "repo" => {
+            if text == "-" {
+                return Err("invalid query text".to_owned());
+            }
+            search.by_repo(text, limit)
+        }
+        "branch" => {
+            if text == "-" {
+                return Err("invalid query text".to_owned());
+            }
+            search.by_branch(text, limit)
+        }
+        "failed" => {
+            if text != "-" {
+                return Err("invalid query text".to_owned());
+            }
+            search.failed(limit)
+        }
+        "recent" => {
+            if text != "-" {
+                return Err("invalid query text".to_owned());
+            }
+            search.recent(limit)
+        }
+        _ => return Err("unsupported query mode".to_owned()),
+    };
+    result.map_err(|error| error.kind().as_str().to_owned())
+}
+
+fn handle_cancel(fields: &[String]) -> HistoryResponse {
+    if fields.len() != CANCEL_FIELD_COUNT {
+        return HistoryResponse::Error("invalid field count".to_owned());
+    }
+    match unescape_field(&fields[0])
+        .map_err(|error| error.to_string())
+        .and_then(|value| {
+            value
+                .parse::<u64>()
+                .map_err(|_| "invalid generation".to_owned())
+        }) {
+        Ok(_) => HistoryResponse::Ack,
+        Err(error) => HistoryResponse::Error(error),
     }
 }
 
@@ -127,6 +263,34 @@ pub fn encode_mbx2_error(request_id: u64, kind: &str) -> String {
     format!("{MBX2_MAGIC}\t{request_id}\tERROR\t{kind}")
 }
 
+/// Encodes a RESULT frame, dropping trailing candidates that would exceed
+/// [`MAX_MESSAGE_BYTES`] so the response stays within the protocol bound.
+pub fn encode_mbx2_result(request_id: u64, generation: u64, commands: &[String]) -> String {
+    let mut included = Vec::with_capacity(commands.len());
+    for command in commands {
+        let mut candidate = included.clone();
+        candidate.push(command.clone());
+        let encoded = encode_mbx2_result_exact(request_id, generation, &candidate);
+        if encoded.len() > MAX_MESSAGE_BYTES {
+            break;
+        }
+        included = candidate;
+    }
+    encode_mbx2_result_exact(request_id, generation, &included)
+}
+
+fn encode_mbx2_result_exact(request_id: u64, generation: u64, commands: &[String]) -> String {
+    let mut message = format!(
+        "{MBX2_MAGIC}\t{request_id}\tRESULT\t{generation}\t{}",
+        commands.len()
+    );
+    for command in commands {
+        message.push('\t');
+        message.push_str(&escape_field(command));
+    }
+    message
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,6 +320,62 @@ mod tests {
         fn record(&self, entry: HistoryEntry) -> Result<(), HistoryError> {
             self.entries.lock().unwrap().push(entry);
             Ok(())
+        }
+    }
+
+    #[derive(Default)]
+    struct StubSearch {
+        prefix: Mutex<Vec<HistoryEntry>>,
+    }
+
+    impl StubSearch {
+        fn with_prefix(entries: Vec<HistoryEntry>) -> Self {
+            Self {
+                prefix: Mutex::new(entries),
+            }
+        }
+    }
+
+    impl HistorySearch for StubSearch {
+        fn recent(&self, _limit: usize) -> Result<Vec<HistoryEntry>, HistoryError> {
+            Ok(Vec::new())
+        }
+
+        fn exact_prefix(
+            &self,
+            _prefix: &str,
+            limit: usize,
+        ) -> Result<Vec<HistoryEntry>, HistoryError> {
+            let entries = self.prefix.lock().unwrap();
+            Ok(entries.iter().take(limit).cloned().collect())
+        }
+
+        fn by_cwd(&self, _cwd: &str, _limit: usize) -> Result<Vec<HistoryEntry>, HistoryError> {
+            Ok(Vec::new())
+        }
+
+        fn by_repo(
+            &self,
+            _repo_root: &str,
+            _limit: usize,
+        ) -> Result<Vec<HistoryEntry>, HistoryError> {
+            Ok(Vec::new())
+        }
+
+        fn by_branch(
+            &self,
+            _repo_branch: &str,
+            _limit: usize,
+        ) -> Result<Vec<HistoryEntry>, HistoryError> {
+            Ok(Vec::new())
+        }
+
+        fn fuzzy(&self, _needle: &str, _limit: usize) -> Result<Vec<HistoryEntry>, HistoryError> {
+            Ok(Vec::new())
+        }
+
+        fn failed(&self, _limit: usize) -> Result<Vec<HistoryEntry>, HistoryError> {
+            Ok(Vec::new())
         }
     }
 
@@ -198,17 +418,46 @@ mod tests {
         ]
     }
 
+    fn sample_entry(command: &str) -> HistoryEntry {
+        HistoryEntry {
+            session_id: "s".to_owned(),
+            event_sequence: 1,
+            history_number: Some(1),
+            command_text: command.to_owned(),
+            start_cwd: "/work".to_owned(),
+            completed_at: "2026-08-15T10:00:00Z".to_owned(),
+            status: 0,
+            duration_ms: None,
+            host: "host".to_owned(),
+            user: "user".to_owned(),
+            repo_root: None,
+            repo_branch: None,
+        }
+    }
+
+    fn service_with_search(search: StubSearch) -> HistoryService {
+        let (recorder, _) = RecordingRecorder::shared();
+        HistoryService::new(Box::new(recorder), Box::new(search), Box::new(AllowAll))
+    }
+
+    fn service_allow() -> HistoryService {
+        service_with_search(StubSearch::default())
+    }
+
     #[test]
     fn ping_returns_pong() {
-        let (recorder, _) = RecordingRecorder::shared();
-        let service = HistoryService::new(Box::new(recorder), Box::new(AllowAll));
+        let service = service_allow();
         assert_eq!(service.handle(1, "PING", &[]), HistoryResponse::Pong);
     }
 
     #[test]
     fn record_decodes_and_enqueues() {
         let (recorder, probe) = RecordingRecorder::shared();
-        let service = HistoryService::new(Box::new(recorder), Box::new(AllowAll));
+        let service = HistoryService::new(
+            Box::new(recorder),
+            Box::new(StubSearch::default()),
+            Box::new(AllowAll),
+        );
         let response = service.handle(2, "RECORD", &record_fields());
         assert_eq!(response, HistoryResponse::Ack);
         let entries = probe.entries.lock().unwrap();
@@ -223,7 +472,11 @@ mod tests {
     #[test]
     fn policy_exclusion_acknowledges_without_recording() {
         let (recorder, probe) = RecordingRecorder::shared();
-        let service = HistoryService::new(Box::new(recorder), Box::new(DenyAll));
+        let service = HistoryService::new(
+            Box::new(recorder),
+            Box::new(StubSearch::default()),
+            Box::new(DenyAll),
+        );
         let response = service.handle(3, "RECORD", &record_fields());
         assert_eq!(response, HistoryResponse::Ack);
         assert!(probe.entries.lock().unwrap().is_empty());
@@ -232,7 +485,11 @@ mod tests {
     #[test]
     fn malformed_record_returns_typed_error() {
         let (recorder, probe) = RecordingRecorder::shared();
-        let service = HistoryService::new(Box::new(recorder), Box::new(AllowAll));
+        let service = HistoryService::new(
+            Box::new(recorder),
+            Box::new(StubSearch::default()),
+            Box::new(AllowAll),
+        );
         let mut fields = record_fields();
         fields[1] = "not-a-number".to_owned();
         let response = service.handle(4, "RECORD", &fields);
@@ -243,7 +500,11 @@ mod tests {
     #[test]
     fn percent_escaped_fields_round_trip() {
         let (recorder, probe) = RecordingRecorder::shared();
-        let service = HistoryService::new(Box::new(recorder), Box::new(AllowAll));
+        let service = HistoryService::new(
+            Box::new(recorder),
+            Box::new(StubSearch::default()),
+            Box::new(AllowAll),
+        );
         let mut fields = record_fields();
         fields[3] = "echo%20a%09tab".to_owned();
         let response = service.handle(5, "RECORD", &fields);
@@ -254,7 +515,11 @@ mod tests {
     #[test]
     fn hostile_sql_command_text_is_recorded_as_data() {
         let (recorder, probe) = RecordingRecorder::shared();
-        let service = HistoryService::new(Box::new(recorder), Box::new(AllowAll));
+        let service = HistoryService::new(
+            Box::new(recorder),
+            Box::new(StubSearch::default()),
+            Box::new(AllowAll),
+        );
         let mut fields = record_fields();
         fields[3] = "'; DROP TABLE history;--".to_owned();
         let response = service.handle(6, "RECORD", &fields);
@@ -263,6 +528,83 @@ mod tests {
             probe.entries.lock().unwrap()[0].command_text,
             "'; DROP TABLE history;--"
         );
+    }
+
+    #[test]
+    fn query_prefix_returns_generation_tagged_result() {
+        let search =
+            StubSearch::with_prefix(vec![sample_entry("git status"), sample_entry("git push")]);
+        let service = service_with_search(search);
+        let response = service.handle(
+            7,
+            "QUERY",
+            &[
+                "42".to_owned(),
+                "prefix".to_owned(),
+                "git".to_owned(),
+                "10".to_owned(),
+            ],
+        );
+        assert_eq!(
+            response,
+            HistoryResponse::Result {
+                generation: 42,
+                commands: vec!["git status".to_owned(), "git push".to_owned()],
+            }
+        );
+    }
+
+    #[test]
+    fn query_rejects_bad_field_count() {
+        let service = service_allow();
+        let response = service.handle(8, "QUERY", &["1".to_owned()]);
+        assert_eq!(
+            response,
+            HistoryResponse::Error("invalid field count".to_owned())
+        );
+    }
+
+    #[test]
+    fn query_failed_requires_dash_text() {
+        let service = service_allow();
+        let response = service.handle(
+            9,
+            "QUERY",
+            &[
+                "1".to_owned(),
+                "failed".to_owned(),
+                "nope".to_owned(),
+                "5".to_owned(),
+            ],
+        );
+        assert_eq!(
+            response,
+            HistoryResponse::Error("invalid query text".to_owned())
+        );
+    }
+
+    #[test]
+    fn cancel_acknowledges_generation() {
+        let service = service_allow();
+        assert_eq!(
+            service.handle(10, "CANCEL", &["99".to_owned()]),
+            HistoryResponse::Ack
+        );
+    }
+
+    #[test]
+    fn encode_result_escapes_command_fields() {
+        let encoded = encode_mbx2_result(3, 7, &["a\tb".to_owned(), "c".to_owned()]);
+        assert_eq!(encoded, "MBX2\t3\tRESULT\t7\t2\ta%09b\tc");
+    }
+
+    #[test]
+    fn encode_result_drops_overflow_candidates() {
+        let huge = "x".repeat(MAX_MESSAGE_BYTES);
+        let encoded = encode_mbx2_result(1, 1, &[huge, "kept-small".to_owned()]);
+        assert!(encoded.len() <= MAX_MESSAGE_BYTES);
+        assert!(encoded.contains("RESULT\t1\t0") || encoded.ends_with("\t0"));
+        assert!(!encoded.contains("kept-small"));
     }
 
     #[test]

@@ -342,8 +342,10 @@ The writer may enrich `repo_root`/`repo_branch` from absolute `start_cwd` using
 the ADR 0007 Git adapter **before** `BEGIN IMMEDIATE`; timeout, disable, or
 absence leave NULLs and still insert the row. Search is a direct CLI operation
 (`mbx history search recent|prefix|cwd|repo|branch|fuzzy|failed`), not
-an MBX2 query today. ADR 0011 accepts future MBX2 QUERY/RESULT/CANCEL for
-async feature lookups (`GHST-001`); sync CLI search remains for operator tools.
+an MBX2 query today. ADR 0011 accepts MBX2 QUERY/RESULT/CANCEL for async
+feature lookups (`GHST-001`); the QUERY wire and helper search path are in
+validation (`docs/protocol-mbx2.md`). Sync CLI search remains for operator
+tools and for ghost until Bash generation stale rejection lands.
 `path`, `count`, `clear`, and `delete` are the privacy controls. Command text
 never enters traces.
 
@@ -444,7 +446,9 @@ are stock `self-insert` are wrapped on emacs and vi-insert; `\ef` / Ctrl-Right
 accept one word in emacs; Left / `\C-b` dismiss an unaccepted suffix;
 Home / Up / backward-word strip before their stock motion;
 Down / `\C-n` restores the remembered typed prefix after Up;
-`\C-x\C-n` / `\C-x\C-p` cycle prefix matches). `COMP-004`
+`\C-x\C-n` / `\C-x\C-p` cycle prefix matches). Async QUERY/RESULT/CANCEL with
+generation IDs is accepted in ADR 0011; wire + Bash stale rejection remain
+(`GHST-001`). `COMP-004`
 popup policy records no GUI overlay; ranked-accept `bind -x` evidence is complete
 (`docs/comp-004-ranked-accept-plan.md`).
 `G3` explicit `bind -x` evidence is complete.

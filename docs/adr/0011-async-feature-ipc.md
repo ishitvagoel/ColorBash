@@ -63,8 +63,9 @@ MBX1 change. MBX1 remains prompt-oriented with additive flag bits.
 ## Consequences
 
 - `GHST-001` moves from `blocked` to `ready` for implementation planning.
-- A protocol doc revision (`docs/protocol-mbx2.md` or a sibling) must specify
-  exact field layouts before code lands.
+- Exact QUERY/RESULT/CANCEL field layouts are specified in
+  `docs/protocol-mbx2.md` and implemented by the wire slice
+  (`docs/ghst-001-query-wire-plan.md`). Bash ghost stale rejection remains.
 - Bash ghost install stays tty-interactive and opt-in (`MBX_GHOST=1` +
   `MBX_HISTORY=1`). Failure or timeout still degrades to typed text only.
 - Dim paint and continuous decoration remain blocked on ADR 0003; this ADR

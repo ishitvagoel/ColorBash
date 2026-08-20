@@ -31,16 +31,19 @@ pub fn execute(command: CliCommand, renderer: &dyn PromptRendering) -> Result<()
         CliCommand::Serve(target) => {
             let service = ProtocolService::new(renderer);
             let policy = crate::policy::EnvironmentHistoryPolicy::from_environment();
-            let history_handler: Option<Box<dyn crate::history_service::HistoryHandler>> =
-                if policy.disabled() {
-                    None
-                } else {
-                    let store = open_capture_store().map_err(|error| error.to_string())?;
-                    Some(Box::new(crate::history_service::HistoryService::new(
-                        Box::new(store),
-                        Box::new(policy),
-                    )))
-                };
+            let history_handler: Option<Box<dyn crate::history_service::HistoryHandler>> = if policy
+                .disabled()
+            {
+                None
+            } else {
+                let store =
+                    std::sync::Arc::new(open_capture_store().map_err(|error| error.to_string())?);
+                Some(Box::new(crate::history_service::HistoryService::new(
+                    Box::new(std::sync::Arc::clone(&store)),
+                    Box::new(std::sync::Arc::clone(&store)),
+                    Box::new(policy),
+                )))
+            };
             match target {
                 ServeTarget::Stdio => transport::serve_stdio(&service, history_handler),
                 ServeTarget::Socket(path) => {
