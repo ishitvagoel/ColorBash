@@ -69,6 +69,7 @@ MBX2<TAB>request-id<TAB>ERROR<TAB>kind
 
 ## Versioning
 
-The magic `MBX2` is fixed for this slice. Adding request kinds, generation IDs,
-cancellation, or stale-response rejection for interactive features is a later
-MBX2 revision, not an MBX1 change.
+The magic `MBX2` is fixed for the RECORD slice. Interactive feature queries
+with generation IDs, cancellation, and stale-result rejection are accepted in
+ADR 0011 as an MBX2 extension (not an MBX1 change). Exact QUERY/RESULT/CANCEL
+field layouts land with the `GHST-001` implementation.
