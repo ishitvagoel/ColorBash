@@ -2,18 +2,32 @@
 mod common;
 
 use common::*;
-use mbx_pty::{WinSize, visible_contains, visible_text};
+use mbx_pty::{CTRL_C, WinSize, visible_contains, visible_text};
 use std::time::Duration;
+
+const BRACKETED_PASTE_START: &[u8] = b"\x1b[200~";
+const BRACKETED_PASTE_END: &[u8] = b"\x1b[201~";
 
 const RIGHT: &[u8] = b"\x1b[C";
 const LEFT: &[u8] = b"\x1b[D";
 const CTRL_P: &[u8] = b"\x10";
+const CTRL_N: &[u8] = b"\x0e";
 const CTRL_Y: &[u8] = b"\x19";
 const META_F: &[u8] = b"\x1bf";
 const CTRL_X_CTRL_N: &[u8] = b"\x18\x0e";
 
 fn send_keys(session: &mut mbx_pty::PtySession, keys: &[u8]) {
     session.write_all(keys, deadline(2)).expect("keys");
+}
+
+fn send_bracketed_paste(session: &mut mbx_pty::PtySession, text: &str) {
+    session
+        .write_all(BRACKETED_PASTE_START, deadline(2))
+        .expect("paste start");
+    session.write_str(text, deadline(2)).expect("paste body");
+    session
+        .write_all(BRACKETED_PASTE_END, deadline(2))
+        .expect("paste end");
 }
 
 fn ghost_env<'a>(
@@ -449,6 +463,44 @@ fn ctrl_p_loads_history_after_dismissing_suffix() {
 }
 
 #[test]
+fn ctrl_n_restores_typed_prefix_after_ctrl_p() {
+    let home = TempHome::new("ghst-d2");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let mut session = spawn_history_shell(home.path(), &ghost_env(data_home_s, histfile_s, &[]));
+    wait_for(&mut session, "> ");
+    record_echo(&mut session, "alpha");
+    record_echo(&mut session, "beta");
+    wait_for_count(&mbx_bin(), &data_home, 2);
+
+    session
+        .write_str("echo MBX_GHST:b", deadline(2))
+        .expect("type prefix");
+    wait_all(&mut session, &["echo MBX_GHST:beta"]);
+    send_keys(&mut session, CTRL_P);
+    wait_all(&mut session, &["echo MBX_GHST:beta"]);
+    send_keys(&mut session, CTRL_N);
+    wait_all(&mut session, &["echo MBX_GHST:b"]);
+    assert_no_output(&mut session, "MBX_GHST:beta\n");
+    session.write_str("\n", deadline(2)).expect("enter");
+    let output = wait_all(&mut session, &["MBX_GHST:b\n", "> "]);
+    assert!(
+        !visible_contains(&output, "MBX_GHST:beta\n"),
+        "Down left history row instead of typed prefix: {:?}",
+        visible_text(&output)
+    );
+    wait_for_count(&mbx_bin(), &data_home, 3);
+    let recent = sidecar_commands(&mbx_bin(), &data_home);
+    assert!(
+        recent.iter().any(|command| command == "echo MBX_GHST:b"),
+        "typed prefix after Up/Down was not admitted: {recent:?}"
+    );
+    exit_and_wait(&mut session);
+}
+
+#[test]
 fn enter_discard_does_not_pollute_kill_ring() {
     let home = TempHome::new("ghst-k2");
     let data_home = home.data_home();
@@ -565,6 +617,63 @@ fn ps2_continuation_ghost_enter_runs_typed_prefix() {
     assert!(
         !visible_contains(&output, "one echo MBX_GHST:cont\n"),
         "unaccepted PS2 ghost executed: {:?}",
+        visible_text(&output)
+    );
+    exit_and_wait(&mut session);
+}
+
+#[test]
+fn ctrl_c_with_active_suffix_restores_usable_prompt() {
+    let home = TempHome::new("ghst-c1");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let mut session = spawn_history_shell(home.path(), &ghost_env(data_home_s, histfile_s, &[]));
+    wait_for(&mut session, "> ");
+    record_echo(&mut session, "alpha");
+    wait_for_count(&mbx_bin(), &data_home, 1);
+
+    session
+        .write_str("echo MBX_GHST:a", deadline(2))
+        .expect("type prefix");
+    wait_all(&mut session, &["echo MBX_GHST:alpha"]);
+    assert_no_output(&mut session, "MBX_GHST:alpha\n");
+    session.write_all(&[CTRL_C], deadline(2)).expect("ctrl-c");
+    wait_for(&mut session, "> ");
+    type_line(&mut session, "echo MBX_GHST:cancelled");
+    let output = wait_all(&mut session, &["MBX_GHST:cancelled\n", "> "]);
+    assert!(
+        !visible_contains(&output, "MBX_GHST:alpha\n"),
+        "ghost suffix executed after Ctrl+C: {:?}",
+        visible_text(&output)
+    );
+    exit_and_wait(&mut session);
+}
+
+#[test]
+fn bracketed_paste_prefix_shows_suffix_without_executing() {
+    let home = TempHome::new("ghst-b1");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let mut session = spawn_history_shell(home.path(), &ghost_env(data_home_s, histfile_s, &[]));
+    wait_for(&mut session, "> ");
+    record_echo(&mut session, "alpha");
+    wait_for_count(&mbx_bin(), &data_home, 1);
+
+    session
+        .write_str("echo ", deadline(2))
+        .expect("type prefix lead-in");
+    send_bracketed_paste(&mut session, "MBX_GHST:a");
+    wait_all(&mut session, &["echo MBX_GHST:alpha"]);
+    assert_no_output(&mut session, "MBX_GHST:alpha\n");
+    session.write_str("\n", deadline(2)).expect("enter");
+    let output = wait_all(&mut session, &["MBX_GHST:a\n", "> "]);
+    assert!(
+        !visible_contains(&output, "MBX_GHST:alpha\n"),
+        "bracketed-paste ghost executed before Enter: {:?}",
         visible_text(&output)
     );
     exit_and_wait(&mut session);
