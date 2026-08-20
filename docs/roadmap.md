@@ -7,9 +7,9 @@
 
 - Last reviewed: 2026-08-18 UTC
 - Current milestone: Phase 3A sidecar implemented; `G0` and `G2` complete; `G1` accepted
-- Active workstream: `HIST-010` / `GIT-003` landing on main; `GHST-002`/`GHST-004` validation leftovers remain (dim paint, async stale-rejection, latency deferred); highlighting/overlay blocked on unproven continuous decoration
-- Next decision gate: async feature IPC ADR (unblocks `GHST-001`); continuous-decoration leftover (blocks highlighting / overlay)
-- Editor-facing work: opt-in ghost suffix is unblocked (ADR 0010). Highlighting and GUI overlay stay blocked on after-every-key paint.
+- Active workstream: `HIST-010` / `GIT-003` on main; ADR 0011 unblocks `GHST-001`; dim paint and continuous decoration remain blocked for highlighting / overlay
+- Next decision gate: continuous-decoration leftover (blocks highlighting / overlay); implement MBX2 QUERY wire for `GHST-001`
+- Editor-facing work: opt-in ghost suffix is unblocked (ADR 0010). Async ghost lookup is unblocked for implementation (ADR 0011). Highlighting and GUI overlay stay blocked on after-every-key paint.
 - Timing policy: unmet percentile targets are `deferred` and do not block
   product development (`docs/latency-budget-deferral.md`)
 
@@ -319,7 +319,7 @@ latency budgets.
 | 1 | Bootstrap | `complete` | CI linked; broader lifecycle tracing deferred |
 | 2 | Prompt | `complete` | capability/width/wrap recorded; `PRM-004` percentiles `deferred` |
 | 3 | History | `complete` | Phase 3A / `G2` complete; `HIST-009` and `HIST-010` complete; write-ack percentiles `deferred` |
-| 4 | Ghost suggestions | `validation` | ADR 0010 opt-in suffix; motion/kill-ring/no-exec recorded; async/dim leftovers remain |
+| 4 | Ghost suggestions | `validation` | ADR 0010 opt-in suffix; ADR 0011 unblocks async; motion/kill-ring/no-exec recorded; QUERY wire + dim leftovers remain |
 | 5 | Completion | `validation` | `G4` / `COMP-001` / `COMP-002` / `COMP-003` complete; `COMP-004` in `discovery` (no overlay); `GIT-004` complete |
 | 6 | Syntax highlighting | `blocked` | unproven continuous decoration; intentionally after search/ghost/completion evidence |
 | 7 | Git/provider expansion | `validation` | prompt status plus history root/branch; upstream/remotes/tags unauthorized |
@@ -457,7 +457,7 @@ keystroke.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `GHST-001` | Async ranked query with generation IDs and cancellation | `blocked` | async IPC ADR decision |
+| `GHST-001` | Async ranked query with generation IDs and cancellation | `ready` | ADR 0011 accepted (`docs/adr/0011-async-feature-ipc.md`; `docs/ghst-001-async-ipc-plan.md`); wire layout + Bash stale rejection remain |
 | `GHST-002` | Inline ghost rendering with stale-result rejection | `validation` | ADR 0010; G-1–G-6 in `bash/ghost.bash`, `crates/pty/tests/ghost.rs`, `tests/bash/modules.bash`; `docs/ghst-002-inline-ghost-plan.md`; remaining printables P-1–P-3 (`docs/ghst-002-printables-plan.md`); vi-insert V-1–V-3 (`docs/ghst-002-vi-insert-plan.md`); Left dismiss L-1–L-3 (`docs/ghst-002-left-motion-plan.md`); Home/Up/backward-word H-1/W-4/U-2 (`docs/ghst-002-home-up-motion-plan.md`); Down D-1–D-2 (`docs/ghst-002-down-motion-plan.md`); kill-ring isolation K-1–K-3 (`docs/ghst-002-kill-ring-plan.md`); Enter is a Readline delete-char + accept-line macro (M-041); helpers bind before printables and partial disarm clears the armed flag (M-044); dim paint and async stale-rejection leftovers remain |
 | `GHST-003` | Full/word acceptance and suggestion cycling | `complete` | Right/`\C-f` full accept in G-2; `\ef` / Ctrl-Right word-accept in W-1–W-3 (`docs/ghst-003-word-accept-plan.md`); `\C-x\C-n` / `\C-x\C-p` cycling in C-1–C-3 (`docs/ghst-003-cycle-plan.md`) |
 | `GHST-004` | Multiline, resize, exact-byte, no-execution, and latency evidence | `validation` | R-1/Q-1/M-1 in `docs/ghst-004-multiline-resize-plan.md`; C-1/B-1 in `docs/ghst-004-no-execution-plan.md`; `crates/pty/tests/ghost.rs`; latency matrix remains |
@@ -567,19 +567,19 @@ Exit condition: `G5` after every `HRD-*` item is complete.
 percentile leftovers are `deferred` and must not block product slices
 (`docs/latency-budget-deferral.md`).
 
-1. `HIST-010` / `GIT-003` repository context and CLI filters (`search repo` /
-   `search branch` / `search failed`) are on the landing branch. `PRM-006` is
-   `complete`. Ghost Strategy A is recorded; dim paint and async stale-rejection
-   remain blocked (decoration hook / IPC ADR). `GHST-004` latency is `deferred`.
-   Do not mark `GHST-004` complete. Do not start highlighting or overlay.
+1. `HIST-010` / `GIT-003` repository context and CLI filters are on `main`.
+   ADR 0011 unblocks `GHST-001` (MBX2 QUERY/RESULT/CANCEL with generation IDs).
+   Ghost Strategy A is recorded; dim paint remains blocked on continuous
+   decoration. `GHST-004` latency is `deferred`. Do not mark `GHST-001` or
+   `GHST-004` complete. Do not start highlighting or overlay.
    `COMP-004` stays `discovery`. Do not mark `COMP-004` or `COMP-005` complete.
-2. Remaining `SRCH-003` work is on other branches; do not duplicate those PRs.
-   Interactive repo/failed filters need the Strategy A search path once `HIST-010`
-   is on `main`.
-3. Next decision gate for ghost async is an MBX2 feature-IPC ADR (`GHST-001`).
-   `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
-   slice on FND-001 SHA refresh or percentile benches unless a functional
-   prompt-path defect is proven.
+2. Remaining `SRCH-003` interactive leftovers are on other branches; do not
+   duplicate those PRs. Repo/failed CLI filters are available for Strategy A
+   search once that PR is rebased onto `main`.
+3. Next implementation slice for ghost async is MBX2 QUERY wire + Bash
+   generation stale rejection. `HRD-001` macOS remains Phase 9 / `G5`. Do not
+   spend a slice on FND-001 SHA refresh or percentile benches unless a
+   functional prompt-path defect is proven.
 
 ## Provisional performance and safety budgets
 
@@ -609,9 +609,9 @@ they become `G5` release promises.
 - Completion functions depend on live shell state and `compopt`; asynchronous or
   subprocess execution can change semantics.
 - MBX1 is sequential and prompt-oriented. History RECORD uses MBX2 on the same
-  coprocess. Interactive features may still need typed results, generation IDs,
-  cancellation, and stale-response rejection as a later MBX2 revision, not an
-  MBX1 change.
+  coprocess. ADR 0011 accepts interactive QUERY/RESULT/CANCEL with generation
+  IDs and client stale rejection as an MBX2 extension; wire layout and Bash
+  rejection remain (`GHST-001`). Do not overload MBX1.
 - A single sequential coprocess can suffer head-of-line blocking.
 - Unicode scalar counts are not display widths. Combining characters, wide
   glyphs, wrapping, `SIGWINCH`, tmux, and SSH need PTY evidence.
@@ -722,3 +722,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-19 | Recorded ghost `GHST-004` no-execution PTY evidence (`docs/ghst-004-no-execution-plan.md`; C-1/B-1). Latency matrix remains `deferred`. Do not mark `GHST-004` complete. |
 | 2026-08-20 | Recorded ghost Down / forward-history dismiss (`docs/ghst-002-down-motion-plan.md`; D-1–D-2). Dim paint and async stale-rejection remain blocked. Do not mark `GHST-004` complete. |
 | 2026-08-20 | Landed `HIST-010` / `GIT-003` + CLI filters onto main after ghost (`docs/hist-010-git-003-plan.md`; `docs/hist-010-cli-filters-plan.md`). Unblocks interactive repo/failed search consumers. |
+| 2026-08-20 | Accepted ADR 0011 async feature IPC on MBX2 (`docs/adr/0011-async-feature-ipc.md`). `GHST-001` moves to `ready`. Wire implementation remains. Do not mark `GHST-001` complete. |
