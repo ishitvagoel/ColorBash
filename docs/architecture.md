@@ -1,8 +1,8 @@
 # Foundation architecture
 
-Status: implemented prototype with the foundation prompt slice plus a UI-free,
-opt-in history sidecar. Editor features still require the reassessment work
-described below.
+Status: implemented prototype with the foundation prompt slice, an opt-in
+history sidecar, and Strategy A ghost. Strategy A search is unblocked;
+highlighting and GUI overlay remain `deferred`.
 
 ## Scope
 
@@ -10,9 +10,10 @@ The implemented prototype is the hybrid Bash/Rust prompt path plus the Phase 3A
 history sidecar. Interactive Bash calls a native helper, receives presentation
 data, and continues to execute commands with ordinary Bash semantics. When
 explicitly enabled, Bash also observes admitted history and enqueues records
-without modifying `.bash_history`. Completion UI, live highlighting, and a
-type-to-filter Ctrl+R overlay remain gated. Opt-in inline ghost (ADR 0010) is
-a suffix after the cursor, not dim after-every-key paint.
+without modifying `.bash_history`. Opt-in inline ghost (ADR 0010) is a suffix
+after the cursor, not dim after-every-key paint. Strategy A history search and
+ghost are unblocked; live highlighting and GUI overlays (completion menu,
+type-to-filter Ctrl+R) remain `deferred` from this MVP.
 
 ## System boundary
 
@@ -346,7 +347,10 @@ an MBX2 query.
 `path`, `count`, `clear`, and `delete` are the privacy controls. Command text
 never enters traces.
 
-This slice does not enable history-driven UI. Invariance and admission-parity
+This slice does not enable a GUI overlay or live highlighting. Strategy A
+ghost is implemented (ADR 0010); Strategy A search is unblocked (G3 `bind -x`
+plus the ADR 0010 precedent; draft PR #37). Highlighting and GUI overlay remain
+`deferred`. Invariance and admission-parity
 PTY evidence is in `crates/pty/tests/history_invariance.rs`. 100k query p95 and
 hostile inertness evidence is in `docs/benchmarks/2026-08-16-history-queries.md`
 and `crates/cli/src/corpus.rs`. Prompt-boundary write-ack PTY and release
@@ -434,9 +438,9 @@ Ctrl+Z, resize, `stty -g` restoration, multiline continuation, narrow wrap,
 resize-mid-line, and wide/combining glyph round trips (`docs/research/
 multiline-width-pty.md`), and the Bash history admission corpus
 (`docs/research/bash-history-admission.md`). The opt-in history sidecar is
-implemented; `G2` is complete and write-ack percentiles are `deferred`. Live
-highlighting remains gated by unproven continuous decoration
-(`docs/g3-gate-close-plan.md`). Opt-in inline ghost is ADR 0010
+implemented; `G2` is complete and write-ack percentiles are `deferred`. Strategy A
+search and ghost are unblocked; highlighting and GUI overlay remain `deferred`
+(`docs/g3-gate-close-plan.md`; ADR 0003). Opt-in inline ghost is ADR 0010
 (`bash/ghost.bash`; suffix after `READLINE_POINT`; Enter uses a Readline
 delete-char + accept-line macro while a suffix is active; ASCII printables that
 are stock `self-insert` are wrapped on emacs and vi-insert; `\ef` / Ctrl-Right

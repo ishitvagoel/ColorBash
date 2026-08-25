@@ -5,11 +5,11 @@
 > brief remains `CODEX_MODERN_BASH_ARCHITECTURE.md`; its checkboxes describe the
 > intended program and are not a status tracker.
 
-- Last reviewed: 2026-08-18 UTC
-- Current milestone: Phase 3A sidecar implemented; `G0` and `G2` complete; `G1` accepted
-- Active workstream: `HIST-010` / `GIT-003` landing on main; `GHST-002`/`GHST-004` validation leftovers remain (dim paint, async stale-rejection, latency deferred); highlighting/overlay blocked on unproven continuous decoration
-- Next decision gate: async feature IPC ADR (unblocks `GHST-001`); continuous-decoration leftover (blocks highlighting / overlay)
-- Editor-facing work: opt-in ghost suffix is unblocked (ADR 0010). Highlighting and GUI overlay stay blocked on after-every-key paint.
+- Last reviewed: 2026-08-25 UTC
+- Current milestone: Phase 3 sidecar and Strategy A ghost are on main; `G0`–`G4` complete
+- Active workstream: ADR 0011 (draft PR #40) then MBX2 QUERY wire (draft PR #41); rebase Strategy A search (draft PR #37)
+- Next decision gate: land ADR 0011 to unblock `GHST-001`. Continuous decoration **defers** highlighting and GUI overlay only; it does not block Strategy A `bind -x` or suffix-in-buffer work
+- Editor-facing work: opt-in ghost suffix is on main (ADR 0010). Strategy A history search is `ready`. Highlighting, dim paint, and GUI overlays are `deferred` from this MVP (G5 revisit)
 - Timing policy: unmet percentile targets are `deferred` and do not block
   product development (`docs/latency-budget-deferral.md`)
 
@@ -33,6 +33,11 @@ Status values have precise meanings:
 Do not use percentages or an ambiguous `partial` status. Code existing is not
 enough for `complete`. Record UTC dates and a commit or PR when one exists. Move
 removed work to `deferred` or `superseded` instead of silently deleting it.
+
+Continuous after-every-key decoration is unproven (ADR 0003 B-5). That leftover
+**defers** live highlighting and GUI-like overlays; it must not mark Strategy A
+explicit `bind -x` or suffix-in-buffer features `blocked`. A missing ADR is the
+next slice, not an indefinite wait.
 
 ## Source-of-truth boundaries
 
@@ -74,8 +79,9 @@ silently overwrite an accepted decision.
 
 ## Current baseline
 
-The repository is a foundation prototype plus a UI-free history sidecar, not the
-MVP. A green GitHub Actions CI run is linked for `FND-001`
+The repository is a foundation prototype plus an opt-in history sidecar and
+Strategy A ghost suffix, not an overlay MVP. A green GitHub Actions CI run is
+linked for `FND-001`
 (`docs/fnd-001-ci-plan.md`). `G0` and `G2` are complete. Remaining prompt
 percentile matrix and write-ack p95/p99 are `deferred`
 (`docs/latency-budget-deferral.md`). `HRD-001` macOS remains release-matrix
@@ -123,13 +129,17 @@ recorded a green run on `origin/main` at commit
 
 Not implemented:
 
-- enhanced Ctrl+R overlay, completion UI, or live highlighting;
-- opt-in inline ghost is implemented (ADR 0010); dim after-every-key paint is not;
-- arbitrary key-injection coverage (Tab, arrows, Ctrl+R), the release platform
-  matrix, or remaining `G0` platform-matrix evidence;
+- live highlighting, dim after-every-key paint, or a GUI completion / Ctrl+R
+  overlay (`deferred` from this Strategy A MVP; G5 revisit);
+- Strategy A history-search UI (explicit `bind -x`; draft PR #37, not on main);
+- asynchronous feature IPC (`GHST-001`; draft ADR 0011 is PR #40);
+- arbitrary key-injection coverage (Tab, arrows, stock Ctrl+R), the release
+  platform matrix, or remaining `G0` platform-matrix evidence; or
 - prompt-boundary write-ack percentile budget (correctness recorded; p95 miss
-  deferred from `G2` — `docs/history-g2-write-ack-deferral.md`); or
-- asynchronous feature IPC or the broader completion/history provider model.
+  deferred from `G2` — `docs/history-g2-write-ack-deferral.md`).
+
+Opt-in inline ghost is implemented (ADR 0010). `HIST-010` / `GIT-003` CLI
+filters (`search repo` / `search branch` / `search failed`) are on main.
 
 Known foundation debt:
 
@@ -175,18 +185,18 @@ Current SOLID foundation
         ├── completion-adapter experiment ────────── G4 completion parity
         └── G1 history privacy ── Phase 3A ───────── G2 history readiness
                                                         │
-                         G2 + G3 ── enhanced Ctrl+R ─────┤
+                         G2 + G3 ── Strategy A Ctrl+R ───┤
                          G2 + G3 ── ghost suggestions ───┤
-                         G3 + G4 ── completion popup ────┤
-                              G3 ── highlighting last ───┤
+                         G3 + G4 ── ranked completion ───┤
+                              G3 ── highlighting last ───┤  (deferred; no paint hook)
                                                         │
-                                      all MVP exits ── G5 release hardening
+                         Strategy A MVP exits ── G5 release hardening
 ```
 
 Phase numbers preserve the original brief. Actual execution order follows the
-dependencies above; Phase 8 enhanced Ctrl+R is intentionally prototyped before
-continuous Phase 4 ghost rendering because an explicit insertion action is a
-lower-risk validation of search, restoration, and exact text insertion.
+dependencies above. Phase 8 is a Strategy A explicit `bind -x` search action,
+not a type-to-filter overlay. Highlighting and GUI popups stay last and are
+`deferred` until a decoration hook or a new ADR exists.
 
 ## Gates
 
@@ -276,18 +286,21 @@ prototype:
 - works in emacs and vi modes with bracketed paste, resize, Ctrl+C, and Ctrl+Z;
 - restores terminal state and prompt output after cancellation/failure; and
 - demonstrates insert-time Readline redraw without printable-key rebinds
-  (B-5). Continuous after-every-key decoration stays unproven and still
-  blocks highlighting and GUI overlays (`docs/g3-gate-close-plan.md`; ADR 0003).
-  Opt-in inline ghost is a separate Strategy A path (ADR 0010).
+  (B-5). Continuous after-every-key decoration stays unproven and **defers**
+  highlighting and GUI overlays (`docs/g3-gate-close-plan.md`; ADR 0003). It
+  does not block Strategy A `bind -x` or suffix-in-buffer features. Opt-in
+  inline ghost is on main (ADR 0010).
 
 ### G4 — Completion parity
 
 Status: `complete` (2026-08-16)
 
 The non-popup `COMP-001`/`COMP-002` adapter experiment produced this gate. It may
-run alongside `G3`, using the shared PTY harness, but a custom completion menu is
-blocked until `COMP-004`. Passed when file completion and at least one existing
-`-F` completion function preserve stock Bash behavior for:
+run alongside `G3`, using the shared PTY harness. A GUI completion overlay is
+`deferred` (no decoration hook; `docs/comp-004-popup-plan.md`). Ranked-accept
+(`\C-x\C-a`) is on main; ranked-cycle remains a `COMP-004` leftover. Passed when
+file completion and at least one existing `-F` completion function preserve
+stock Bash behavior for:
 
 - `COMP_*` inputs, `COMPREPLY`, and `compopt` effects;
 - exact candidate bytes, quoting, escaping, whitespace, and suffix insertion;
@@ -303,13 +316,20 @@ close (same precedent as `G2` write-ack deferral).
 
 ### G5 — MVP release
 
-Status: `blocked` by unproven continuous decoration and the MVP phase exits
+Status: `blocked` by remaining Strategy A feature exits and `HRD-*`, not by
+continuous decoration
 
-Requires `GHST-004`, `COMP-005`, `HLT-003`, `GIT-004`, `SRCH-003`, and all
+Requires Strategy A exits `GHST-004`, `COMP-005`, `GIT-004`, `SRCH-003`, and all
 `HRD-*` release deliverables, plus real-PTY evidence across the supported Bash/OS
 matrix, hostile-input tests, signals and resize, tmux/SSH/fullscreen applications,
-helper crashes, terminal restoration, installation/removal, and all accepted
-latency budgets.
+helper crashes, terminal restoration, installation/removal, and accepted
+latency budgets that have not been deferred.
+
+`HLT-003` and GUI overlay/dim-paint work are `deferred` from this Strategy A MVP
+with owner **G5 revisit**. Do not delete those IDs. Do not treat the missing
+decoration hook as an indefinite product-development stop. Unmet percentile
+targets stay `deferred` (`docs/latency-budget-deferral.md`) and are not a G5
+pass unless an ADR ratifies them.
 
 ## Phase summary
 
@@ -319,12 +339,12 @@ latency budgets.
 | 1 | Bootstrap | `complete` | CI linked; broader lifecycle tracing deferred |
 | 2 | Prompt | `complete` | capability/width/wrap recorded; `PRM-004` percentiles `deferred` |
 | 3 | History | `complete` | Phase 3A / `G2` complete; `HIST-009` and `HIST-010` complete; write-ack percentiles `deferred` |
-| 4 | Ghost suggestions | `validation` | ADR 0010 opt-in suffix; motion/kill-ring/no-exec recorded; async/dim leftovers remain |
-| 5 | Completion | `validation` | `G4` / `COMP-001` / `COMP-002` / `COMP-003` complete; `COMP-004` in `discovery` (no overlay); `GIT-004` complete |
-| 6 | Syntax highlighting | `blocked` | unproven continuous decoration; intentionally after search/ghost/completion evidence |
+| 4 | Ghost suggestions | `validation` | ADR 0010 suffix on main; `GHST-001` waits on ADR 0011 (PR #40); dim paint `deferred`; do not mark `GHST-004` complete |
+| 5 | Completion | `validation` | `G4` / `COMP-001`–`COMP-003` / `GIT-004` complete; `COMP-004` `discovery`; overlay `deferred`; ranked-cycle is PR #30 |
+| 6 | Syntax highlighting | `deferred` | no after-every-key paint hook (ADR 0003); G5 revisit; IDs kept |
 | 7 | Git/provider expansion | `validation` | prompt status plus history root/branch; upstream/remotes/tags unauthorized |
-| 8 | Enhanced Ctrl+R | `blocked` | unproven continuous decoration leftover |
-| 9 | Release hardening | `not-started` | feature gates and full compatibility matrix |
+| 8 | Enhanced Ctrl+R | `ready` | Strategy A explicit `bind -x` (G3 + ADR 0010); overlay `deferred`; draft PR #37 |
+| 9 | Release hardening | `not-started` | Strategy A feature exits and full compatibility matrix |
 
 ## Phase details
 
@@ -443,13 +463,15 @@ the roadmap cannot make that scope change by itself.
 
 ### Phase 4 — Ghost suggestions
 
-Status: `validation`. Opt-in suffix ghost is recorded (ADR 0010). Word-accept,
+Status: `validation`. Opt-in suffix ghost is on main (ADR 0010). Word-accept,
 cycling, remaining printables, vi-insert, Left dismiss, Home/Up/Down/backward-word,
-and kill-ring isolation are recorded. Dim paint and async lookup remain.
-Partial `GHST-004` PTY evidence is in `docs/ghst-004-multiline-resize-plan.md`
-and `docs/ghst-004-no-execution-plan.md`.
+and kill-ring isolation are recorded. Dim after-every-key paint is `deferred`
+(not a Phase 4 exit). Async lookup is `GHST-001`, blocked only on landing
+ADR 0011 (draft PR #40). Partial `GHST-004` PTY evidence is in
+`docs/ghst-004-multiline-resize-plan.md` and `docs/ghst-004-no-execution-plan.md`.
+Do not mark `GHST-004` complete; the latency matrix leftover stays `deferred`.
 
-After the gates pass, implement asynchronous ranked-history lookup with generation
+After ADR 0011 lands, implement asynchronous ranked-history lookup with generation
 IDs, stale-result rejection, inline rendering, full/word acceptance, cycling, and
 multiline/resize behavior. Acceptance must preserve exact bytes/cursor position,
 never execute the suggestion, and perform no external command on a cache-hit
@@ -457,38 +479,45 @@ keystroke.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `GHST-001` | Async ranked query with generation IDs and cancellation | `blocked` | async IPC ADR decision |
-| `GHST-002` | Inline ghost rendering with stale-result rejection | `validation` | ADR 0010; G-1–G-6 in `bash/ghost.bash`, `crates/pty/tests/ghost.rs`, `tests/bash/modules.bash`; `docs/ghst-002-inline-ghost-plan.md`; remaining printables P-1–P-3 (`docs/ghst-002-printables-plan.md`); vi-insert V-1–V-3 (`docs/ghst-002-vi-insert-plan.md`); Left dismiss L-1–L-3 (`docs/ghst-002-left-motion-plan.md`); Home/Up/backward-word H-1/W-4/U-2 (`docs/ghst-002-home-up-motion-plan.md`); Down D-1–D-2 (`docs/ghst-002-down-motion-plan.md`); kill-ring isolation K-1–K-3 (`docs/ghst-002-kill-ring-plan.md`); Enter is a Readline delete-char + accept-line macro (M-041); helpers bind before printables and partial disarm clears the armed flag (M-044); dim paint and async stale-rejection leftovers remain |
+| `GHST-001` | Async ranked query with generation IDs and cancellation | `blocked` | land ADR 0011 (draft PR #40); then QUERY wire (draft PR #41) |
+| `GHST-002` | Inline ghost rendering with stale-result rejection | `validation` | ADR 0010; G-1–G-6 in `bash/ghost.bash`, `crates/pty/tests/ghost.rs`, `tests/bash/modules.bash`; `docs/ghst-002-inline-ghost-plan.md`; remaining printables P-1–P-3 (`docs/ghst-002-printables-plan.md`); vi-insert V-1–V-3 (`docs/ghst-002-vi-insert-plan.md`); Left dismiss L-1–L-3 (`docs/ghst-002-left-motion-plan.md`); Home/Up/backward-word H-1/W-4/U-2 (`docs/ghst-002-home-up-motion-plan.md`); Down D-1–D-2 (`docs/ghst-002-down-motion-plan.md`); kill-ring isolation K-1–K-3 (`docs/ghst-002-kill-ring-plan.md`); Enter is a Readline delete-char + accept-line macro (M-041); helpers bind before printables and partial disarm clears the armed flag (M-044); dim paint is `deferred` (not a Phase 4 exit); async stale-rejection waits on `GHST-001` |
 | `GHST-003` | Full/word acceptance and suggestion cycling | `complete` | Right/`\C-f` full accept in G-2; `\ef` / Ctrl-Right word-accept in W-1–W-3 (`docs/ghst-003-word-accept-plan.md`); `\C-x\C-n` / `\C-x\C-p` cycling in C-1–C-3 (`docs/ghst-003-cycle-plan.md`) |
-| `GHST-004` | Multiline, resize, exact-byte, no-execution, and latency evidence | `validation` | R-1/Q-1/M-1 in `docs/ghst-004-multiline-resize-plan.md`; C-1/B-1 in `docs/ghst-004-no-execution-plan.md`; `crates/pty/tests/ghost.rs`; latency matrix remains |
+| `GHST-004` | Multiline, resize, exact-byte, no-execution, and latency evidence | `validation` | R-1/Q-1/M-1 in `docs/ghst-004-multiline-resize-plan.md`; C-1/B-1 in `docs/ghst-004-no-execution-plan.md`; `crates/pty/tests/ghost.rs`; latency matrix `deferred` (`docs/latency-budget-deferral.md`). Do not mark complete |
 
-Exit condition: `GHST-004` meets the accepted editing and safety budgets.
+Exit condition: `GHST-004` functional editing and safety evidence. Latency
+percentiles are `deferred` and do not block that exit once an authorized close
+records it; this slice does not close `GHST-004`.
 
 ### Phase 5 — Completion
 
-Status: `validation`; popup policy in `discovery` (`COMP-004`; no GUI overlay).
+Status: `validation`; popup policy in `discovery` (`COMP-004`). GUI overlay is
+`deferred` from this MVP. Ranked-accept is on main. Ranked-cycle is draft
+PR #30 and must not reuse ghost chords `\C-x\C-n` / `\C-x\C-p`.
 `COMP-001` / `COMP-002` / `COMP-003` / `GIT-004` are complete.
 
 First adapt stock Bash completion and prove exact insertion parity. Only then add
-typed candidate metadata, bounded ranking, popup navigation, and Git candidates.
-Unsupported completion specifications must fall through without mutating the
-line. Do not move completion functions into a subprocess unless live-state and
-`compopt` parity are demonstrated.
+typed candidate metadata, bounded ranking, optional Strategy A cycle chords, and
+Git candidates. Unsupported completion specifications must fall through without
+mutating the line. Do not move completion functions into a subprocess unless
+live-state and `compopt` parity are demonstrated. Do not start a GUI overlay.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
 | `COMP-001` | Build a non-popup stock-completion adapter harness | `complete` | `docs/comp-001-harness-plan.md`; H-1–H-4; `G4` complete; 5 ms leftover `deferred` |
 | `COMP-002` | Prove file and one `-F` function's exact insertion parity | `complete` | `docs/comp-002-parity-plan.md`; P-1–P-4, F-1–F-4, L-1–L-4, N-1–N-2, S-1–S-4; `docs/g4-gate-close-plan.md`; 5 ms leftover `deferred` |
 | `COMP-003` | Add typed candidate metadata and bounded ranking | `complete` | `docs/comp-003-metadata-plan.md` K-1–K-4; `docs/comp-003-ranking-plan.md` R-1–R-4 in `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs` |
-| `COMP-004` | Add popup navigation and terminal-safe rendering | `discovery` | `docs/comp-004-popup-plan.md` P-1–P-4; `docs/comp-004-ranked-accept-plan.md` A-1–A-5; overlay unproven |
-| `COMP-005` | Insert/fall through exactly and pass the parity/PTY matrix | `blocked` | `COMP-004`, Git candidates when enabled |
+| `COMP-004` | Add popup navigation and terminal-safe rendering | `discovery` | `docs/comp-004-popup-plan.md` P-1–P-4; ranked-accept A-1–A-5 on main (`docs/comp-004-ranked-accept-plan.md`); GUI overlay `deferred`; ranked-cycle leftover is draft PR #30 (rebase; do not reuse ghost `\C-x\C-n` / `\C-x\C-p`) |
+| `COMP-005` | Insert/fall through exactly and pass the parity/PTY matrix | `blocked` | `COMP-004` Strategy A leftovers; Git candidates when enabled. Overlay is not the blocker |
 
-Exit condition: `G4` for the adapter slice; `COMP-005` for the MVP completion
-feature.
+Exit condition: `G4` for the adapter slice; `COMP-005` for the Strategy A
+completion feature. Do not mark `COMP-004` or `COMP-005` complete in this
+taxonomy slice.
 
 ### Phase 6 — Syntax highlighting
 
-Status: `blocked` by unproven continuous decoration and intentionally last among editor experiments.
+Status: `deferred` from this Strategy A MVP (owner **G5 revisit**). Unproven
+continuous decoration (ADR 0003); intentionally last among editor experiments.
+IDs are kept. Do not idle product development on this phase.
 
 Define a tolerant token taxonomy only after Readline redraw feasibility is known.
 The highlighter must accept incomplete Bash, never execute or expand input, bound
@@ -497,11 +526,12 @@ and strip back to the exact original bytes.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `HLT-001` | Define token taxonomy and tolerant incomplete-input lexer | `blocked` | unproven continuous decoration and ADR 0003 |
-| `HLT-002` | Integrate terminal-safe styling without taking execution ownership | `blocked` | `HLT-001`, accepted redraw strategy |
-| `HLT-003` | Pass exact-byte stripping, hostile-input, PTY, and latency gates | `blocked` | `HLT-002`, `PTY-001` |
+| `HLT-001` | Define token taxonomy and tolerant incomplete-input lexer | `deferred` | unproven continuous decoration and ADR 0003; G5 revisit |
+| `HLT-002` | Integrate terminal-safe styling without taking execution ownership | `deferred` | `HLT-001`, accepted redraw strategy; G5 revisit |
+| `HLT-003` | Pass exact-byte stripping, hostile-input, PTY, and latency gates | `deferred` | `HLT-002`, `PTY-001`; G5 revisit |
 
-Exit condition: `HLT-003`.
+Exit condition: `HLT-003` if G5 keeps highlighting in scope; otherwise remain
+`deferred` with an ADR or roadmap note. Do not delete these IDs.
 
 ### Phase 7 — Git and provider expansion
 
@@ -524,21 +554,24 @@ MVP Git/completion slice. `GIT-005` remains explicitly post-MVP.
 
 ### Phase 8 — Enhanced Ctrl+R
 
-Status: `blocked` by unproven continuous decoration, but first in the editor-feature sequence once
-that leftover is resolved.
+Status: `ready` for Strategy A explicit `bind -x` search. A type-to-filter
+overlay remains `deferred` (no decoration hook). G3 already proved non-destructive
+insert; ADR 0010 is the ghost precedent. Draft PR #37 implements the chord path
+and needs rebase onto current main (conflicts; predates ghost and `HIST-010`).
 
 Build a configurable explicit search action with age, cwd, and useful status
 metadata; bounded filtering; safe cancellation; exact insertion without
-execution; and terminal restoration. Repository/failed-command filters are added
-only when their indexed fields are reliable.
+execution; and terminal restoration. CLI `search repo` / `search branch` /
+`search failed` already exist on main (`HIST-010`). Interactive filters wait on
+the search UI, not on decoration.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `SRCH-001` | Configurable bounded history-search action and result view | `blocked` | unproven continuous decoration |
-| `SRCH-002` | Cancel restoration and exact insertion without execution | `blocked` | `SRCH-001`, `PTY-001` |
-| `SRCH-003` | Metadata filters, 100k-row latency, signal, and terminal-state evidence | `blocked` | `SRCH-002`; CLI `search failed` / `search repo` / `search branch` exist; interactive filters still need the Ctrl+R UI |
+| `SRCH-001` | Configurable bounded history-search action and result view | `ready` | G3 explicit `bind -x`; ADR 0010 precedent; draft PR #37. Overlay is not required |
+| `SRCH-002` | Cancel restoration and exact insertion without execution | `ready` | `SRCH-001`, `PTY-001`; included in draft PR #37 |
+| `SRCH-003` | Metadata filters, 100k-row latency, signal, and terminal-state evidence | `blocked` | landing Strategy A search UI (PR #37 / `SRCH-001`), not decoration; CLI `search failed` / `search repo` / `search branch` are on main |
 
-Exit condition: `SRCH-003`.
+Exit condition: `SRCH-003`. Do not mark `SRCH-*` complete in this taxonomy slice.
 
 ### Phase 9 — Release hardening
 
@@ -554,7 +587,7 @@ combinations are impractical.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `HRD-001` | Supported Bash/OS/terminal pairwise PTY matrix | `not-started` | all MVP feature exits; Darwin PTY constant pre-work (D-1–D-3) recorded in `docs/hrd-001-darwin-pty-constants-plan.md`; macOS matrix run still required |
+| `HRD-001` | Supported Bash/OS/terminal pairwise PTY matrix | `not-started` | Strategy A MVP feature exits (not deferred `HLT-*` / overlay); Darwin PTY constant pre-work (D-1–D-3) recorded in `docs/hrd-001-darwin-pty-constants-plan.md`; macOS matrix run still required |
 | `HRD-002` | Hostile input, protocol bounds, privacy, and no-execution audit | `not-started` | feature-complete candidate |
 | `HRD-003` | Release-mode end-to-end latency and resource evidence | `not-started` | accepted workloads/budgets |
 | `HRD-004` | Install, upgrade, disable, removal, crash, and recovery evidence | `not-started` | release packaging |
@@ -563,23 +596,28 @@ Exit condition: `G5` after every `HRD-*` item is complete.
 
 ## Immediate next work
 
-`G0` and `G2` are complete. Capture stays disabled by default. Unmet
+`G0`–`G4` and Phase 3 are complete. Capture stays disabled by default. Unmet
 percentile leftovers are `deferred` and must not block product slices
-(`docs/latency-budget-deferral.md`).
+(`docs/latency-budget-deferral.md`). `HIST-010` / `GIT-003` CLI filters are
+already on `main`; do not duplicate them.
 
-1. `HIST-010` / `GIT-003` repository context and CLI filters (`search repo` /
-   `search branch` / `search failed`) are on the landing branch. `PRM-006` is
-   `complete`. Ghost Strategy A is recorded; dim paint and async stale-rejection
-   remain blocked (decoration hook / IPC ADR). `GHST-004` latency is `deferred`.
-   Do not mark `GHST-004` complete. Do not start highlighting or overlay.
-   `COMP-004` stays `discovery`. Do not mark `COMP-004` or `COMP-005` complete.
-2. Remaining `SRCH-003` work is on other branches; do not duplicate those PRs.
-   Interactive repo/failed filters need the Strategy A search path once `HIST-010`
-   is on `main`.
-3. Next decision gate for ghost async is an MBX2 feature-IPC ADR (`GHST-001`).
-   `HRD-001` macOS PTY matrix remains Phase 9 / `G5` work. Do not spend a
-   slice on FND-001 SHA refresh or percentile benches unless a functional
-   prompt-path defect is proven.
+1. Review and land draft PR #40 (ADR 0011 async MBX2 feature IPC). That is the
+   `GHST-001` decision. Do not rewrite the ADR from scratch.
+2. Land draft PR #41 (MBX2 `QUERY` / `RESULT` / `CANCEL` wire). A later slice
+   wires `bash/ghost.bash` onto QUERY with generation stale-rejection. Do not
+   mark `GHST-001` or `GHST-004` complete unless their exit criteria are met.
+3. Rebase draft PR #37 (Strategy A history search) onto current `main`. It
+   conflicts and predates ghost plus `HIST-010`. Interactive repo/failed
+   filters follow after that UI lands. Do not mark `SRCH-*` complete here.
+4. Later: rebase PR #30 ranked-cycle with chords that do **not** collide with
+   ghost `\C-x\C-n` / `\C-x\C-p`. `COMP-004` stays `discovery`. Overlay is
+   `deferred`. Do not mark `COMP-004` or `COMP-005` complete.
+5. Do not start highlighting, dim paint, or a GUI overlay. Those IDs are
+   `deferred` from this MVP with G5 revisit. `HRD-001` macOS remains Phase 9 /
+   `G5` host work. Close superseded draft PRs #31 (`search failed`; on main)
+   and #34 (`PRM-006` already complete) when authorized. Do not spend a slice
+   on FND-001 SHA refresh or percentile benches unless a functional prompt-path
+   defect is proven.
 
 ## Provisional performance and safety budgets
 
@@ -604,8 +642,10 @@ they become `G5` release promises.
 ## Cross-cutting risks requiring evidence
 
 - Standard Readline exposes `READLINE_LINE` during `bind -x` but no supported
-  after-every-key decoration hook. Rebinding printable keys is a stop/reassess
-  condition.
+  after-every-key decoration hook. That leftover **defers** highlighting and GUI
+  overlays. Rebinding printables to fake an overlay is a stop/reassess
+  condition. Strategy A explicit `bind -x` and suffix-in-buffer features are
+  not blocked by it.
 - Completion functions depend on live shell state and `compopt`; asynchronous or
   subprocess execution can change semantics.
 - MBX1 is sequential and prompt-oriented. History RECORD uses MBX2 on the same
@@ -627,6 +667,15 @@ Until the MVP gates pass, defer Python/Node/Docker/Kubernetes/cloud providers,
 provider SDK/plugin ecosystem, command palette, directory frecency, contextual
 error intelligence, command result blocks, cloud history, graphical UI, terminal
 emulator work, AI assistance, and automatic command correction or execution.
+
+Also `deferred` from this **Strategy A MVP** (owner G5 revisit; IDs kept):
+
+- live syntax highlighting (`HLT-001`–`HLT-003`);
+- dim after-every-key ghost paint;
+- GUI completion overlay / type-to-filter Ctrl+R overlay.
+
+Do not leave those items `blocked` with no next action. Revisit at G5 or with
+an accepted decoration/ownership ADR.
 
 ## Change log
 
@@ -722,3 +771,4 @@ emulator work, AI assistance, and automatic command correction or execution.
 | 2026-08-19 | Recorded ghost `GHST-004` no-execution PTY evidence (`docs/ghst-004-no-execution-plan.md`; C-1/B-1). Latency matrix remains `deferred`. Do not mark `GHST-004` complete. |
 | 2026-08-20 | Recorded ghost Down / forward-history dismiss (`docs/ghst-002-down-motion-plan.md`; D-1–D-2). Dim paint and async stale-rejection remain blocked. Do not mark `GHST-004` complete. |
 | 2026-08-20 | Landed `HIST-010` / `GIT-003` + CLI filters onto main after ghost (`docs/hist-010-git-003-plan.md`; `docs/hist-010-cli-filters-plan.md`). Unblocks interactive repo/failed search consumers. |
+| 2026-08-25 | Reclassified blocker taxonomy: continuous decoration **defers** highlighting, dim paint, and GUI overlays (G5 revisit; IDs kept). Strategy A search (`SRCH-001`/`SRCH-002`) is `ready`; `SRCH-003` waits on landing search UI, not decoration. `GHST-001` waits only on ADR 0011 (PR #40). Immediate next work is PR #40, then #41, then rebase #37. No deliverable marked complete. |
