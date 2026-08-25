@@ -1,7 +1,10 @@
 # GHST-004 partial: no-execution PTY evidence (C-1–B-1)
 
-Status: `validation` for Ctrl+C and bracketed-paste cases (2026-08-19). Latency
-matrix and full `GHST-004` exit remain. Do **not** mark `GHST-004` complete.
+Status: `complete` for Ctrl+C and bracketed-paste cases (2026-08-19). Functional
+`GHST-004` editing/safety evidence is recorded with resize, exact-byte, and PS2
+(`docs/ghst-004-multiline-resize-plan.md`). Latency percentiles stay `deferred`
+(`docs/latency-budget-deferral.md`) and are not a Phase 4 exit. Dim paint /
+overlay stay `deferred`.
 
 ## Why this slice
 
@@ -21,7 +24,7 @@ evidence beyond ordinary typing. Dim paint and async stale-rejection stay blocke
    prompt accepts a new command.
 2. Bracketed paste bytes that complete a prefix may show a suffix; they do not
    execute until Enter.
-3. Do not mark `GHST-004` complete. Do not start highlighting or overlay.
+3. Dim paint and overlay stay `deferred`. Latency percentiles stay `deferred`.
 
 ## Out of scope (hard)
 
@@ -39,4 +42,4 @@ evidence beyond ordinary typing. Dim paint and async stale-rejection stay blocke
 
 ## Stop
 
-Do not mark `GHST-004` complete. Do not start highlighting or overlay.
+Do not start highlighting or overlay. Latency percentiles stay `deferred`.

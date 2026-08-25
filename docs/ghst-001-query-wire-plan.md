@@ -1,7 +1,7 @@
 # GHST-001 slice: MBX2 QUERY/RESULT/CANCEL wire
 
-Status: `complete` for the wire slice (2026-08-20). Ghost stale rejection remains.
-Do **not** mark `GHST-001` or `GHST-004` complete.
+Status: `complete` for the wire slice (2026-08-20). Ghost stale rejection is
+recorded in `docs/ghst-001-ghost-query-plan.md`.
 
 ## Why this slice
 

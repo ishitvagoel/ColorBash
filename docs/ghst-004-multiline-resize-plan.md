@@ -1,8 +1,10 @@
 # GHST-004 partial: resize, exact-byte, and PS2 PTY evidence (R-1–M-1)
 
-Status: `validation` for resize, spaced exact-byte, and PS2 continuation
-(2026-08-19). Latency matrix and full `GHST-004` exit remain. Do **not** mark
-`GHST-004` complete.
+Status: `complete` for resize, spaced exact-byte, and PS2 continuation
+(2026-08-19). Functional `GHST-004` editing/safety evidence is recorded with
+Ctrl+C and bracketed paste (`docs/ghst-004-no-execution-plan.md`). Latency
+percentiles stay `deferred` (`docs/latency-budget-deferral.md`) and are not a
+Phase 4 exit. Dim paint / overlay stay `deferred`.
 
 ## Why this slice
 
@@ -25,7 +27,7 @@ suggestions.
    boundary; Enter still admits only the typed prefix, not the full history row.
 3. On a `PS2` continuation line, an active suffix is discarded on Enter; the
    folded command uses the typed continuation prefix, not the unaccepted suffix.
-4. Do not mark `GHST-004` complete. Do not start highlighting or overlay.
+4. Dim paint and overlay stay `deferred`. Latency percentiles stay `deferred`.
 
 ## Out of scope (hard)
 
@@ -44,4 +46,4 @@ suggestions.
 
 ## Stop
 
-Do not mark `GHST-004` complete. Do not start highlighting or overlay.
+Do not start highlighting or overlay. Latency percentiles stay `deferred`.

@@ -1,8 +1,8 @@
 # Foundation architecture
 
 Status: implemented prototype with the foundation prompt slice, an opt-in
-history sidecar, and Strategy A ghost. Strategy A search is unblocked;
-highlighting and GUI overlay remain `deferred`.
+history sidecar, Strategy A ghost, and Strategy A history search. Highlighting
+and GUI overlay remain `deferred`.
 
 ## Scope
 
@@ -349,7 +349,8 @@ the ADR 0007 Git adapter **before** `BEGIN IMMEDIATE`; timeout, disable, or
 absence leave NULLs and still insert the row. Search is a direct CLI operation
 (`mbx history search recent|prefix|cwd|repo|branch|fuzzy|failed`). ADR 0011
 QUERY/RESULT/CANCEL is implemented; opt-in ghost uses coprocess QUERY when the
-helper is ready and ignores a RESULT whose generation is not current. Sync CLI
+helper is ready, ignores a RESULT whose generation is not current, and skips a
+delayed stale RESULT that arrives after a later QUERY (ADR 0011). Sync CLI
 search remains for operator tools and for ghost when no coprocess is attached.
 `path`, `count`, `clear`, and `delete` are the privacy controls. Command text
 never enters traces.
@@ -455,8 +456,8 @@ accept one word in emacs; Left / `\C-b` dismiss an unaccepted suffix;
 Home / Up / backward-word strip before their stock motion;
 Down / `\C-n` restores the remembered typed prefix after Up;
 `\C-x\C-n` / `\C-x\C-p` cycle prefix matches). Async QUERY/RESULT/CANCEL with
-generation IDs is accepted in ADR 0011; overlapping delayed-RESULT PTY remains
-(`GHST-001`). Explicit history search via `bind -x` is Strategy A (ADR 0009;
+generation IDs is accepted in ADR 0011; ghost skips a delayed RESULT whose
+generation is not current (`GHST-001`). Explicit history search via `bind -x` is Strategy A (ADR 0009;
 `bash/search.bash`; default `\C-xh` insert and `\C-xl` restore; bounded
 cycling; empty-line and prefix/fuzzy cwd preference; Ctrl+C / Ctrl+Z / resize /
 `stty -g` PTY around `\C-xh` / `\C-xl`). `COMP-004` popup

@@ -678,3 +678,80 @@ fn bracketed_paste_prefix_shows_suffix_without_executing() {
     );
     exit_and_wait(&mut session);
 }
+
+fn hold_query_helper() -> std::path::PathBuf {
+    workspace_root().join("tests/bash/fixtures/hold-query-result.bash")
+}
+
+#[test]
+fn overlapping_delayed_result_is_rejected() {
+    let home = TempHome::new("ghst-overlap");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let helper = hold_query_helper();
+    let helper_s = helper.to_str().unwrap();
+    let real = mbx_bin();
+    let real_s = real.to_str().unwrap();
+    let mut session = spawn_history_shell(
+        home.path(),
+        &ghost_env(
+            data_home_s,
+            histfile_s,
+            &[
+                ("MBX_BIN", helper_s),
+                ("MBX_REAL_BIN", real_s),
+                ("MBX_GHOST_TIMEOUT", "0.25"),
+            ],
+        ),
+    );
+    wait_for(&mut session, "> ");
+    type_line(&mut session, "pwd # MBX_GHST:fresh");
+    wait_all(&mut session, &["> "]);
+    type_line(&mut session, "printf 'MBX_GHST:stale\\n'");
+    wait_all(&mut session, &["MBX_GHST:stale", "> "]);
+    wait_for_count(&mbx_bin(), &data_home, 2);
+
+    // 'p' sends QUERY gen 1 (newest prefix is printf). The helper holds that
+    // RESULT until 'w' sends QUERY gen 2, then emits the stale frame first.
+    session
+        .write_str("pw", deadline(2))
+        .expect("type short then longer prefix");
+    wait_all(&mut session, &["pwd # MBX_GHST:fresh"]);
+    assert_no_output(&mut session, "printf 'MBX_GHST:stale");
+    session.write_str("\n", deadline(2)).expect("enter");
+    let output = wait_all(&mut session, &["> "]);
+    assert!(
+        !visible_contains(&output, "MBX_GHST:stale\n"),
+        "stale delayed RESULT was executed: {:?}",
+        visible_text(&output)
+    );
+    exit_and_wait(&mut session);
+}
+
+#[test]
+fn cancel_after_query_leaves_usable_prompt() {
+    let home = TempHome::new("ghst-cancel");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let mut session = spawn_history_shell(home.path(), &ghost_env(data_home_s, histfile_s, &[]));
+    wait_for(&mut session, "> ");
+    record_echo(&mut session, "alpha");
+    wait_for_count(&mbx_bin(), &data_home, 1);
+
+    session
+        .write_str(
+            "_mbx_ghost_query e || true; ((_MBX_REQUEST_ID += 1)); _mbx_protocol_encode_history_cancel \"$_MBX_REQUEST_ID\" \"$_MBX_GHOST_GENERATION\"; _mbx_engine_exchange \"$REPLY\" && printf 'MBX_GHST:cancel-ok\\n'\n",
+            deadline(2),
+        )
+        .expect("cancel after query");
+    wait_all(&mut session, &["MBX_GHST:cancel-ok\n", "> "]);
+    session
+        .write_str("echo MBX_GHST:after-cancel\n", deadline(2))
+        .expect("prompt after cancel");
+    wait_all(&mut session, &["MBX_GHST:after-cancel\n", "> "]);
+    exit_and_wait(&mut session);
+}

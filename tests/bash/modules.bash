@@ -831,6 +831,13 @@ assert_eq 42 "$REPLY" 'RESULT decode must return the generation in REPLY'
 assert_eq 2 ${#mbx_query_cmds[@]} 'RESULT decode must fill the destination array'
 assert_eq 'git status' "${mbx_query_cmds[0]}" 'RESULT command unescape drifted'
 assert_eq $'echo\tx' "${mbx_query_cmds[1]}" 'RESULT tab unescape drifted'
+if _mbx_protocol_decode_history_result 8 $'MBX2\t9\tRESULT\t1\t1\techo' mbx_query_cmds; then
+    fail 'RESULT decode accepted a mismatched request id'
+fi
+_mbx_protocol_parse_history_result $'MBX2\t9\tRESULT\t1\t1\techo' mbx_query_cmds || \
+    fail 'RESULT parse rejected a well-formed frame with a different request id'
+assert_eq 1 "$REPLY" 'RESULT parse must return the generation without an id match'
+assert_eq echo "${mbx_query_cmds[0]}" 'RESULT parse must still unescape commands'
 if _mbx_protocol_decode_history_result 9 $'MBX2\t9\tRESULT\t42\t1' mbx_query_cmds; then
     fail 'RESULT with a short field count was accepted'
 fi

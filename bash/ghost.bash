@@ -256,22 +256,53 @@ _mbx_ghost_query_wire() {
     local limit=$2
     local generation=$3
     local deadline=$4
-    local request_id response
-    local -a cmds=()
+    local request_id response result_gen
+    local -a cmds=() fields=()
 
     ((_MBX_REQUEST_ID += 1))
     request_id=$_MBX_REQUEST_ID
     _mbx_protocol_encode_history_query \
         "$request_id" "$generation" prefix "$query" "$limit" || return 1
-    if ! _mbx_engine_exchange "$REPLY" "$deadline"; then
-        # Unread RESULT would desync the coprocess the way a timed-out RECORD
-        # does; stop so the prompt path can start a clean helper.
+    if ! _mbx_engine_write "$REPLY" "$deadline"; then
+        # A failed write can leave the coprocess desynced; stop so the prompt
+        # path can start a clean helper.
         _mbx_engine_stop
         return 1
     fi
-    response=$REPLY
-    _mbx_protocol_decode_history_result "$request_id" "$response" cmds || return 1
-    _mbx_ghost_accept_commands "$REPLY" "$query" "$limit" cmds
+    # Do not stop on a timed-out read: a delayed RESULT for this or an older
+    # generation may still arrive, and the next QUERY must skip it (ADR 0011).
+    # Hard decode failures still stop. RECORD/prompt already stop on a stale
+    # frame, so an idle delayed RESULT cannot poison a later PS1 cycle.
+    while _mbx_deadline_remaining "$deadline" >/dev/null; do
+        if ! _mbx_engine_read "$deadline"; then
+            return 1
+        fi
+        response=$REPLY
+        if _mbx_protocol_parse_history_result "$response" cmds; then
+            result_gen=$REPLY
+            if ((result_gen == generation)); then
+                _mbx_ghost_accept_commands "$result_gen" "$query" "$limit" cmds
+                return $?
+            fi
+            if ((result_gen < generation)); then
+                continue
+            fi
+            return 1
+        fi
+        fields=()
+        _mbx_protocol_split_fields "$response" fields || {
+            _mbx_engine_stop
+            return 1
+        }
+        if ((${#fields[@]} == 3)) && \
+            [[ ${fields[0]} == "$_MBX_PROTOCOL_MAGIC_HISTORY" && \
+                ${fields[2]} == ACK ]]; then
+            continue
+        fi
+        _mbx_engine_stop
+        return 1
+    done
+    return 1
 }
 
 _mbx_ghost_query_cli() {
@@ -324,7 +355,7 @@ _mbx_ghost_query() {
     set +m
     set +b
     if [[ ${_MBX_ENGINE_READY:-0} == 1 ]] && \
-        declare -F _mbx_engine_exchange >/dev/null 2>&1; then
+        declare -F _mbx_engine_write >/dev/null 2>&1; then
         _mbx_ghost_query_wire "$query" "$limit" "$_MBX_GHOST_GENERATION" \
             "$deadline" && status=0
     else

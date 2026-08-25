@@ -236,6 +236,51 @@ _mbx_engine_stop() {
     _mbx_reap_children
 }
 
+_mbx_engine_write() {
+    (($# == 1 || $# == 2)) || return 2
+
+    local request=$1
+    local render_deadline=${2-}
+    local deadline writer_pid writer_status
+
+    [[ -n ${_MBX_ENGINE_CHILD_PID:-} && \
+        -n ${_MBX_ENGINE_IN_FD:-} && \
+        -n ${_MBX_ENGINE_OUT_FD:-} ]] || return 1
+    kill -0 "$_MBX_ENGINE_CHILD_PID" 2>/dev/null || return 1
+    _mbx_protocol_validate_line "$request" || return 1
+    _mbx_exchange_deadline "$render_deadline" || return 1
+    deadline=$REPLY
+    _mbx_deadline_remaining "$deadline" >/dev/null || return 1
+
+    # A background builtin write keeps a peer that stops reading from consuming
+    # the complete render deadline. Its PID is always bounded and collected.
+    (
+        trap '' PIPE
+        printf '%s\n' "$request" >&"$_MBX_ENGINE_IN_FD" 2>/dev/null
+    ) &
+    writer_pid=$!
+    if ! _mbx_wait_child_until "$writer_pid" "$deadline"; then
+        _mbx_terminate_child "$writer_pid"
+        return 1
+    fi
+    writer_status=$REPLY
+    ((writer_status == 0)) || return 1
+}
+
+_mbx_engine_read() {
+    (($# == 0 || $# == 1)) || return 2
+
+    local render_deadline=${1-}
+    local deadline
+
+    [[ -n ${_MBX_ENGINE_CHILD_PID:-} && \
+        -n ${_MBX_ENGINE_OUT_FD:-} ]] || return 1
+    kill -0 "$_MBX_ENGINE_CHILD_PID" 2>/dev/null || return 1
+    _mbx_exchange_deadline "$render_deadline" || return 1
+    deadline=$REPLY
+    _mbx_read_bounded_response "$_MBX_ENGINE_OUT_FD" "$deadline"
+}
+
 _mbx_engine_exchange() {
     (($# == 1 || $# == 2)) || return 2
 

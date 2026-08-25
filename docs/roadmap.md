@@ -6,10 +6,10 @@
 > intended program and are not a status tracker.
 
 - Last reviewed: 2026-08-25 UTC
-- Current milestone: Phase 3 sidecar and Strategy A ghost are on main; `G0`–`G4` complete; ADR 0011 accepted; QUERY wire and ghost generation checks in `validation`; Strategy A search insert, cycling, restore, and cwd preference in `validation`
-- Active workstream: overlapping delayed-RESULT PTY for `GHST-001`; remaining `SRCH-003` 100k leftover (`deferred`)
-- Next decision gate: `GHST-001` overlapping stale-rejection PTY. Continuous decoration **defers** highlighting and GUI overlay only
-- Editor-facing work: opt-in ghost suffix is on main (ADR 0010). Async QUERY wire is in `validation`. Explicit history-search insert (`\C-xh`), cycling, restore (`\C-xl`), and cwd preference are in `validation` (ADR 0009). Highlighting, dim paint, and GUI overlays are `deferred` from this MVP (G5 revisit)
+- Current milestone: Phase 3 sidecar and Phase 4 Strategy A ghost are on this tree; `G0`–`G4` complete; ADR 0011 QUERY wire, generation skip, and overlapping delayed-RESULT PTY recorded; Strategy A search insert, cycling, restore, cwd, and signal PTY recorded; `SRCH-003` 100k leftover `deferred`
+- Active workstream: rebase `COMP-004` ranked-cycle with chords that do not collide with ghost `\C-x\C-n` / `\C-x\C-p` or search `\C-xh` / `\C-xl`
+- Next decision gate: `COMP-004` Strategy A cycle (no overlay). Continuous decoration **defers** highlighting and GUI overlay only
+- Editor-facing work: opt-in ghost suffix is on main (ADR 0010). Async QUERY with stale-generation skip is recorded (ADR 0011). Explicit history-search insert (`\C-xh`), cycling, restore (`\C-xl`), and cwd preference are recorded (ADR 0009). Highlighting, dim paint, and GUI overlays are `deferred` from this MVP (G5 revisit)
 - Timing policy: unmet percentile targets are `deferred` and do not block
   product development (`docs/latency-budget-deferral.md`)
 
@@ -131,9 +131,11 @@ Not implemented:
 
 - live highlighting, dim after-every-key paint, or a GUI completion / Ctrl+R
   overlay (`deferred` from this Strategy A MVP; G5 revisit);
-- overlapping delayed-RESULT PTY for ghost stale rejection (`GHST-001`);
+- `COMP-004` ranked-cycle chords (draft PR #30 must not reuse ghost
+  `\C-x\C-n` / `\C-x\C-p` or search `\C-xh` / `\C-xl`);
 - arbitrary key-injection coverage (Tab, arrows, stock Ctrl+R), the release
-  platform matrix, or remaining `G0` platform-matrix evidence; or
+  platform matrix (`HRD-001` macOS host-blocked), or remaining `G0`
+  platform-matrix evidence; or
 - prompt-boundary write-ack percentile budget (correctness recorded; p95 miss
   deferred from `G2` — `docs/history-g2-write-ack-deferral.md`).
 
@@ -318,7 +320,7 @@ close (same precedent as `G2` write-ack deferral).
 Status: `blocked` by remaining Strategy A feature exits and `HRD-*`, not by
 continuous decoration
 
-Requires Strategy A exits `GHST-004`, `COMP-005`, `GIT-004`, `SRCH-003`, and all
+Requires Strategy A exits `COMP-005`, `SRCH-003`, and all
 `HRD-*` release deliverables, plus real-PTY evidence across the supported Bash/OS
 matrix, hostile-input tests, signals and resize, tmux/SSH/fullscreen applications,
 helper crashes, terminal restoration, installation/removal, and accepted
@@ -338,12 +340,12 @@ pass unless an ADR ratifies them.
 | 1 | Bootstrap | `complete` | CI linked; broader lifecycle tracing deferred |
 | 2 | Prompt | `complete` | capability/width/wrap recorded; `PRM-004` percentiles `deferred` |
 | 3 | History | `complete` | Phase 3A / `G2` complete; `HIST-009` and `HIST-010` complete; write-ack percentiles `deferred` |
-| 4 | Ghost suggestions | `validation` | ADR 0010 suffix on main; ADR 0011 + QUERY wire; overlapping delayed-RESULT PTY remains; dim paint `deferred`; do not mark `GHST-004` complete |
+| 4 | Ghost suggestions | `complete` | ADR 0010 suffix; ADR 0011 QUERY + generation skip + overlapping delayed-RESULT PTY; `GHST-004` functional PTY recorded; dim paint `deferred`; latency percentiles `deferred` |
 | 5 | Completion | `validation` | `G4` / `COMP-001`–`COMP-003` / `GIT-004` complete; `COMP-004` `discovery`; overlay `deferred`; ranked-cycle is PR #30 |
 | 6 | Syntax highlighting | `deferred` | no after-every-key paint hook (ADR 0003); G5 revisit; IDs kept |
 | 7 | Git/provider expansion | `validation` | prompt status plus history root/branch; upstream/remotes/tags unauthorized |
-| 8 | Enhanced Ctrl+R | `validation` | `\C-xh` insert, cycling, `\C-xl` restore, cwd, and signal PTY recorded (ADR 0009); overlay `deferred` |
-| 9 | Release hardening | `not-started` | Strategy A feature exits and full compatibility matrix |
+| 8 | Enhanced Ctrl+R | `validation` | `SRCH-001` / `SRCH-002` complete (ADR 0009); cwd/signal `SRCH-003` recorded; 100k interactive leftover `deferred`; overlay `deferred` |
+| 9 | Release hardening | `not-started` | Strategy A feature exits and full compatibility matrix; `HRD-001` macOS host-blocked |
 
 ## Phase details
 
@@ -462,13 +464,12 @@ the roadmap cannot make that scope change by itself.
 
 ### Phase 4 — Ghost suggestions
 
-Status: `validation`. Opt-in suffix ghost is on main (ADR 0010). Word-accept,
+Status: `complete` for Strategy A suffix ghost (2026-08-25). Word-accept,
 cycling, remaining printables, vi-insert, Left dismiss, Home/Up/Down/backward-word,
 and kill-ring isolation are recorded. Dim after-every-key paint is `deferred`
-(not a Phase 4 exit). Async lookup is `GHST-001` in `validation` (ADR 0011 +
-QUERY wire); Bash generation stale rejection remains. Partial `GHST-004` PTY evidence is in
-`docs/ghst-004-multiline-resize-plan.md` and `docs/ghst-004-no-execution-plan.md`.
-Do not mark `GHST-004` complete; the latency matrix leftover stays `deferred`.
+(not a Phase 4 exit). Async lookup is `GHST-001` `complete` (ADR 0011 + QUERY
+wire + overlapping delayed-RESULT PTY). `GHST-004` functional editing and safety
+PTY evidence is recorded; latency percentiles stay `deferred`.
 
 Implement asynchronous ranked-history lookup with generation
 IDs, stale-result rejection, inline rendering, full/word acceptance, cycling, and
@@ -478,14 +479,13 @@ keystroke.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `GHST-001` | Async ranked query with generation IDs and cancellation | `validation` | ADR 0011; QUERY/RESULT/CANCEL wire; ghost coprocess QUERY + generation check (`docs/ghst-001-ghost-query-plan.md` W-1); overlapping delayed-RESULT PTY remains |
-| `GHST-002` | Inline ghost rendering with stale-result rejection | `validation` | ADR 0010; G-1–G-6 in `bash/ghost.bash`, `crates/pty/tests/ghost.rs`, `tests/bash/modules.bash`; `docs/ghst-002-inline-ghost-plan.md`; remaining printables P-1–P-3 (`docs/ghst-002-printables-plan.md`); vi-insert V-1–V-3 (`docs/ghst-002-vi-insert-plan.md`); Left dismiss L-1–L-3 (`docs/ghst-002-left-motion-plan.md`); Home/Up/backward-word H-1/W-4/U-2 (`docs/ghst-002-home-up-motion-plan.md`); Down D-1–D-2 (`docs/ghst-002-down-motion-plan.md`); kill-ring isolation K-1–K-3 (`docs/ghst-002-kill-ring-plan.md`); Enter is a Readline delete-char + accept-line macro (M-041); helpers bind before printables and partial disarm clears the armed flag (M-044); dim paint is `deferred` (not a Phase 4 exit); async stale-rejection waits on wiring ghost to QUERY |
+| `GHST-001` | Async ranked query with generation IDs and cancellation | `complete` | ADR 0011; QUERY/RESULT/CANCEL wire; ghost coprocess QUERY + generation check (`docs/ghst-001-ghost-query-plan.md` W-1); overlapping delayed-RESULT PTY W-2; CANCEL-after-QUERY prompt W-4 (`crates/pty/tests/ghost.rs`) |
+| `GHST-002` | Inline ghost rendering with stale-result rejection | `complete` | ADR 0010; G-1–G-6 in `bash/ghost.bash`, `crates/pty/tests/ghost.rs`, `tests/bash/modules.bash`; `docs/ghst-002-inline-ghost-plan.md`; remaining printables P-1–P-3 (`docs/ghst-002-printables-plan.md`); vi-insert V-1–V-3 (`docs/ghst-002-vi-insert-plan.md`); Left dismiss L-1–L-3 (`docs/ghst-002-left-motion-plan.md`); Home/Up/backward-word H-1/W-4/U-2 (`docs/ghst-002-home-up-motion-plan.md`); Down D-1–D-2 (`docs/ghst-002-down-motion-plan.md`); kill-ring isolation K-1–K-3 (`docs/ghst-002-kill-ring-plan.md`); Enter is a Readline delete-char + accept-line macro (M-041); helpers bind before printables and partial disarm clears the armed flag (M-044); dim paint is `deferred` (not a Phase 4 exit); async stale-rejection is `GHST-001` |
 | `GHST-003` | Full/word acceptance and suggestion cycling | `complete` | Right/`\C-f` full accept in G-2; `\ef` / Ctrl-Right word-accept in W-1–W-3 (`docs/ghst-003-word-accept-plan.md`); `\C-x\C-n` / `\C-x\C-p` cycling in C-1–C-3 (`docs/ghst-003-cycle-plan.md`) |
-| `GHST-004` | Multiline, resize, exact-byte, no-execution, and latency evidence | `validation` | R-1/Q-1/M-1 in `docs/ghst-004-multiline-resize-plan.md`; C-1/B-1 in `docs/ghst-004-no-execution-plan.md`; `crates/pty/tests/ghost.rs`; latency matrix `deferred` (`docs/latency-budget-deferral.md`). Do not mark complete |
+| `GHST-004` | Multiline, resize, exact-byte, no-execution, and latency evidence | `complete` | R-1/Q-1/M-1 in `docs/ghst-004-multiline-resize-plan.md`; C-1/B-1 in `docs/ghst-004-no-execution-plan.md`; `crates/pty/tests/ghost.rs`; latency matrix `deferred` (`docs/latency-budget-deferral.md`) |
 
 Exit condition: `GHST-004` functional editing and safety evidence. Latency
-percentiles are `deferred` and do not block that exit once an authorized close
-records it; this slice does not close `GHST-004`.
+percentiles are `deferred` and do not block that exit.
 
 ### Phase 5 — Completion
 
@@ -553,9 +553,9 @@ MVP Git/completion slice. `GIT-005` remains explicitly post-MVP.
 
 ### Phase 8 — Enhanced Ctrl+R
 
-Status: `validation` for explicit insert, bounded cycling, restore, and
-cwd-scoped empty-line search (ADR 0009). A type-to-filter overlay remains
-`deferred`. Default insert is `\C-xh`; restore is `\C-xl`.
+Status: `validation` for cwd/signal leftovers; insert, cycling, and restore are
+`complete` (ADR 0009). A type-to-filter overlay remains `deferred`. Default
+insert is `\C-xh`; restore is `\C-xl`.
 
 Build a configurable explicit search action with age, cwd, and useful status
 metadata; bounded filtering; safe cancellation; exact insertion without
@@ -565,11 +565,12 @@ the search UI leftover, not on decoration.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `SRCH-001` | Configurable bounded history-search action and result view | `validation` | insert S-1–S-7 and cycling V-1–V-4 in `bash/search.bash`, `crates/pty/tests/history_search.rs`, `tests/bash/modules.bash`; ADR 0009; `docs/srch-001-history-search-plan.md`; `docs/srch-001-result-view-plan.md`. Overlay is not required. Do not mark complete until PTY evidence is green on this tree |
-| `SRCH-002` | Cancel restoration and exact insertion without execution | `validation` | restore R-1–R-4 in `bash/search.bash`, `crates/pty/tests/history_search.rs`, `tests/bash/modules.bash`; ADR 0009; `docs/srch-002-cancel-restore-plan.md`. Overlay is not required. Do not mark complete until PTY evidence is green on this tree |
+| `SRCH-001` | Configurable bounded history-search action and result view | `complete` | insert S-1–S-7 and cycling V-1–V-4 in `bash/search.bash`, `crates/pty/tests/history_search.rs` (23 PTY tests), `tests/bash/modules.bash`; ADR 0009; `docs/srch-001-history-search-plan.md`; `docs/srch-001-result-view-plan.md`. Overlay is not required |
+| `SRCH-002` | Cancel restoration and exact insertion without execution | `complete` | restore R-1–R-4 in `bash/search.bash`, `crates/pty/tests/history_search.rs`, `tests/bash/modules.bash`; ADR 0009; `docs/srch-002-cancel-restore-plan.md`. Overlay is not required |
 | `SRCH-003` | Metadata filters, 100k-row latency, signal, and terminal-state evidence | `validation` | cwd empty-line C-1–C-4, prefix/fuzzy cwd, and signal/terminal-state T-1–T-4 in `bash/search.bash`, `crates/pty/tests/history_search.rs`, `tests/bash/modules.bash`; `docs/srch-003-cwd-filter-plan.md`; `docs/srch-003-cwd-prefix-plan.md`; `docs/srch-003-signal-plan.md`; overlay `deferred`; 100k interactive leftover remains `deferred`. CLI `search failed` / `search repo` / `search branch` are on main |
 
-Exit condition: `SRCH-003`. Do not mark `SRCH-*` complete in this taxonomy slice.
+Exit condition: `SRCH-003`. Do not mark `SRCH-003` complete while the 100k
+interactive leftover and overlay remain outside this Strategy A slice.
 
 ### Phase 9 — Release hardening
 
@@ -585,7 +586,7 @@ combinations are impractical.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `HRD-001` | Supported Bash/OS/terminal pairwise PTY matrix | `not-started` | Strategy A MVP feature exits (not deferred `HLT-*` / overlay); Darwin PTY constant pre-work (D-1–D-3) recorded in `docs/hrd-001-darwin-pty-constants-plan.md`; macOS matrix run still required |
+| `HRD-001` | Supported Bash/OS/terminal pairwise PTY matrix | `blocked` | Strategy A MVP feature exits (not deferred `HLT-*` / overlay); Darwin PTY constant pre-work (D-1–D-3) recorded in `docs/hrd-001-darwin-pty-constants-plan.md`; full macOS matrix is host-blocked on this Linux runner |
 | `HRD-002` | Hostile input, protocol bounds, privacy, and no-execution audit | `not-started` | feature-complete candidate |
 | `HRD-003` | Release-mode end-to-end latency and resource evidence | `not-started` | accepted workloads/budgets |
 | `HRD-004` | Install, upgrade, disable, removal, crash, and recovery evidence | `not-started` | release packaging |
@@ -594,25 +595,20 @@ Exit condition: `G5` after every `HRD-*` item is complete.
 
 ## Immediate next work
 
-`G0`–`G4` and Phase 3 are complete. Capture stays disabled by default. Unmet
-percentile leftovers are `deferred` and must not block product slices
-(`docs/latency-budget-deferral.md`). `HIST-010` / `GIT-003` CLI filters are
-already on `main`; do not duplicate them.
+`G0`–`G4` and Phase 3–4 are complete on this tree. Capture stays disabled by
+default. Unmet percentile leftovers are `deferred` and must not block product
+slices (`docs/latency-budget-deferral.md`). `HIST-010` / `GIT-003` CLI filters
+are already on `main`; do not duplicate them.
 
-1. Overlapping delayed-RESULT PTY for `GHST-001` stale rejection (coprocess
-   QUERY + generation check are recorded; `docs/ghst-001-ghost-query-plan.md`).
-   Do not mark `GHST-001` or `GHST-004` complete unless their exit criteria
-   are met.
-2. `SRCH-001` / `SRCH-002` and cwd/signal `SRCH-003` are in `validation`
-   (ADR 0009). Remaining `SRCH-003` leftover is 100k interactive (latency
-   `deferred`). Overlay is `deferred`. Do not mark `SRCH-003` complete.
-3. Later: rebase PR #30 ranked-cycle with chords that do **not** collide with
-   ghost `\C-x\C-n` / `\C-x\C-p` or search `\C-xh` / `\C-xl`. `COMP-004` stays
-   `discovery`. Overlay is `deferred`. Do not mark `COMP-004` or `COMP-005`
-   complete.
-4. Do not start highlighting, dim paint, or a GUI overlay. Those IDs are
-   `deferred` from this MVP with G5 revisit. `HRD-001` macOS remains Phase 9 /
-   `G5` host work. Close superseded draft PRs #31 (`search failed`; on main)
+1. Rebase PR #30 ranked-cycle with chords that do **not** collide with ghost
+   `\C-x\C-n` / `\C-x\C-p` or search `\C-xh` / `\C-xl`. Inspect `bind -p`
+   before choosing (M-040). `COMP-004` stays `discovery` until that leftover
+   lands. Overlay is `deferred`. Do not mark `COMP-004` or `COMP-005` complete.
+2. `SRCH-003` stays `validation`. Remaining leftover is 100k interactive
+   (latency `deferred`). Overlay is `deferred`. Do not mark `SRCH-003` complete.
+3. Do not start highlighting, dim paint, or a GUI overlay. Those IDs are
+   `deferred` from this MVP with G5 revisit. `HRD-001` macOS is host-blocked
+   (Phase 9 / `G5`). Close superseded draft PRs #31 (`search failed`; on main)
    and #34 (`PRM-006` already complete) when authorized. Do not spend a slice
    on FND-001 SHA refresh or percentile benches unless a functional prompt-path
    defect is proven.
@@ -648,8 +644,8 @@ they become `G5` release promises.
   subprocess execution can change semantics.
 - MBX1 is sequential and prompt-oriented. History RECORD uses MBX2 on the same
   coprocess. ADR 0011 accepts interactive QUERY/RESULT/CANCEL with generation
-  IDs and client stale rejection as an MBX2 extension; wire layout and Bash
-  rejection remain (`GHST-001`). Do not overload MBX1.
+  IDs and client stale rejection as an MBX2 extension; overlapping delayed
+  RESULT skip is recorded (`GHST-001`). Do not overload MBX1.
 - A single sequential coprocess can suffer head-of-line blocking.
 - Unicode scalar counts are not display widths. Combining characters, wide
   glyphs, wrapping, `SIGWINCH`, tmux, and SSH need PTY evidence.
@@ -778,3 +774,6 @@ an accepted decoration/ownership ADR.
 | 2026-08-25 | Recorded `SRCH-003` cwd-scoped empty-line search (`docs/srch-003-cwd-filter-plan.md`; C-1–C-4). `MBX_SEARCH_CWD=0` keeps global recent. Do not mark `SRCH-003` complete. Overlay stays `deferred`. |
 | 2026-08-25 | Recorded `SRCH-003` prefix/fuzzy `--cwd` (`docs/srch-003-cwd-prefix-plan.md`). Typed `\C-xh` prefers cwd-scoped prefix then fuzzy before global queries. Do not mark `SRCH-003` complete. Overlay stays `deferred`. |
 | 2026-08-25 | Recorded `SRCH-003` search signal/terminal-state PTY (`docs/srch-003-signal-plan.md`; T-1–T-4). Do not mark `SRCH-003` complete. Overlay stays `deferred`. |
+| 2026-08-25 | History-search PTY is green on this tree (23 cases). `SRCH-001` and `SRCH-002` move to `complete`. `SRCH-003` stays `validation` (100k interactive leftover `deferred`; overlay `deferred`). |
+| 2026-08-25 | Ghost overlapping delayed-RESULT PTY and CANCEL-after-QUERY prompt (`docs/ghst-001-ghost-query-plan.md` W-2/W-4). `GHST-001` and `GHST-002` move to `complete`. `GHST-004` functional editing/safety PTY closes; latency percentiles stay `deferred`. Phase 4 Strategy A ghost is `complete`. Dim paint / overlay stay `deferred`. |
+| 2026-08-25 | `HRD-001` macOS pairwise matrix is `blocked` on a macOS host. Darwin PTY constants (D-1–D-3) remain recorded. Do not fake the matrix on Linux. |

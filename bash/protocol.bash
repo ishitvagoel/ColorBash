@@ -338,13 +338,13 @@ _mbx_protocol_encode_history_cancel() {
     }
 }
 
-# RESULT: expected_id line dest_array_name → REPLY=generation; dest filled.
-_mbx_protocol_decode_history_result() {
-    (($# == 3)) || return 2
+# RESULT frame: line dest_array_name → REPLY=generation; dest filled.
+# Does not require a request-id match so a delayed stale RESULT can be skipped.
+_mbx_protocol_parse_history_result() {
+    (($# == 2)) || return 2
 
-    local expected_id=$1
-    local line=$2
-    local -n _mbx_result_cmds=$3
+    local line=$1
+    local -n _mbx_result_cmds=$2
     local -a fields=()
     local count index decoded
 
@@ -354,7 +354,6 @@ _mbx_protocol_decode_history_result() {
     _mbx_protocol_split_fields "$line" fields
     ((${#fields[@]} >= 5)) || return 1
     [[ ${fields[0]} == "$_MBX_PROTOCOL_MAGIC_HISTORY" && \
-        ${fields[1]} == "$expected_id" && \
         ${fields[2]} == RESULT ]] || return 1
     _mbx_unescape_field "${fields[3]}" || return 1
     decoded=$REPLY
@@ -370,6 +369,23 @@ _mbx_protocol_decode_history_result() {
         _mbx_result_cmds+=("$REPLY")
     done
     REPLY=$decoded
+}
+
+# RESULT: expected_id line dest_array_name → REPLY=generation; dest filled.
+_mbx_protocol_decode_history_result() {
+    (($# == 3)) || return 2
+
+    local expected_id=$1
+    local line=$2
+    local dest=$3
+    local -a fields=()
+
+    REPLY=
+    _mbx_protocol_validate_line "$line" || return 1
+    _mbx_protocol_split_fields "$line" fields
+    ((${#fields[@]} >= 5)) || return 1
+    [[ ${fields[1]} == "$expected_id" ]] || return 1
+    _mbx_protocol_parse_history_result "$line" "$dest"
 }
 
 # ERROR: expected_id line → REPLY=kind
