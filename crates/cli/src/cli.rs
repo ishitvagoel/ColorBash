@@ -538,6 +538,5 @@ mod tests {
             .unwrap_err(),
             "unknown search option: git"
         );
-        );
     }
 }
