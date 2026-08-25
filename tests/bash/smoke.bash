@@ -104,4 +104,15 @@ EOF
 )
 [[ $recovery_state == *'RECOVERY:alive:engine=0'* ]] || fail 'helper exit did not degrade to the per-call renderer'
 
+idempotence_state=$(env MBX_TEST_ROOT="$ROOT" MBX_BIN="$MBX_TEST_BIN" TERM=dumb \
+    bash --noprofile --norc -i 2>/dev/null <<'EOF'
+source "$MBX_TEST_ROOT/bash/init.bash"
+first_len=${#PROMPT_COMMAND[@]}
+source "$MBX_TEST_ROOT/bash/init.bash"
+printf 'IDEM:%s:%s:%s\n' "${_MBX_INITIALIZED:-missing}" "$first_len" "${#PROMPT_COMMAND[@]}"
+exit
+EOF
+)
+[[ $idempotence_state == *'IDEM:1:2:2'* ]] || fail "re-sourcing init.bash was not idempotent: $idempotence_state"
+
 printf 'PASS: Bash compatibility smoke suite\n'

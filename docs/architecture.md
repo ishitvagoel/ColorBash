@@ -193,9 +193,9 @@ The bounded post-refactor SOLID audit is implemented and recorded in
 `RequestHandler` returns content only, Git acquisition is capped and deadline-
 controlled beneath the pure parser, and all prompt adapters share one explicit
 context/flag/safety/liveness contract. Semantic prompt composition versus trusted
-PS1 encoding remains `PRM-009` discovery until capability/width work or a second
-renderer proves that change axis; a speculative extra abstraction is not required
-for the current slice.
+PS1 encoding was reassessed as `PRM-009`: capability/width work (`PRM-002`)
+and the shared native/fallback contract (`PRM-007`) do not justify a typed
+PS1 encoding or a third renderer. Keep semantic roles mapped to theme SGR.
 
 ## PromptFlags boundary
 

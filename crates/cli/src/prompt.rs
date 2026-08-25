@@ -412,8 +412,8 @@ fn format_duration(duration_ms: u64) -> String {
 mod tests {
     use super::*;
     use mbx_protocol::{
-        FLAG_ASCII_ICONS, FLAG_COLOR_16, FLAG_DISABLE_GIT, FLAG_NO_COLOR, FLAG_PRODUCTION,
-        FLAG_SSH, FLAG_TRUECOLOR,
+        FLAG_ASCII_ICONS, FLAG_COLOR_16, FLAG_DISABLE_GIT, FLAG_NERD_ICONS, FLAG_NO_COLOR,
+        FLAG_PRODUCTION, FLAG_SSH, FLAG_TRUECOLOR,
     };
     use std::cell::Cell;
     use std::rc::Rc;
@@ -571,6 +571,29 @@ mod tests {
         let mut prompt = request(FLAG_NO_COLOR | FLAG_DISABLE_GIT);
         prompt.cwd = "/users/me/projects/mbx".to_owned();
         assert_eq!(renderer.render_prompt(&prompt), "~/projects/mbx\\n> ");
+    }
+
+    #[test]
+    fn nerd_icons_replace_ascii_labels_when_requested() {
+        let renderer = PromptRenderer::standard(
+            RenderEnvironment::default(),
+            Box::new(StaticRepository(Some(RepositoryStatus {
+                branch: "main".to_owned(),
+                staged: 1,
+                modified: 2,
+                untracked: 3,
+            }))),
+        );
+        let mut prompt = request(FLAG_NO_COLOR | FLAG_NERD_ICONS);
+        prompt.status = 1;
+        let rendered = renderer.render_prompt(&prompt);
+        assert!(rendered.contains(" "));
+        assert!(rendered.contains("󰊢 "));
+        assert!(rendered.contains(""));
+        assert!(rendered.ends_with("❯ "));
+        assert!(!rendered.contains("git:"));
+        assert!(!rendered.contains("exit "));
+        assert!(!rendered.ends_with("> "));
     }
 
     #[test]

@@ -6,8 +6,8 @@
 > intended program and are not a status tracker.
 
 - Last reviewed: 2026-08-25 UTC
-- Current milestone: Phase 3 sidecar, Phase 4 Strategy A ghost, and Phase 5 Strategy A insert/fallthrough are on this tree; `G0`–`G4` complete; ADR 0011 QUERY wire, generation skip, and overlapping delayed-RESULT PTY recorded; Strategy A search insert, cycling, restore, cwd, and signal PTY recorded; `COMP-005` complete (overlay leftover stays `COMP-004` `discovery`); `SRCH-003` 100k leftover `deferred`
-- Active workstream: `SRCH-003` stays `validation`; close `BST-002`–`BST-004`, `PRM-001`, and `PRM-009` only with exit evidence
+- Current milestone: Phase 3 sidecar, Phase 4 Strategy A ghost, and Phase 5 Strategy A insert/fallthrough are on this tree; `G0`–`G4` complete; ADR 0011 QUERY wire, generation skip, and overlapping delayed-RESULT PTY recorded; Strategy A search insert, cycling, restore, cwd, and signal PTY recorded; `COMP-005` complete (overlay leftover stays `COMP-004` `discovery`); `BST-002`–`BST-004`, `PRM-001`, and `PRM-009` complete; `SRCH-003` 100k leftover `deferred`
+- Active workstream: `SRCH-003` stays `validation`; `HRD-001` / `G5` remain host-blocked
 - Next decision gate: `SRCH-003` leftover honesty, then `G5` / `HRD-*`. Continuous decoration **defers** highlighting and GUI overlay only
 - Editor-facing work: opt-in ghost suffix is on main (ADR 0010). Async QUERY with stale-generation skip is recorded (ADR 0011). Explicit history-search insert (`\C-xh`), cycling, restore (`\C-xl`), and cwd preference are recorded (ADR 0009). Highlighting, dim paint, and GUI overlays are `deferred` from this MVP (G5 revisit)
 - Timing policy: unmet percentile targets are `deferred` and do not block
@@ -338,8 +338,8 @@ pass unless an ADR ratifies them.
 | Phase | Name | Status | Principal unfinished condition |
 | ---: | --- | --- | --- |
 | 0 | Research / architecture | `complete` | `G0` complete; `HRD-001` macOS remains release-matrix work |
-| 1 | Bootstrap | `complete` | CI linked; broader lifecycle tracing deferred |
-| 2 | Prompt | `complete` | capability/width/wrap recorded; `PRM-004` percentiles `deferred` |
+| 1 | Bootstrap | `complete` | CI linked; `BST-002`–`BST-004` complete; broader lifecycle tracing `deferred`; `HRD-001` platform matrix |
+| 2 | Prompt | `complete` | `PRM-001`/`PRM-009` complete; capability/width/wrap recorded; `PRM-004` percentiles `deferred` |
 | 3 | History | `complete` | Phase 3A / `G2` complete; `HIST-009` and `HIST-010` complete; write-ack percentiles `deferred` |
 | 4 | Ghost suggestions | `complete` | ADR 0010 suffix; ADR 0011 QUERY + generation skip + overlapping delayed-RESULT PTY; `GHST-004` functional PTY recorded; dim paint `deferred`; latency percentiles `deferred` |
 | 5 | Completion | `complete` | Strategy A insert/fallthrough (`COMP-005`); `G4` / `COMP-001`–`COMP-003` / `GIT-004` complete; ranked-cycle `\C-xn` / `\C-xp`; `COMP-004` overlay leftover `discovery`; overlay `deferred` |
@@ -383,9 +383,9 @@ degradation.
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
 | `BST-001` | Rust workspace, Bash loader, and development setup | `complete` | `Cargo.toml`, `bash/init.bash`, `scripts/dev-setup.bash` |
-| `BST-002` | Interactive guard, idempotence, status preservation, and fallback | `validation` | shell suites plus PTY lifecycle/failure tests; platform matrix remains `HRD-001` |
-| `BST-003` | MBX1 coprocess and per-call adapters | `validation` | bounded protocol/module tests pass; PTY helper-crash coverage exists; platform matrix remains |
-| `BST-004` | Debug/trace logging without command text | `validation` | minimal Rust trace exists; broader lifecycle diagnostics deferred |
+| `BST-002` | Interactive guard, idempotence, status preservation, and fallback | `complete` | `docs/bst-prm-g0-leftover-close-plan.md` I-1–I-5; `tests/bash/smoke.bash`; `crates/pty/tests/foundation.rs`; platform matrix leftover is `HRD-001` |
+| `BST-003` | MBX1 coprocess and per-call adapters | `complete` | `docs/bst-prm-g0-leftover-close-plan.md` A-1–A-2; `tests/bash/modules.bash`; `tests/integration/protocol.bash`; PTY helper-crash; platform matrix leftover is `HRD-001` |
+| `BST-004` | Debug/trace logging without command text | `complete` | `docs/bst-prm-g0-leftover-close-plan.md` T-1; `crates/cli/src/telemetry.rs`; typed diagnostics omit command text; `MBX_DBG` forbidden; broader lifecycle tracing `deferred` |
 | `BST-005` | CI and canonical verification suite | `complete` | `.github/workflows/ci.yml` runs `bash tests/run.bash`; green run https://github.com/ishitvagoel/ColorBash/actions/runs/31937499009 on `origin/main` at `8c8dad2` |
 | `BST-006` | Enforce a terminator-independent 64-KiB boundary and cap Bash response acquisition before allocation | `complete` | Rust/Bash `MAX-1`/`MAX`/`MAX+1` EOF/LF/CRLF, NUL, and oversized-producer tests |
 | `BST-007` | Prove socket collision refusal, `0600` mode, cleanup, and correlation behavior | `complete` | focused Unix tests cover collisions, mode, cleanup ordering, and mismatched IDs |
@@ -401,7 +401,7 @@ Outcome: an adaptive, semantic, safe prompt that remains fast under failure.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `PRM-001` | Path, Git, status, duration, SSH, production, icon, and theme segments | `validation` | Rust/Bash renderers and semantic tests |
+| `PRM-001` | Path, Git, status, duration, SSH, production, icon, and theme segments | `complete` | `docs/bst-prm-g0-leftover-close-plan.md` S-1–S-5; `crates/cli/src/prompt.rs`; `tests/bash/modules.bash` fallback parity |
 | `PRM-002` | Capability, redirected-output, visible-width, and resize model | `complete` | redirected-output color policy recorded (`docs/prm-002-redirected-output-plan.md`; `crates/cli/src/environment.rs`); display-width path compaction helper recorded (`docs/prm-002-width-plan.md`; `crates/cli/src/prompt.rs`); color capability (16/256/truecolor) recorded (`docs/prm-002-color-capability-plan.md`; `crates/cli/src/environment.rs`, `crates/cli/src/prompt.rs`, `bash/config.bash`, `bash/fallback.bash`); non-DSR wrap-column PTY usability recorded (`docs/prm-002-wrap-column-plan.md`; `crates/pty/tests/multiline_width.rs`) |
 | `PRM-003` | End-to-end deadline, capped Git acquisition, and warm cache | `complete` | one Bash deadline, capped 50-ms Git refresh, 128-entry/1-s cache, failure tests, and `docs/benchmarks/2026-08-15-solid-hardening.md` |
 | `PRM-004` | Full prompt p50/p95/p99 benchmark matrix | `deferred` | controlled warm-Git case recorded; remaining matrix deferred (`docs/latency-budget-deferral.md`) |
@@ -409,7 +409,7 @@ Outcome: an adaptive, semantic, safe prompt that remains fast under failure.
 | `PRM-006` | Decide opt-in duration policy or explicit preexec adapter | `complete` | `docs/prm-006-duration-plan.md`; D-1–D-4 in `tests/bash/smoke.bash`; remain opt-in; do not compose `DEBUG`; `G3`/`G4` complete |
 | `PRM-007` | Give native and fallback adapters one explicit input/safety contract and shared hostile-state corpus | `complete` | explicit four-field context, shared C0/DEL/expansion corpus, production precedence, and SSH-only test |
 | `PRM-008` | Preserve raw additive prompt flags across coprocess, per-call, and fallback paths | `complete` | raw `--flags` CLI boundary plus coprocess/per-call/fallback unknown-bit tests |
-| `PRM-009` | Reassess semantic composition versus typed PS1 encoding and validated theme styles | `discovery` | wait for `PRM-002` or a second renderer; avoid a speculative abstraction |
+| `PRM-009` | Reassess semantic composition versus typed PS1 encoding and validated theme styles | `complete` | `docs/bst-prm-g0-leftover-close-plan.md` D-1; keep semantic roles → theme SGR; `PRM-002`/`PRM-007` do not justify a typed PS1 encoding |
 
 Exit condition: prompt requirements of `G0`.
 
@@ -604,14 +604,12 @@ are already on `main`; do not duplicate them.
 
 1. `SRCH-003` stays `validation`. Remaining leftover is 100k interactive
    (latency `deferred`). Overlay is `deferred`. Do not mark `SRCH-003` complete.
-2. Close `BST-002`–`BST-004`, `PRM-001`, and `PRM-009` only with named exit
-   evidence. Platform matrix leftovers belong to `HRD-001`, not a fake
-   `complete`. Do not start highlighting or dim paint.
-3. `HRD-001` macOS is host-blocked (Phase 9 / `G5`). Close superseded draft
+2. `HRD-001` macOS is host-blocked (Phase 9 / `G5`). Close superseded draft
    PRs #31 (`search failed`; on main) and #34 (`PRM-006` already complete)
    when authorized. Do not spend a slice on FND-001 SHA refresh or percentile
    benches unless a functional prompt-path defect is proven. Do not mark
-   `COMP-004` complete (overlay strategy still `discovery`).
+   `COMP-004` complete (overlay strategy still `discovery`). Do not start
+   highlighting or dim paint.
 
 ## Provisional performance and safety budgets
 
@@ -779,3 +777,4 @@ an accepted decoration/ownership ADR.
 | 2026-08-25 | `HRD-001` macOS pairwise matrix is `blocked` on a macOS host. Darwin PTY constants (D-1–D-3) remain recorded. Do not fake the matrix on Linux. |
 | 2026-08-25 | Rebased `COMP-004` ranked-cycle onto ghost/search chords. Default cycle is `\C-xn` / `\C-xp` (inspect `bind -p`; do not reuse ghost `\C-x\C-n` / `\C-x\C-p`). C-1–C-6 PTY/module evidence recorded. `COMP-004` stays `discovery` (overlay `deferred`). |
 | 2026-08-25 | Closed `COMP-005` Strategy A insert/fallthrough (`docs/comp-005-strategy-a-close-plan.md`). Existing G4/COMP-002 parity, ranked-accept, ranked-cycle, and `GIT-004` kinds. Overlay leftover stays `COMP-004` `discovery`. Phase 5 Strategy A is `complete`. Do not start highlighting or dim paint. |
+| 2026-08-25 | Closed `BST-002`–`BST-004`, `PRM-001`, and `PRM-009` (`docs/bst-prm-g0-leftover-close-plan.md`). Re-source idempotence and nerd-icon glyph asserts added. Platform matrix leftover stays `HRD-001`. Broader lifecycle tracing stays `deferred`. `SRCH-003` stays `validation`. |
