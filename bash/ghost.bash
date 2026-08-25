@@ -273,8 +273,11 @@ _mbx_ghost_query_wire() {
     # generation may still arrive, and the next QUERY must skip it (ADR 0011).
     # Hard decode failures still stop. RECORD/prompt already stop on a stale
     # frame, so an idle delayed RESULT cannot poison a later PS1 cycle.
+    # `_mbx_read_bounded_response` can slurp the next queued RESULT in the same
+    # acquisition and then reject the extra LF (M-045). RESULT skip needs a
+    # line reader that leaves later frames in the pipe.
     while _mbx_deadline_remaining "$deadline" >/dev/null; do
-        if ! _mbx_engine_read "$deadline"; then
+        if ! _mbx_ghost_read_line "$_MBX_ENGINE_OUT_FD" "$deadline"; then
             return 1
         fi
         response=$REPLY

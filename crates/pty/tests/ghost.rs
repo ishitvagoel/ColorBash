@@ -707,14 +707,9 @@ fn overlapping_delayed_result_is_rejected() {
         ),
     );
     wait_for(&mut session, "> ");
-    type_line(&mut session, "pwd # MBX_GHST:fresh");
-    wait_all(&mut session, &["> "]);
-    type_line(&mut session, "printf 'MBX_GHST:stale\\n'");
-    wait_all(&mut session, &["MBX_GHST:stale", "> "]);
-    wait_for_count(&mbx_bin(), &data_home, 2);
 
-    // 'p' sends QUERY gen 1 (newest prefix is printf). The helper holds that
-    // RESULT until 'w' sends QUERY gen 2, then emits the stale frame first.
+    // 'p' sends QUERY gen 1 (printf stale). The helper holds that RESULT until
+    // 'w' sends QUERY gen 2, then emits the stale frame first.
     session
         .write_str("pw", deadline(2))
         .expect("type short then longer prefix");

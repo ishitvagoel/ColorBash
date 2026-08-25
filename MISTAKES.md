@@ -858,17 +858,25 @@ to prevent recurrence, not to assign blame.
 - Discovered: 2026-08-16
 - Status: Fixed
 - Failed assumption: `_mbx_read_bounded_response` could collect sidecar search
-  lines the same way it collects one MBX1/MBX2 frame.
+  lines the same way it collects one MBX1/MBX2 frame, and a later read would
+  still see a second queued frame.
 - Impact: a helper that printed two command lines delivered both LFs in one
   `read`, so the protocol reader rejected the buffer (`before_lf` still
-  contained a newline). Bounded cycling never left the first snapshot.
+  contained a newline). Bounded cycling never left the first snapshot. The
+  same over-read rejected a delayed stale QUERY RESULT sitting in the coprocess
+  pipe ahead of the current generation's RESULT, so overlapping ghost skip
+  never applied the matching suffix.
 - Correction: search uses a one-line `read -r` helper that stops at the first
-  LF and leaves later lines in the pipe.
-- Prevention: protocol frame readers are single-payload. CLI output that is
-  one record per line needs a line reader plus a focused two-line contract
-  test. Do not reuse `_mbx_read_bounded_response` outside framing.
-- Evidence: `_mbx_search_read_line` in `bash/search.bash` and the two-line
-  cycle contract in `tests/bash/modules.bash`.
+  LF and leaves later lines in the pipe. Ghost QUERY RESULT skip uses that
+  line reader on the coprocess FD instead of `_mbx_read_bounded_response`.
+- Prevention: protocol frame readers are single-payload and may over-read the
+  next queued frame. CLI output and pipelined RESULT frames that are one
+  record per line need a line reader plus a focused two-frame contract.
+  Do not reuse `_mbx_read_bounded_response` outside a true 1:1 exchange.
+- Evidence: `_mbx_search_read_line` in `bash/search.bash`, the two-line
+  cycle contract in `tests/bash/modules.bash`, `_mbx_ghost_query_wire` in
+  `bash/ghost.bash`, and `overlapping_delayed_result_is_rejected` in
+  `crates/pty/tests/ghost.rs`.
 
 ## M-046 — Cwd-scoped prefix SQL omitted schema v3 columns
 

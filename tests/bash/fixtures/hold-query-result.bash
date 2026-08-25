@@ -14,28 +14,57 @@ if [[ ${1:-} != serve ]]; then
     exec "$real" "$@"
 fi
 
-coproc REAL { exec "$real" serve --stdio; }
-held=
+held_id=
+held_gen=
+held_text=
 
-cleanup() {
-    if [[ -n ${REAL_PID:-} ]]; then
-        kill "$REAL_PID" 2>/dev/null || true
-        wait "$REAL_PID" 2>/dev/null || true
-    fi
+result_for() {
+    local id=$1
+    local gen=$2
+    local text=$3
+    local cmd
+    case $text in
+        pw*) cmd='pwd # MBX_GHST:fresh' ;;
+        *) cmd="printf 'MBX_GHST:stale\\n'" ;;
+    esac
+    printf 'MBX2\t%s\tRESULT\t%s\t1\t%s\n' "$id" "$gen" "$cmd"
 }
-trap cleanup EXIT
 
 while IFS= read -r line; do
-    printf '%s\n' "$line" >&"${REAL[1]}"
-    IFS= read -r -u "${REAL[0]}" response
     IFS=$'\t' read -r -a fields <<<"$line"
-    if [[ ${fields[2]-} == QUERY ]]; then
-        if [[ -z $held ]]; then
-            held=$response
-            continue
-        fi
-        printf '%s\n' "$held"
-        held=
-    fi
-    printf '%s\n' "$response"
+    magic=${fields[0]-}
+    id=${fields[1]-}
+    kind=${fields[2]-}
+    case $magic-$kind in
+        MBX1-PING)
+            printf 'MBX1\t%s\tPONG\n' "$id"
+            ;;
+        MBX1-PROMPT)
+            printf 'MBX1\t%s\tPROMPT\t> \n' "$id"
+            ;;
+        MBX2-PING)
+            printf 'MBX2\t%s\tPONG\n' "$id"
+            ;;
+        MBX2-RECORD|MBX2-CANCEL)
+            printf 'MBX2\t%s\tACK\n' "$id"
+            ;;
+        MBX2-QUERY)
+            gen=${fields[3]-}
+            text=${fields[5]-}
+            if [[ -z $held_id ]]; then
+                held_id=$id
+                held_gen=$gen
+                held_text=$text
+                continue
+            fi
+            result_for "$held_id" "$held_gen" "$held_text"
+            held_id=
+            held_gen=
+            held_text=
+            result_for "$id" "$gen" "$text"
+            ;;
+        *)
+            printf 'MBX2\t%s\tERROR\tinvalid\n' "${id:-0}"
+            ;;
+    esac
 done
