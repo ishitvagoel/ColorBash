@@ -870,3 +870,20 @@ to prevent recurrence, not to assign blame.
 - Evidence: `_mbx_search_read_line` in `bash/search.bash` and the two-line
   cycle contract in `tests/bash/modules.bash`.
 
+## M-046 — Cwd-scoped prefix SQL omitted schema v3 columns
+
+- Discovered: 2026-08-25
+- Status: Fixed
+- Failed assumption: cherry-picking `exact_prefix_in_cwd` from a pre-HIST-010
+  branch could keep that slice's ten-column `SELECT` list.
+- Impact: `query()` reads `repo_root` at index 10. The cwd-prefix statements
+  stopped at `user`, so `queries_return_bounded_recent_prefix_and_cwd` failed
+  with `Invalid column index: 10`.
+- Correction: `EXACT_PREFIX_CWD_SQL` and `EXACT_PREFIX_CWD_ESCAPE_SQL` select
+  the same twelve columns as `HISTORY_COLUMNS`.
+- Prevention: any new history `SELECT` must use `HISTORY_COLUMNS` or list every
+  mapped index. Rebasing a query helper across a schema version requires a
+  focused read of `query()`.
+- Evidence: `crates/cli/src/storage.rs` and
+  `storage::tests::queries_return_bounded_recent_prefix_and_cwd`.
+
