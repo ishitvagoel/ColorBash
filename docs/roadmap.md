@@ -132,8 +132,7 @@ Not implemented:
 - live highlighting, dim after-every-key paint, or a GUI completion / Ctrl+R
   overlay (`deferred` from this Strategy A MVP; G5 revisit);
 - Strategy A history-search UI (explicit `bind -x`; draft PR #37, not on main);
-- asynchronous feature IPC wire (`GHST-001`; ADR 0011 accepted; QUERY layout
-  remains);
+- ghost generation stale-rejection on QUERY (`GHST-001` leftover; wire exists);
 - arbitrary key-injection coverage (Tab, arrows, stock Ctrl+R), the release
   platform matrix, or remaining `G0` platform-matrix evidence; or
 - prompt-boundary write-ack percentile budget (correctness recorded; p95 miss
