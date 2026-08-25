@@ -24,21 +24,34 @@ pub enum HistoryCommand {
     Count,
     Clear,
     Delete,
-    SearchRecent { limit: usize },
+    SearchRecent {
+        limit: usize,
+    },
     SearchPrefix {
         prefix: String,
         cwd: Option<String>,
         limit: usize,
     },
-    SearchCwd { cwd: String, limit: usize },
-    SearchRepo { repo_root: String, limit: usize },
-    SearchBranch { repo_branch: String, limit: usize },
+    SearchCwd {
+        cwd: String,
+        limit: usize,
+    },
+    SearchRepo {
+        repo_root: String,
+        limit: usize,
+    },
+    SearchBranch {
+        repo_branch: String,
+        limit: usize,
+    },
     SearchFuzzy {
         needle: String,
         cwd: Option<String>,
         limit: usize,
     },
-    SearchFailed { limit: usize },
+    SearchFailed {
+        limit: usize,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
