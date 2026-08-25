@@ -70,13 +70,13 @@ const EXACT_PREFIX_ESCAPE_SQL: &str = "SELECT session_id, event_sequence, histor
      ORDER BY completed_at DESC, event_sequence DESC LIMIT ?2";
 
 const EXACT_PREFIX_CWD_SQL: &str = "SELECT session_id, event_sequence, history_number, \
-     command_text, start_cwd, completed_at, status, duration_ms, host, user \
+     command_text, start_cwd, completed_at, status, duration_ms, host, user, repo_root, repo_branch \
      FROM history \
      WHERE command_text COLLATE NOCASE LIKE ?1 AND start_cwd = ?2 \
      ORDER BY completed_at DESC, event_sequence DESC LIMIT ?3";
 
 const EXACT_PREFIX_CWD_ESCAPE_SQL: &str = "SELECT session_id, event_sequence, history_number, \
-     command_text, start_cwd, completed_at, status, duration_ms, host, user \
+     command_text, start_cwd, completed_at, status, duration_ms, host, user, repo_root, repo_branch \
      FROM history \
      WHERE command_text COLLATE NOCASE LIKE ?1 ESCAPE '\\' AND start_cwd = ?2 \
      ORDER BY completed_at DESC, event_sequence DESC LIMIT ?3";
