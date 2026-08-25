@@ -133,5 +133,6 @@ bash tests/run.bash
 explicitly narrowed in an ADR. GUI overlay remains unproven. `GIT-004` Git
 completion kinds is the next completion-phase leftover. Ghost, highlighting,
 and enhanced Ctrl+R stay blocked on continuous decoration. `HIST-009` fuzzy
-history and `HRD-001` macOS matrix remain separate. `COMP-005` stays blocked
-until `COMP-004` leftovers and Git candidates are addressed.
+history and `HRD-001` macOS matrix remain separate. `COMP-005` Strategy A
+insert/fallthrough later closed without overlay
+(`docs/comp-005-strategy-a-close-plan.md`).

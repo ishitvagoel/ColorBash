@@ -6,9 +6,9 @@
 > intended program and are not a status tracker.
 
 - Last reviewed: 2026-08-25 UTC
-- Current milestone: Phase 3 sidecar and Phase 4 Strategy A ghost are on this tree; `G0`–`G4` complete; ADR 0011 QUERY wire, generation skip, and overlapping delayed-RESULT PTY recorded; Strategy A search insert, cycling, restore, cwd, and signal PTY recorded; `SRCH-003` 100k leftover `deferred`
-- Active workstream: close `COMP-005` Strategy A insert/fallthrough; `SRCH-003` 100k leftover `deferred`
-- Next decision gate: `COMP-005` (no overlay). Continuous decoration **defers** highlighting and GUI overlay only
+- Current milestone: Phase 3 sidecar, Phase 4 Strategy A ghost, and Phase 5 Strategy A insert/fallthrough are on this tree; `G0`–`G4` complete; ADR 0011 QUERY wire, generation skip, and overlapping delayed-RESULT PTY recorded; Strategy A search insert, cycling, restore, cwd, and signal PTY recorded; `COMP-005` complete (overlay leftover stays `COMP-004` `discovery`); `SRCH-003` 100k leftover `deferred`
+- Active workstream: `SRCH-003` stays `validation`; close `BST-002`–`BST-004`, `PRM-001`, and `PRM-009` only with exit evidence
+- Next decision gate: `SRCH-003` leftover honesty, then `G5` / `HRD-*`. Continuous decoration **defers** highlighting and GUI overlay only
 - Editor-facing work: opt-in ghost suffix is on main (ADR 0010). Async QUERY with stale-generation skip is recorded (ADR 0011). Explicit history-search insert (`\C-xh`), cycling, restore (`\C-xl`), and cwd preference are recorded (ADR 0009). Highlighting, dim paint, and GUI overlays are `deferred` from this MVP (G5 revisit)
 - Timing policy: unmet percentile targets are `deferred` and do not block
   product development (`docs/latency-budget-deferral.md`)
@@ -130,9 +130,8 @@ recorded a green run on `origin/main` at commit
 Not implemented:
 
 - live highlighting, dim after-every-key paint, or a GUI completion / Ctrl+R
-  overlay (`deferred` from this Strategy A MVP; G5 revisit);
-- `COMP-005` Strategy A insert/fallthrough close-out (ranked-accept and
-  ranked-cycle chords exist; overlay stays `deferred`);
+  overlay (`COMP-004` stays `discovery`; overlay `deferred` from this Strategy A
+  MVP; G5 revisit);
 - arbitrary key-injection coverage (Tab, arrows, stock Ctrl+R), the release
   platform matrix (`HRD-001` macOS host-blocked), or remaining `G0`
   platform-matrix evidence; or
@@ -299,7 +298,9 @@ Status: `complete` (2026-08-16)
 The non-popup `COMP-001`/`COMP-002` adapter experiment produced this gate. It may
 run alongside `G3`, using the shared PTY harness. A GUI completion overlay is
 `deferred` (no decoration hook; `docs/comp-004-popup-plan.md`). Ranked-accept
-(`\C-x\C-a`) is on main; ranked-cycle remains a `COMP-004` leftover. Passed when
+(`\C-x\C-a`) is on main; ranked-cycle `\C-xn` / `\C-xp` is recorded.
+`COMP-005` Strategy A insert/fallthrough is `complete`. Overlay leftover stays
+`COMP-004` `discovery`. Passed when
 file completion and at least one existing `-F` completion function preserve
 stock Bash behavior for:
 
@@ -320,7 +321,7 @@ close (same precedent as `G2` write-ack deferral).
 Status: `blocked` by remaining Strategy A feature exits and `HRD-*`, not by
 continuous decoration
 
-Requires Strategy A exits `COMP-005`, `SRCH-003`, and all
+Requires remaining Strategy A leftover `SRCH-003` and all
 `HRD-*` release deliverables, plus real-PTY evidence across the supported Bash/OS
 matrix, hostile-input tests, signals and resize, tmux/SSH/fullscreen applications,
 helper crashes, terminal restoration, installation/removal, and accepted
@@ -341,7 +342,7 @@ pass unless an ADR ratifies them.
 | 2 | Prompt | `complete` | capability/width/wrap recorded; `PRM-004` percentiles `deferred` |
 | 3 | History | `complete` | Phase 3A / `G2` complete; `HIST-009` and `HIST-010` complete; write-ack percentiles `deferred` |
 | 4 | Ghost suggestions | `complete` | ADR 0010 suffix; ADR 0011 QUERY + generation skip + overlapping delayed-RESULT PTY; `GHST-004` functional PTY recorded; dim paint `deferred`; latency percentiles `deferred` |
-| 5 | Completion | `validation` | `G4` / `COMP-001`–`COMP-003` / `GIT-004` complete; ranked-cycle `\C-xn` / `\C-xp`; `COMP-004` `discovery`; overlay `deferred` |
+| 5 | Completion | `complete` | Strategy A insert/fallthrough (`COMP-005`); `G4` / `COMP-001`–`COMP-003` / `GIT-004` complete; ranked-cycle `\C-xn` / `\C-xp`; `COMP-004` overlay leftover `discovery`; overlay `deferred` |
 | 6 | Syntax highlighting | `deferred` | no after-every-key paint hook (ADR 0003); G5 revisit; IDs kept |
 | 7 | Git/provider expansion | `validation` | prompt status plus history root/branch; upstream/remotes/tags unauthorized |
 | 8 | Enhanced Ctrl+R | `validation` | `SRCH-001` / `SRCH-002` complete (ADR 0009); cwd/signal `SRCH-003` recorded; 100k interactive leftover `deferred`; overlay `deferred` |
@@ -489,10 +490,11 @@ percentiles are `deferred` and do not block that exit.
 
 ### Phase 5 — Completion
 
-Status: `validation`; popup policy in `discovery` (`COMP-004`). GUI overlay is
-`deferred` from this MVP. Ranked-accept is on main. Ranked-cycle defaults to
-`\C-xn` / `\C-xp` so ghost `\C-x\C-n` / `\C-x\C-p` stay free.
-`COMP-001` / `COMP-002` / `COMP-003` / `GIT-004` are complete.
+Status: `complete` for Strategy A insert/fallthrough (`COMP-005`, 2026-08-25).
+Popup policy stays in `discovery` (`COMP-004`). GUI overlay is `deferred` from
+this MVP. Ranked-accept is on main. Ranked-cycle defaults to `\C-xn` / `\C-xp`
+so ghost `\C-x\C-n` / `\C-x\C-p` stay free.
+`COMP-001` / `COMP-002` / `COMP-003` / `GIT-004` / `COMP-005` are complete.
 
 First adapt stock Bash completion and prove exact insertion parity. Only then add
 typed candidate metadata, bounded ranking, optional Strategy A cycle chords, and
@@ -506,11 +508,11 @@ live-state and `compopt` parity are demonstrated. Do not start a GUI overlay.
 | `COMP-002` | Prove file and one `-F` function's exact insertion parity | `complete` | `docs/comp-002-parity-plan.md`; P-1–P-4, F-1–F-4, L-1–L-4, N-1–N-2, S-1–S-4; `docs/g4-gate-close-plan.md`; 5 ms leftover `deferred` |
 | `COMP-003` | Add typed candidate metadata and bounded ranking | `complete` | `docs/comp-003-metadata-plan.md` K-1–K-4; `docs/comp-003-ranking-plan.md` R-1–R-4 in `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs` |
 | `COMP-004` | Add popup navigation and terminal-safe rendering | `discovery` | `docs/comp-004-popup-plan.md` P-1–P-4; ranked-accept A-1–A-5 on main (`docs/comp-004-ranked-accept-plan.md`); ranked-cycle C-1–C-6 (`docs/comp-004-ranked-cycle-plan.md`; default `\C-xn` / `\C-xp`, not ghost `\C-x\C-n` / `\C-x\C-p`); GUI overlay `deferred` |
-| `COMP-005` | Insert/fall through exactly and pass the parity/PTY matrix | `blocked` | `COMP-004` overlay leftover; Git candidates when enabled. Overlay is not the Strategy A cycle blocker |
+| `COMP-005` | Insert/fall through exactly and pass the parity/PTY matrix | `complete` | `docs/comp-005-strategy-a-close-plan.md`; G4/COMP-002 P-1–P-4, L-1–L-4, N-1–N-2, S-1–S-4; ranked-accept A-1–A-6; ranked-cycle C-1–C-6 (`\C-xn` / `\C-xp`); `GIT-004` kinds; overlay `deferred`; 5 ms leftover `deferred` |
 
 Exit condition: `G4` for the adapter slice; `COMP-005` for the Strategy A
-completion feature. Do not mark `COMP-004` or `COMP-005` complete in this
-taxonomy slice.
+completion feature. Overlay leftover stays `COMP-004` `discovery`. Do not mark
+`COMP-004` complete.
 
 ### Phase 6 — Syntax highlighting
 
@@ -595,21 +597,21 @@ Exit condition: `G5` after every `HRD-*` item is complete.
 
 ## Immediate next work
 
-`G0`–`G4` and Phase 3–4 are complete on this tree. Capture stays disabled by
+`G0`–`G4` and Phase 3–5 Strategy A are complete on this tree. Capture stays disabled by
 default. Unmet percentile leftovers are `deferred` and must not block product
 slices (`docs/latency-budget-deferral.md`). `HIST-010` / `GIT-003` CLI filters
 are already on `main`; do not duplicate them.
 
-1. Close `COMP-005` Strategy A insert/fallthrough with existing G4/COMP-002
-   parity plus ranked-accept and ranked-cycle evidence. Overlay stays
-   `deferred`. Do not mark `COMP-004` complete (overlay strategy still
-   `discovery`). Do not start highlighting or dim paint.
-2. `SRCH-003` stays `validation`. Remaining leftover is 100k interactive
+1. `SRCH-003` stays `validation`. Remaining leftover is 100k interactive
    (latency `deferred`). Overlay is `deferred`. Do not mark `SRCH-003` complete.
+2. Close `BST-002`–`BST-004`, `PRM-001`, and `PRM-009` only with named exit
+   evidence. Platform matrix leftovers belong to `HRD-001`, not a fake
+   `complete`. Do not start highlighting or dim paint.
 3. `HRD-001` macOS is host-blocked (Phase 9 / `G5`). Close superseded draft
    PRs #31 (`search failed`; on main) and #34 (`PRM-006` already complete)
    when authorized. Do not spend a slice on FND-001 SHA refresh or percentile
-   benches unless a functional prompt-path defect is proven.
+   benches unless a functional prompt-path defect is proven. Do not mark
+   `COMP-004` complete (overlay strategy still `discovery`).
 
 ## Provisional performance and safety budgets
 
@@ -775,4 +777,5 @@ an accepted decoration/ownership ADR.
 | 2026-08-25 | History-search PTY is green on this tree (23 cases). `SRCH-001` and `SRCH-002` move to `complete`. `SRCH-003` stays `validation` (100k interactive leftover `deferred`; overlay `deferred`). |
 | 2026-08-25 | Ghost overlapping delayed-RESULT PTY and CANCEL-after-QUERY prompt (`docs/ghst-001-ghost-query-plan.md` W-2/W-4). `GHST-001` and `GHST-002` move to `complete`. `GHST-004` functional editing/safety PTY closes; latency percentiles stay `deferred`. Phase 4 Strategy A ghost is `complete`. Dim paint / overlay stay `deferred`. |
 | 2026-08-25 | `HRD-001` macOS pairwise matrix is `blocked` on a macOS host. Darwin PTY constants (D-1–D-3) remain recorded. Do not fake the matrix on Linux. |
-| 2026-08-25 | Rebased `COMP-004` ranked-cycle onto ghost/search chords. Default cycle is `\C-xn` / `\C-xp` (inspect `bind -p`; do not reuse ghost `\C-x\C-n` / `\C-x\C-p`). `COMP-004` stays `discovery` (overlay `deferred`). |
+| 2026-08-25 | Rebased `COMP-004` ranked-cycle onto ghost/search chords. Default cycle is `\C-xn` / `\C-xp` (inspect `bind -p`; do not reuse ghost `\C-x\C-n` / `\C-x\C-p`). C-1–C-6 PTY/module evidence recorded. `COMP-004` stays `discovery` (overlay `deferred`). |
+| 2026-08-25 | Closed `COMP-005` Strategy A insert/fallthrough (`docs/comp-005-strategy-a-close-plan.md`). Existing G4/COMP-002 parity, ranked-accept, ranked-cycle, and `GIT-004` kinds. Overlay leftover stays `COMP-004` `discovery`. Phase 5 Strategy A is `complete`. Do not start highlighting or dim paint. |

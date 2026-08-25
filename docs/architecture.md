@@ -468,4 +468,6 @@ cycling; empty-line and prefix/fuzzy cwd preference; Ctrl+C / Ctrl+Z / resize /
 policy records no GUI overlay; ranked-accept `bind -x` evidence is complete
 (`docs/comp-004-ranked-accept-plan.md`). Ranked-cycle `bind -x` evidence is
 complete (`docs/comp-004-ranked-cycle-plan.md`; default `\C-xn` / `\C-xp`).
-`G3` explicit `bind -x` evidence is complete.
+`COMP-005` Strategy A insert/fallthrough is complete
+(`docs/comp-005-strategy-a-close-plan.md`); overlay stays `deferred` and
+`COMP-004` stays `discovery`. `G3` explicit `bind -x` evidence is complete.
