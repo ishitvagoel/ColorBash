@@ -344,7 +344,7 @@ pass unless an ADR ratifies them.
 | 4 | Ghost suggestions | `complete` | ADR 0010 suffix; ADR 0011 QUERY + generation skip + overlapping delayed-RESULT PTY; `GHST-004` functional PTY recorded; dim paint `deferred`; latency percentiles `deferred` |
 | 5 | Completion | `complete` | Strategy A insert/fallthrough (`COMP-005`); `G4` / `COMP-001`–`COMP-003` / `GIT-004` complete; ranked-cycle `\C-xn` / `\C-xp`; `COMP-004` overlay leftover `discovery`; overlay `deferred` |
 | 6 | Syntax highlighting | `deferred` | no after-every-key paint hook (ADR 0003); G5 revisit; IDs kept |
-| 7 | Git/provider expansion | `validation` | prompt status plus history root/branch; upstream/remotes/tags unauthorized |
+| 7 | Git/provider expansion | `complete` | MVP exits `GIT-002` / `GIT-004` (`docs/git-phase7-mvp-close-plan.md`); `GIT-005` SDK `deferred`; upstream/remotes/tags unauthorized |
 | 8 | Enhanced Ctrl+R | `validation` | `SRCH-001` / `SRCH-002` complete (ADR 0009); cwd/signal `SRCH-003` recorded; 100k interactive leftover `deferred`; overlay `deferred` |
 | 9 | Release hardening | `not-started` | Strategy A feature exits and full compatibility matrix; `HRD-001` macOS host-blocked |
 
@@ -536,8 +536,9 @@ Exit condition: `HLT-003` if G5 keeps highlighting in scope; otherwise remain
 
 ### Phase 7 — Git and provider expansion
 
-Status: `validation`; prompt status plus history-scoped root/branch exist.
-Upstream/branches/remotes/tags remain unauthorized until a later consumer.
+Status: `complete` for the Strategy A MVP (`GIT-002` / `GIT-004`, 2026-08-25).
+Prompt status plus history-scoped root/branch exist. Upstream/branches/remotes/tags
+remain unauthorized. `GIT-005` stays `deferred` post-MVP.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
@@ -778,3 +779,4 @@ an accepted decoration/ownership ADR.
 | 2026-08-25 | Rebased `COMP-004` ranked-cycle onto ghost/search chords. Default cycle is `\C-xn` / `\C-xp` (inspect `bind -p`; do not reuse ghost `\C-x\C-n` / `\C-x\C-p`). C-1–C-6 PTY/module evidence recorded. `COMP-004` stays `discovery` (overlay `deferred`). |
 | 2026-08-25 | Closed `COMP-005` Strategy A insert/fallthrough (`docs/comp-005-strategy-a-close-plan.md`). Existing G4/COMP-002 parity, ranked-accept, ranked-cycle, and `GIT-004` kinds. Overlay leftover stays `COMP-004` `discovery`. Phase 5 Strategy A is `complete`. Do not start highlighting or dim paint. |
 | 2026-08-25 | Closed `BST-002`–`BST-004`, `PRM-001`, and `PRM-009` (`docs/bst-prm-g0-leftover-close-plan.md`). Re-source idempotence and nerd-icon glyph asserts added. Platform matrix leftover stays `HRD-001`. Broader lifecycle tracing stays `deferred`. `SRCH-003` stays `validation`. |
+| 2026-08-25 | Closed Phase 7 MVP Git/provider expansion (`docs/git-phase7-mvp-close-plan.md`). `GIT-001`–`GIT-004` evidenced; `GIT-005` stays `deferred`. Upstream/remotes/tags unauthorized. Do not mark `G5` complete. |
