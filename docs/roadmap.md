@@ -6,7 +6,7 @@
 > intended program and are not a status tracker.
 
 - Last reviewed: 2026-08-25 UTC
-- Current milestone: Phase 3 sidecar, Phase 4 Strategy A ghost, and Phase 5 Strategy A insert/fallthrough are on this tree; `G0`–`G4` complete; ADR 0011 QUERY wire, generation skip, and overlapping delayed-RESULT PTY recorded; Strategy A search insert, cycling, restore, cwd, and signal PTY recorded; `COMP-005` complete (overlay leftover stays `COMP-004` `discovery`); `BST-002`–`BST-004`, `PRM-001`, and `PRM-009` complete; `SRCH-003` 100k leftover `deferred`
+- Current milestone: Phase 3 sidecar, Phase 4 Strategy A ghost, Phase 5 Strategy A insert/fallthrough, and Phase 7 MVP Git/provider exits are on this tree; `G0`–`G4` complete; ADR 0011 QUERY wire, generation skip, and overlapping delayed-RESULT PTY recorded; Strategy A search insert, cycling, restore, cwd, and signal PTY recorded; `COMP-005` complete (overlay leftover stays `COMP-004` `discovery`); `BST-002`–`BST-004`, `PRM-001`, and `PRM-009` complete; `GIT-005` `deferred`; `SRCH-003` 100k leftover `deferred`
 - Active workstream: `SRCH-003` stays `validation`; `HRD-001` / `G5` remain host-blocked
 - Next decision gate: `SRCH-003` leftover honesty, then `G5` / `HRD-*`. Continuous decoration **defers** highlighting and GUI overlay only
 - Editor-facing work: opt-in ghost suffix is on main (ADR 0010). Async QUERY with stale-generation skip is recorded (ADR 0011). Explicit history-search insert (`\C-xh`), cycling, restore (`\C-xl`), and cwd preference are recorded (ADR 0009). Highlighting, dim paint, and GUI overlays are `deferred` from this MVP (G5 revisit)
