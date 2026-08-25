@@ -1070,9 +1070,22 @@ set -m
 _mbx_ghost_query 'e' || true
 [[ $- == *m* ]] || fail 'ghost query must restore monitor mode after a lookup'
 set +m
+
+_MBX_GHOST_GENERATION=2
+mbx_stale_cmds=('echo MBX_GHST:alpha')
+if _mbx_ghost_accept_commands 1 'echo MBX_GHST:a' 8 mbx_stale_cmds; then
+    fail 'a stale QUERY generation was applied to ghost candidates'
+fi
+assert_eq 0 ${#_MBX_GHOST_CANDIDATES[@]} \
+    'stale RESULT must not populate ghost candidates'
+_mbx_ghost_accept_commands 2 'echo MBX_GHST:a' 8 mbx_stale_cmds || \
+    fail 'the current QUERY generation was rejected'
+assert_eq 'echo MBX_GHST:alpha' "${_MBX_GHOST_CANDIDATES[0]-}" \
+    'current-generation RESULT must keep the prefix match'
+
 rm -rf "$ghost_stub_dir"
 unset MBX_BIN MBX_GHOST MBX_HISTORY READLINE_LINE READLINE_POINT READLINE_KEYSEQ \
     _MBX_GHOST_HAS _MBX_GHOST_POINT _MBX_GHOST_INDEX _MBX_GHOST_TYPED_LEN \
-    _MBX_GHOST_CANDIDATES
+    _MBX_GHOST_CANDIDATES _MBX_GHOST_GENERATION
 
 printf 'PASS: focused Bash module contracts\n'

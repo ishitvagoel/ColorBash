@@ -26,6 +26,7 @@ _MBX_GHOST_TYPED_LEN=0
 _MBX_GHOST_HIST_OFFSET=0
 _MBX_GHOST_HIST_CURRENT=
 _MBX_GHOST_CANDIDATES=()
+_MBX_GHOST_GENERATION=0
 _MBX_GHOST_DELETE_KEYSEQ=$_MBX_GHOST_DELETE_DEFAULT_KEYSEQ
 _MBX_GHOST_ACCEPT_KEYSEQ=$_MBX_GHOST_ACCEPT_DEFAULT_KEYSEQ
 
@@ -222,31 +223,70 @@ _mbx_ghost_restore_jobs() {
     _MBX_GHOST_SAVED_MONITOR=0
 }
 
-_mbx_ghost_query() {
-    local query=$1
-    local deadline output_fd child_pid match= limit
+# Apply a QUERY RESULT only when its generation is still current (ADR 0011).
+_mbx_ghost_accept_commands() {
+    (($# == 4)) || return 2
+
+    local result_gen=$1
+    local query=$2
+    local limit=$3
+    local -n _mbx_ghost_cmds=$4
+    local match
 
     _MBX_GHOST_CANDIDATES=()
     _MBX_GHOST_INDEX=0
-    [[ -x ${MBX_BIN:-} ]] || return 1
-    [[ -n $query ]] || return 1
-    _mbx_ghost_limit
-    limit=$REPLY
-    _mbx_deadline_after "${MBX_GHOST_TIMEOUT:-${MBX_HISTORY_TIMEOUT:-0.10}}" || \
+    ((result_gen == _MBX_GHOST_GENERATION)) || return 1
+    if ((${#_mbx_ghost_cmds[@]} > 0)); then
+        for match in "${_mbx_ghost_cmds[@]}"; do
+            ((${#_MBX_GHOST_CANDIDATES[@]} < limit)) || break
+            _mbx_ghost_usable_match "$query" "$match" || continue
+            match=$REPLY
+            _mbx_ghost_candidate_seen "$match" && continue
+            _MBX_GHOST_CANDIDATES+=("$match")
+        done
+    fi
+    ((${#_MBX_GHOST_CANDIDATES[@]} > 0)) || return 1
+    REPLY=${_MBX_GHOST_CANDIDATES[0]}
+}
+
+_mbx_ghost_query_wire() {
+    (($# == 4)) || return 2
+
+    local query=$1
+    local limit=$2
+    local generation=$3
+    local deadline=$4
+    local request_id response
+    local -a cmds=()
+
+    ((_MBX_REQUEST_ID += 1))
+    request_id=$_MBX_REQUEST_ID
+    _mbx_protocol_encode_history_query \
+        "$request_id" "$generation" prefix "$query" "$limit" || return 1
+    if ! _mbx_engine_exchange "$REPLY" "$deadline"; then
+        # Unread RESULT would desync the coprocess the way a timed-out RECORD
+        # does; stop so the prompt path can start a clean helper.
+        _mbx_engine_stop
         return 1
-    deadline=$REPLY
-    _MBX_GHOST_SAVED_MONITOR=0
-    _MBX_GHOST_SAVED_NOTIFY=0
-    [[ $- == *m* ]] && _MBX_GHOST_SAVED_MONITOR=1
-    [[ $- == *b* ]] && _MBX_GHOST_SAVED_NOTIFY=1
-    set +m
-    set +b
+    fi
+    response=$REPLY
+    _mbx_protocol_decode_history_result "$request_id" "$response" cmds || return 1
+    _mbx_ghost_accept_commands "$REPLY" "$query" "$limit" cmds
+}
+
+_mbx_ghost_query_cli() {
+    (($# == 3)) || return 2
+
+    local query=$1
+    local limit=$2
+    local deadline=$3
+    local output_fd child_pid match=
+
     exec {output_fd}< <(exec "$MBX_BIN" history search prefix "$query" --limit "$limit" \
-        2>/dev/null) || {
-        _mbx_ghost_restore_jobs
-        return 1
-    }
+        2>/dev/null) || return 1
     child_pid=$!
+    _MBX_GHOST_CANDIDATES=()
+    _MBX_GHOST_INDEX=0
     while ((${#_MBX_GHOST_CANDIDATES[@]} < limit)); do
         _mbx_ghost_read_line "$output_fd" "$deadline" || break
         match=$REPLY
@@ -259,9 +299,39 @@ _mbx_ghost_query() {
     if ! _mbx_wait_child_until "$child_pid" "$deadline"; then
         _mbx_terminate_child "$child_pid"
     fi
-    _mbx_ghost_restore_jobs
     ((${#_MBX_GHOST_CANDIDATES[@]} > 0)) || return 1
     REPLY=${_MBX_GHOST_CANDIDATES[0]}
+}
+
+_mbx_ghost_query() {
+    local query=$1
+    local deadline limit status=1
+
+    _MBX_GHOST_CANDIDATES=()
+    _MBX_GHOST_INDEX=0
+    [[ -x ${MBX_BIN:-} ]] || return 1
+    [[ -n $query ]] || return 1
+    _mbx_ghost_limit
+    limit=$REPLY
+    _mbx_deadline_after "${MBX_GHOST_TIMEOUT:-${MBX_HISTORY_TIMEOUT:-0.10}}" || \
+        return 1
+    deadline=$REPLY
+    ((_MBX_GHOST_GENERATION += 1))
+    _MBX_GHOST_SAVED_MONITOR=0
+    _MBX_GHOST_SAVED_NOTIFY=0
+    [[ $- == *m* ]] && _MBX_GHOST_SAVED_MONITOR=1
+    [[ $- == *b* ]] && _MBX_GHOST_SAVED_NOTIFY=1
+    set +m
+    set +b
+    if [[ ${_MBX_ENGINE_READY:-0} == 1 ]] && \
+        declare -F _mbx_engine_exchange >/dev/null 2>&1; then
+        _mbx_ghost_query_wire "$query" "$limit" "$_MBX_GHOST_GENERATION" \
+            "$deadline" && status=0
+    else
+        _mbx_ghost_query_cli "$query" "$limit" "$deadline" && status=0
+    fi
+    _mbx_ghost_restore_jobs
+    return "$status"
 }
 
 _mbx_ghost_show() {

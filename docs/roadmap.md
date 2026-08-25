@@ -6,9 +6,9 @@
 > intended program and are not a status tracker.
 
 - Last reviewed: 2026-08-25 UTC
-- Current milestone: Phase 3 sidecar and Strategy A ghost are on main; `G0`–`G4` complete; ADR 0011 accepted; QUERY wire in `validation`
-- Active workstream: wire ghost onto QUERY with generation stale-rejection; rebase Strategy A search (draft PR #37)
-- Next decision gate: Bash generation stale rejection on QUERY. Continuous decoration **defers** highlighting and GUI overlay only
+- Current milestone: Phase 3 sidecar and Strategy A ghost are on main; `G0`–`G4` complete; ADR 0011 accepted; QUERY wire and ghost generation checks in `validation`
+- Active workstream: overlapping delayed-RESULT PTY for `GHST-001`; rebase Strategy A search (draft PR #37)
+- Next decision gate: `GHST-001` overlapping stale-rejection PTY. Continuous decoration **defers** highlighting and GUI overlay only
 - Editor-facing work: opt-in ghost suffix is on main (ADR 0010). Async QUERY wire is in `validation`. Strategy A history search is `ready`. Highlighting, dim paint, and GUI overlays are `deferred` from this MVP (G5 revisit)
 - Timing policy: unmet percentile targets are `deferred` and do not block
   product development (`docs/latency-budget-deferral.md`)
@@ -132,7 +132,7 @@ Not implemented:
 - live highlighting, dim after-every-key paint, or a GUI completion / Ctrl+R
   overlay (`deferred` from this Strategy A MVP; G5 revisit);
 - Strategy A history-search UI (explicit `bind -x`; draft PR #37, not on main);
-- ghost generation stale-rejection on QUERY (`GHST-001` leftover; wire exists);
+- overlapping delayed-RESULT PTY for ghost stale rejection (`GHST-001`);
 - arbitrary key-injection coverage (Tab, arrows, stock Ctrl+R), the release
   platform matrix, or remaining `G0` platform-matrix evidence; or
 - prompt-boundary write-ack percentile budget (correctness recorded; p95 miss
@@ -479,7 +479,7 @@ keystroke.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `GHST-001` | Async ranked query with generation IDs and cancellation | `validation` | ADR 0011; wire QUERY/RESULT/CANCEL in `docs/protocol-mbx2.md`, `bash/protocol.bash`, `crates/cli/src/history_service.rs` (`docs/ghst-001-query-wire-plan.md`); Bash ghost generation stale rejection + PTY remain |
+| `GHST-001` | Async ranked query with generation IDs and cancellation | `validation` | ADR 0011; QUERY/RESULT/CANCEL wire; ghost coprocess QUERY + generation check (`docs/ghst-001-ghost-query-plan.md` W-1); overlapping delayed-RESULT PTY remains |
 | `GHST-002` | Inline ghost rendering with stale-result rejection | `validation` | ADR 0010; G-1–G-6 in `bash/ghost.bash`, `crates/pty/tests/ghost.rs`, `tests/bash/modules.bash`; `docs/ghst-002-inline-ghost-plan.md`; remaining printables P-1–P-3 (`docs/ghst-002-printables-plan.md`); vi-insert V-1–V-3 (`docs/ghst-002-vi-insert-plan.md`); Left dismiss L-1–L-3 (`docs/ghst-002-left-motion-plan.md`); Home/Up/backward-word H-1/W-4/U-2 (`docs/ghst-002-home-up-motion-plan.md`); Down D-1–D-2 (`docs/ghst-002-down-motion-plan.md`); kill-ring isolation K-1–K-3 (`docs/ghst-002-kill-ring-plan.md`); Enter is a Readline delete-char + accept-line macro (M-041); helpers bind before printables and partial disarm clears the armed flag (M-044); dim paint is `deferred` (not a Phase 4 exit); async stale-rejection waits on wiring ghost to QUERY |
 | `GHST-003` | Full/word acceptance and suggestion cycling | `complete` | Right/`\C-f` full accept in G-2; `\ef` / Ctrl-Right word-accept in W-1–W-3 (`docs/ghst-003-word-accept-plan.md`); `\C-x\C-n` / `\C-x\C-p` cycling in C-1–C-3 (`docs/ghst-003-cycle-plan.md`) |
 | `GHST-004` | Multiline, resize, exact-byte, no-execution, and latency evidence | `validation` | R-1/Q-1/M-1 in `docs/ghst-004-multiline-resize-plan.md`; C-1/B-1 in `docs/ghst-004-no-execution-plan.md`; `crates/pty/tests/ghost.rs`; latency matrix `deferred` (`docs/latency-budget-deferral.md`). Do not mark complete |
@@ -601,10 +601,10 @@ percentile leftovers are `deferred` and must not block product slices
 (`docs/latency-budget-deferral.md`). `HIST-010` / `GIT-003` CLI filters are
 already on `main`; do not duplicate them.
 
-1. Wire `bash/ghost.bash` onto MBX2 QUERY with generation stale-rejection.
-   QUERY/RESULT/CANCEL wire is in `validation` (`docs/ghst-001-query-wire-plan.md`).
-   Sync CLI search remains until that leftover. Do not mark `GHST-001` or
-   `GHST-004` complete unless their exit criteria are met.
+1. Overlapping delayed-RESULT PTY for `GHST-001` stale rejection (coprocess
+   QUERY + generation check are recorded; `docs/ghst-001-ghost-query-plan.md`).
+   Do not mark `GHST-001` or `GHST-004` complete unless their exit criteria
+   are met.
 2. Rebase draft PR #37 (Strategy A history search) onto current `main`. It
    conflicts and predates ghost plus `HIST-010`. Interactive repo/failed
    filters follow after that UI lands. Do not mark `SRCH-*` complete here.
@@ -771,4 +771,4 @@ an accepted decoration/ownership ADR.
 | 2026-08-20 | Recorded ghost Down / forward-history dismiss (`docs/ghst-002-down-motion-plan.md`; D-1–D-2). Dim paint and async stale-rejection remain blocked. Do not mark `GHST-004` complete. |
 | 2026-08-20 | Landed `HIST-010` / `GIT-003` + CLI filters onto main after ghost (`docs/hist-010-git-003-plan.md`; `docs/hist-010-cli-filters-plan.md`). Unblocks interactive repo/failed search consumers. |
 | 2026-08-25 | Reclassified blocker taxonomy: continuous decoration **defers** highlighting, dim paint, and GUI overlays (G5 revisit; IDs kept). Strategy A search (`SRCH-001`/`SRCH-002`) is `ready`; `SRCH-003` waits on landing search UI, not decoration. No deliverable marked complete. |
-| 2026-08-25 | Accepted ADR 0011 async feature IPC on MBX2 (`docs/adr/0011-async-feature-ipc.md`). Landed MBX2 QUERY/RESULT/CANCEL wire (`docs/ghst-001-query-wire-plan.md`). `GHST-001` moves to `validation`. Bash ghost generation stale rejection remains. Do not mark `GHST-001` complete. |
+| 2026-08-25 | Accepted ADR 0011 async feature IPC on MBX2 (`docs/adr/0011-async-feature-ipc.md`). Landed MBX2 QUERY/RESULT/CANCEL wire (`docs/ghst-001-query-wire-plan.md`) and ghost coprocess QUERY with generation checks (`docs/ghst-001-ghost-query-plan.md`). `GHST-001` stays `validation` (overlapping delayed-RESULT PTY remains). Do not mark `GHST-001` complete. |

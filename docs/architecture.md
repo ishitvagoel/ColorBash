@@ -342,11 +342,10 @@ and shutdown, and treats `(session_id, event_sequence)` as the idempotency key.
 The writer may enrich `repo_root`/`repo_branch` from absolute `start_cwd` using
 the ADR 0007 Git adapter **before** `BEGIN IMMEDIATE`; timeout, disable, or
 absence leave NULLs and still insert the row. Search is a direct CLI operation
-(`mbx history search recent|prefix|cwd|repo|branch|fuzzy|failed`), not
-an MBX2 query today. ADR 0011 accepts MBX2 QUERY/RESULT/CANCEL for async
-feature lookups (`GHST-001`); the QUERY wire and helper search path are in
-validation (`docs/protocol-mbx2.md`). Sync CLI search remains for operator
-tools and for ghost until Bash generation stale rejection lands.
+(`mbx history search recent|prefix|cwd|repo|branch|fuzzy|failed`). ADR 0011
+QUERY/RESULT/CANCEL is implemented; opt-in ghost uses coprocess QUERY when the
+helper is ready and ignores a RESULT whose generation is not current. Sync CLI
+search remains for operator tools and for ghost when no coprocess is attached.
 `path`, `count`, `clear`, and `delete` are the privacy controls. Command text
 never enters traces.
 

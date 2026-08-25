@@ -4,8 +4,9 @@ Status: RECORD slice implemented (`HIST-007`). `G2` is complete. Write-ack
 percentiles are `deferred` (`docs/history-g2-write-ack-deferral.md`).
 QUERY/RESULT/CANCEL wire layouts are specified for `GHST-001`
 (`docs/adr/0011-async-feature-ipc.md`; `docs/ghst-001-query-wire-plan.md`).
-Helper QUERY handling and Bash encode/decode land with that slice; ghost stale
-rejection remains a later leftover. Sync CLI search remains available.
+Helper QUERY handling, Bash encode/decode, and ghost coprocess QUERY with
+generation checks are recorded (`docs/ghst-001-ghost-query-plan.md`). Overlapping
+delayed-RESULT PTY remains. Sync CLI search remains available.
 
 Foreign-user open is recorded. Invariance, admission-parity, hostile inertness,
 100k query p95, concurrent-writer contention, write-ack correctness, WAL
@@ -114,5 +115,6 @@ MBX2<TAB>request-id<TAB>ERROR<TAB>kind
 ## Versioning
 
 The magic `MBX2` is fixed. RECORD and QUERY share framing. Exact layouts above
-are the contract for the `GHST-001` wire slice. Ghost generation stale rejection
-and async install remain separate leftovers. Not an MBX1 change.
+are the contract for the `GHST-001` wire slice. Ghost coprocess QUERY with
+generation checks is recorded; overlapping delayed-RESULT PTY remains. Not an
+MBX1 change.
