@@ -33,7 +33,9 @@ user presses a dedicated chord does not.
    keep the prompt usable.
 4. The query is `READLINE_LINE` unless the chord is repeating on the current
    snapshot entry. An empty line prefers cwd-scoped rows (`history search cwd
-   "$PWD"`) and falls back to newest sidecar rows (`history search recent`). A
+   "$PWD"`) and falls back to newest sidecar rows (`history search recent`).
+   When `MBX_SEARCH_FAILED=1`, an empty line prefers `history search failed`
+   first and falls through to cwd/recent when that query is empty. A
    non-empty line prefers prefix then fuzzy with `--cwd "$PWD"`, then the same
    queries globally. Results are
    bounded (`MBX_SEARCH_LIMIT`, default 8, max 16). The selected command text
@@ -60,10 +62,12 @@ user presses a dedicated chord does not.
 
 Phase 8 can ship an explicit search insert, bounded cycling, and cancel
 restoration without reopening editor ownership. Stock Ctrl+R remains Bash
-reverse-i-search. A metadata overlay and 100k-row interactive latency stay
-later `SRCH-003` leftovers. Signal and terminal-state PTY around the insert
+reverse-i-search. A metadata overlay stays `deferred`. 100k-row interactive
+latency stays `deferred`. Signal and terminal-state PTY around the insert
 and restore chords is recorded (`docs/srch-003-signal-plan.md`). Empty-line
-and typed-prefix search prefer cwd (HIST-008) before global rows. Command
+and typed-prefix search prefer cwd (HIST-008) before global rows. Opt-in
+empty-line failed insert is `MBX_SEARCH_FAILED=1`
+(`docs/srch-003-failed-filter-plan.md`). Command
 text stays out of traces (`M-023`).
 
 Later status (2026-08-25): ADR 0010 landed opt-in suffix ghost as Strategy A
@@ -71,7 +75,9 @@ Later status (2026-08-25): ADR 0010 landed opt-in suffix ghost as Strategy A
 leftovers remain `deferred` (G5 revisit). Do not treat this ADR as still
 blocking ghost. Default search chord is `\C-xh` after stock `\C-x\C-r`
 (`re-read-init-file`) was found occupied (same inspect-`bind -p` prevention as
-M-040). Restore is `\C-xl`.
+M-040). Restore is `\C-xl`. `SRCH-003` Strategy A filters + signal are
+complete (`docs/srch-003-failed-filter-plan.md`); overlay and 100k interactive
+percentiles stay `deferred`.
 
 ## Validation
 
@@ -79,4 +85,4 @@ PTY evidence in `crates/pty/tests/history_search.rs` and module contracts in
 `tests/bash/modules.bash`. Plans: `docs/srch-001-history-search-plan.md`,
 `docs/srch-001-result-view-plan.md`, `docs/srch-002-cancel-restore-plan.md`,
 `docs/srch-003-cwd-filter-plan.md`, `docs/srch-003-cwd-prefix-plan.md`,
-`docs/srch-003-signal-plan.md`.
+`docs/srch-003-signal-plan.md`, `docs/srch-003-failed-filter-plan.md`.

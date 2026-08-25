@@ -357,7 +357,8 @@ never enters traces.
 
 This slice does not enable a GUI overlay or live highlighting. Strategy A
 ghost is implemented (ADR 0010); Strategy A search insert, cycling, restore,
-and cwd preference are recorded (ADR 0009). Highlighting and GUI overlay remain
+cwd preference, and opt-in failed empty-line insert are recorded (ADR 0009).
+Highlighting and GUI overlay remain
 `deferred`. Invariance and admission-parity
 PTY evidence is in `crates/pty/tests/history_invariance.rs`. 100k query p95 and
 hostile inertness evidence is in `docs/benchmarks/2026-08-16-history-queries.md`
@@ -463,7 +464,8 @@ Down / `\C-n` restores the remembered typed prefix after Up;
 generation IDs is accepted in ADR 0011; ghost skips a delayed RESULT whose
 generation is not current (`GHST-001`). Explicit history search via `bind -x` is Strategy A (ADR 0009;
 `bash/search.bash`; default `\C-xh` insert and `\C-xl` restore; bounded
-cycling; empty-line and prefix/fuzzy cwd preference; Ctrl+C / Ctrl+Z / resize /
+cycling; empty-line and prefix/fuzzy cwd preference; opt-in empty-line
+`history search failed` when `MBX_SEARCH_FAILED=1`; Ctrl+C / Ctrl+Z / resize /
 `stty -g` PTY around `\C-xh` / `\C-xl`). `COMP-004` popup
 policy records no GUI overlay; ranked-accept `bind -x` evidence is complete
 (`docs/comp-004-ranked-accept-plan.md`). Ranked-cycle `bind -x` evidence is

@@ -1250,6 +1250,49 @@ assert_eq 'global-prefix-hit' "$READLINE_LINE" \
 unset MBX_SEARCH_CWD
 _mbx_search_clear
 
+cat >"$search_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+case " $* " in
+    *" search failed "*) printf '%s\n' "failed-hit" ;;
+    *" search cwd "*) printf '%s\n' "cwd-hit" ;;
+    *" search recent "*) printf '%s\n' "recent-hit" ;;
+    *) printf '%s\n' "other-hit" ;;
+esac
+EOF
+unset MBX_SEARCH_FAILED
+READLINE_LINE=
+READLINE_POINT=0
+_mbx_search_insert
+assert_eq 'cwd-hit' "$READLINE_LINE" \
+    'default empty-line search should still prefer cwd over failed'
+_mbx_search_clear
+MBX_SEARCH_FAILED=1
+READLINE_LINE=
+READLINE_POINT=0
+_mbx_search_insert
+assert_eq 'failed-hit' "$READLINE_LINE" \
+    'MBX_SEARCH_FAILED=1 empty-line search should prefer failed rows'
+unset MBX_SEARCH_FAILED
+_mbx_search_clear
+
+cat >"$search_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+case " $* " in
+    *" search failed "*) ;;
+    *" search cwd "*) printf '%s\n' "cwd-hit" ;;
+    *" search recent "*) printf '%s\n' "recent-hit" ;;
+    *) printf '%s\n' "other-hit" ;;
+esac
+EOF
+MBX_SEARCH_FAILED=1
+READLINE_LINE=
+READLINE_POINT=0
+_mbx_search_insert
+assert_eq 'cwd-hit' "$READLINE_LINE" \
+    'MBX_SEARCH_FAILED=1 with no failed rows should fall through to cwd'
+unset MBX_SEARCH_FAILED
+_mbx_search_clear
+
 MBX_HISTORY=0
 READLINE_LINE='keep-me'
 READLINE_POINT=7
@@ -1270,7 +1313,7 @@ _mbx_search_insert
 assert_eq 'keep-me' "$READLINE_LINE" \
     'search must no-op when the helper is missing'
 rm -rf "$search_stub_dir"
-unset MBX_BIN MBX_HISTORY MBX_SEARCH_TIMEOUT READLINE_LINE READLINE_POINT \
+unset MBX_BIN MBX_HISTORY MBX_SEARCH_TIMEOUT MBX_SEARCH_FAILED READLINE_LINE READLINE_POINT \
     _MBX_SEARCH_INSTALLED _MBX_SEARCH_MATCHES _MBX_SEARCH_INDEX \
     _MBX_SEARCH_ORIGINAL _MBX_SEARCH_ORIGINAL_POINT _MBX_SEARCH_HAS_ORIGINAL
 

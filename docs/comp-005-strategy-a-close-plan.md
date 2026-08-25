@@ -96,5 +96,6 @@ is allowed so the canonical suite can run.
 
 `COMP-005` is `complete`. `COMP-004` stays `discovery` until overlay
 strategy is resolved or an ADR narrows it. GUI overlay remains unproven.
-`SRCH-003` stays `validation` (100k interactive leftover `deferred`).
+`SRCH-003` Strategy A is closed in `docs/srch-003-failed-filter-plan.md`
+(100k interactive leftover `deferred`).
 `HRD-001` still needs a macOS host.

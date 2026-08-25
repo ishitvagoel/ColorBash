@@ -3,7 +3,7 @@ mod common;
 
 use common::*;
 use mbx_pty::{CTRL_C, CTRL_Z, WinSize, visible_contains};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const CTRL_X: u8 = 0x18;
 const DEFAULT_KEYSEQ: &[u8] = &[CTRL_X, b'h'];
@@ -695,4 +695,82 @@ fn ctrl_z_then_search_still_inserts() {
         .expect("sentinel");
     wait_all(&mut session, &["\nMBX_SRCH:after_stop", "> "]);
     // First `exit` can refuse while a stopped job remains; Drop SIGKILLs the PTY.
+}
+
+fn wait_for_failed_command(bin: &std::path::Path, data_home: &std::path::Path, expected: &str) {
+    let deadline = Instant::now() + Duration::from_secs(8);
+    loop {
+        let failed = query(
+            bin,
+            &["history", "search", "failed", "--limit", "8"],
+            data_home,
+        );
+        if failed.lines().any(|line| line == expected) {
+            return;
+        }
+        if Instant::now() >= deadline {
+            panic!("failed search never contained {expected:?}; got {failed:?}");
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+#[test]
+fn empty_line_inserts_failed_when_opt_in() {
+    let home = TempHome::new("srch-f1");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let mut session = spawn_history_shell(
+        home.path(),
+        &enabled_env(data_home_s, histfile_s, &[("MBX_SEARCH_FAILED", "1")]),
+    );
+    wait_for(&mut session, "> ");
+    type_line(&mut session, "false");
+    wait_for(&mut session, "> ");
+    record_printf(&mut session, "ok");
+    wait_for_count(&mbx_bin(), &data_home, 2);
+    wait_for_failed_command(&mbx_bin(), &data_home, "false");
+
+    send_keyseq(&mut session, DEFAULT_KEYSEQ);
+    assert_no_marker(&mut session, "\nMBX_SRCH:ok");
+    session.write_str("\n", deadline(2)).expect("submit");
+    let after_enter = wait_for(&mut session, "> ");
+    assert!(
+        !visible_contains(&after_enter, "\nMBX_SRCH:ok"),
+        "opt-in failed empty-line insert should place `false`, not the later success: {:?}",
+        mbx_pty::visible_text(&after_enter)
+    );
+    session
+        .write_str("printf 'MBX_SRCH:failed_inserted\\n'\n", deadline(2))
+        .expect("sentinel");
+    wait_all(&mut session, &["\nMBX_SRCH:failed_inserted", "> "]);
+    exit_and_wait(&mut session);
+}
+
+#[test]
+fn empty_line_failed_falls_back_when_no_failed_rows() {
+    let home = TempHome::new("srch-f2");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let mut session = spawn_history_shell(
+        home.path(),
+        &enabled_env(data_home_s, histfile_s, &[("MBX_SEARCH_FAILED", "1")]),
+    );
+    wait_for(&mut session, "> ");
+    record_printf(&mut session, "ok");
+    wait_for_count(&mbx_bin(), &data_home, 1);
+
+    send_keyseq(&mut session, DEFAULT_KEYSEQ);
+    assert_no_marker(&mut session, "\nMBX_SRCH:ok");
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["\nMBX_SRCH:ok", "> "]);
+    session
+        .write_str("printf 'MBX_SRCH:failed_fallback\\n'\n", deadline(2))
+        .expect("sentinel");
+    wait_all(&mut session, &["\nMBX_SRCH:failed_fallback", "> "]);
+    exit_and_wait(&mut session);
 }

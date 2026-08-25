@@ -6,10 +6,10 @@
 > intended program and are not a status tracker.
 
 - Last reviewed: 2026-08-25 UTC
-- Current milestone: Phase 3 sidecar, Phase 4 Strategy A ghost, Phase 5 Strategy A insert/fallthrough, and Phase 7 MVP Git/provider exits are on this tree; `G0`–`G4` complete; ADR 0011 QUERY wire, generation skip, and overlapping delayed-RESULT PTY recorded; Strategy A search insert, cycling, restore, cwd, and signal PTY recorded; `COMP-005` complete (overlay leftover stays `COMP-004` `discovery`); `BST-002`–`BST-004`, `PRM-001`, and `PRM-009` complete; `GIT-005` `deferred`; `SRCH-003` 100k leftover `deferred`
-- Active workstream: `SRCH-003` stays `validation`; `HRD-001` / `G5` remain host-blocked
-- Next decision gate: `SRCH-003` leftover honesty, then `G5` / `HRD-*`. Continuous decoration **defers** highlighting and GUI overlay only
-- Editor-facing work: opt-in ghost suffix is on main (ADR 0010). Async QUERY with stale-generation skip is recorded (ADR 0011). Explicit history-search insert (`\C-xh`), cycling, restore (`\C-xl`), and cwd preference are recorded (ADR 0009). Highlighting, dim paint, and GUI overlays are `deferred` from this MVP (G5 revisit)
+- Current milestone: Phase 3 sidecar, Phase 4 Strategy A ghost, Phase 5 Strategy A insert/fallthrough, Phase 7 MVP Git/provider, and Phase 8 Strategy A search exits are on this tree; `G0`–`G4` complete; ADR 0011 QUERY wire, generation skip, and overlapping delayed-RESULT PTY recorded; Strategy A search insert, cycling, restore, cwd, signal, and opt-in failed insert recorded; `COMP-005` complete (overlay leftover stays `COMP-004` `discovery`); `BST-002`–`BST-004`, `PRM-001`, and `PRM-009` complete; `GIT-005` `deferred`; `SRCH-003` complete (100k leftover `deferred`; overlay `deferred`; interactive repo insert unauthorized)
+- Active workstream: `HRD-001` / `G5` remain host-blocked
+- Next decision gate: `G5` / `HRD-*`. Continuous decoration **defers** highlighting and GUI overlay only
+- Editor-facing work: opt-in ghost suffix is on main (ADR 0010). Async QUERY with stale-generation skip is recorded (ADR 0011). Explicit history-search insert (`\C-xh`), cycling, restore (`\C-xl`), cwd preference, and opt-in failed empty-line insert are recorded (ADR 0009). Highlighting, dim paint, and GUI overlays are `deferred` from this MVP (G5 revisit)
 - Timing policy: unmet percentile targets are `deferred` and do not block
   product development (`docs/latency-budget-deferral.md`)
 
@@ -318,11 +318,11 @@ close (same precedent as `G2` write-ack deferral).
 
 ### G5 — MVP release
 
-Status: `blocked` by remaining Strategy A feature exits and `HRD-*`, not by
+Status: `blocked` by `HRD-*`, not by remaining Strategy A feature exits or
 continuous decoration
 
-Requires remaining Strategy A leftover `SRCH-003` and all
-`HRD-*` release deliverables, plus real-PTY evidence across the supported Bash/OS
+Requires all `HRD-*` release deliverables, plus real-PTY evidence across the
+supported Bash/OS
 matrix, hostile-input tests, signals and resize, tmux/SSH/fullscreen applications,
 helper crashes, terminal restoration, installation/removal, and accepted
 latency budgets that have not been deferred.
@@ -345,8 +345,8 @@ pass unless an ADR ratifies them.
 | 5 | Completion | `complete` | Strategy A insert/fallthrough (`COMP-005`); `G4` / `COMP-001`–`COMP-003` / `GIT-004` complete; ranked-cycle `\C-xn` / `\C-xp`; `COMP-004` overlay leftover `discovery`; overlay `deferred` |
 | 6 | Syntax highlighting | `deferred` | no after-every-key paint hook (ADR 0003); G5 revisit; IDs kept |
 | 7 | Git/provider expansion | `complete` | MVP exits `GIT-002` / `GIT-004` (`docs/git-phase7-mvp-close-plan.md`); `GIT-005` SDK `deferred`; upstream/remotes/tags unauthorized |
-| 8 | Enhanced Ctrl+R | `validation` | `SRCH-001` / `SRCH-002` complete (ADR 0009); cwd/signal `SRCH-003` recorded; 100k interactive leftover `deferred`; overlay `deferred` |
-| 9 | Release hardening | `not-started` | Strategy A feature exits and full compatibility matrix; `HRD-001` macOS host-blocked |
+| 8 | Enhanced Ctrl+R | `complete` | `SRCH-001`–`SRCH-003` complete (ADR 0009); cwd/signal/opt-in failed insert recorded; 100k interactive leftover `deferred`; overlay `deferred`; interactive repo insert unauthorized |
+| 9 | Release hardening | `not-started` | Full compatibility matrix; `HRD-001` macOS host-blocked |
 
 ## Phase details
 
@@ -556,24 +556,27 @@ MVP Git/completion slice. `GIT-005` remains explicitly post-MVP.
 
 ### Phase 8 — Enhanced Ctrl+R
 
-Status: `validation` for cwd/signal leftovers; insert, cycling, and restore are
-`complete` (ADR 0009). A type-to-filter overlay remains `deferred`. Default
-insert is `\C-xh`; restore is `\C-xl`.
+Status: `complete` for Strategy A explicit `bind -x` search (2026-08-25; ADR
+0009). A type-to-filter overlay remains `deferred`. Default insert is `\C-xh`;
+restore is `\C-xl`.
 
-Build a configurable explicit search action with age, cwd, and useful status
+Build a configurable explicit search action with cwd and useful status
 metadata; bounded filtering; safe cancellation; exact insertion without
-execution; and terminal restoration. CLI `search repo` / `search branch` /
-`search failed` already exist on main (`HIST-010`). Interactive filters wait on
-the search UI leftover, not on decoration.
+execution; and terminal restoration. Age/cwd/status columns stay overlay
+`deferred`. CLI `search repo` / `search branch` / `search failed` exist on
+main (`HIST-010`). Interactive empty-line `\C-xh` uses cwd, then recent;
+`MBX_SEARCH_FAILED=1` prefers `search failed` first. Interactive `search repo`
+insert stays unauthorized (needs a trusted repo root in Bash).
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `SRCH-001` | Configurable bounded history-search action and result view | `complete` | insert S-1–S-7 and cycling V-1–V-4 in `bash/search.bash`, `crates/pty/tests/history_search.rs` (23 PTY tests), `tests/bash/modules.bash`; ADR 0009; `docs/srch-001-history-search-plan.md`; `docs/srch-001-result-view-plan.md`. Overlay is not required |
+| `SRCH-001` | Configurable bounded history-search action and result view | `complete` | insert S-1–S-7 and cycling V-1–V-4 in `bash/search.bash`, `crates/pty/tests/history_search.rs`, `tests/bash/modules.bash`; ADR 0009; `docs/srch-001-history-search-plan.md`; `docs/srch-001-result-view-plan.md`. Overlay is not required |
 | `SRCH-002` | Cancel restoration and exact insertion without execution | `complete` | restore R-1–R-4 in `bash/search.bash`, `crates/pty/tests/history_search.rs`, `tests/bash/modules.bash`; ADR 0009; `docs/srch-002-cancel-restore-plan.md`. Overlay is not required |
-| `SRCH-003` | Metadata filters, 100k-row latency, signal, and terminal-state evidence | `validation` | cwd empty-line C-1–C-4, prefix/fuzzy cwd, and signal/terminal-state T-1–T-4 in `bash/search.bash`, `crates/pty/tests/history_search.rs`, `tests/bash/modules.bash`; `docs/srch-003-cwd-filter-plan.md`; `docs/srch-003-cwd-prefix-plan.md`; `docs/srch-003-signal-plan.md`; overlay `deferred`; 100k interactive leftover remains `deferred`. CLI `search failed` / `search repo` / `search branch` are on main |
+| `SRCH-003` | Metadata filters, 100k-row latency, signal, and terminal-state evidence | `complete` | cwd empty-line C-1–C-4, prefix/fuzzy cwd, signal/terminal-state T-1–T-4, and opt-in failed insert F-1–F-3 in `bash/search.bash`, `crates/pty/tests/history_search.rs`, `tests/bash/modules.bash`; `docs/srch-003-cwd-filter-plan.md`; `docs/srch-003-cwd-prefix-plan.md`; `docs/srch-003-signal-plan.md`; `docs/srch-003-failed-filter-plan.md`. Overlay `deferred`; 100k interactive leftover `deferred`; interactive repo insert unauthorized. CLI `search failed` / `search repo` / `search branch` are on main |
 
-Exit condition: `SRCH-003`. Do not mark `SRCH-003` complete while the 100k
-interactive leftover and overlay remain outside this Strategy A slice.
+Exit condition: `SRCH-003`. Overlay leftover stays `deferred`. 100k interactive
+percentiles stay `deferred` (`docs/latency-budget-deferral.md`) and do not
+block this Strategy A exit. Interactive repo insert stays unauthorized.
 
 ### Phase 9 — Release hardening
 
@@ -589,7 +592,7 @@ combinations are impractical.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `HRD-001` | Supported Bash/OS/terminal pairwise PTY matrix | `blocked` | Strategy A MVP feature exits (not deferred `HLT-*` / overlay); Darwin PTY constant pre-work (D-1–D-3) recorded in `docs/hrd-001-darwin-pty-constants-plan.md`; full macOS matrix is host-blocked on this Linux runner |
+| `HRD-001` | Supported Bash/OS/terminal pairwise PTY matrix | `blocked` | Strategy A MVP feature exits are recorded (not deferred `HLT-*` / overlay); Darwin PTY constant pre-work (D-1–D-3) recorded in `docs/hrd-001-darwin-pty-constants-plan.md`; full macOS matrix is host-blocked on this Linux runner |
 | `HRD-002` | Hostile input, protocol bounds, privacy, and no-execution audit | `not-started` | feature-complete candidate |
 | `HRD-003` | Release-mode end-to-end latency and resource evidence | `not-started` | accepted workloads/budgets |
 | `HRD-004` | Install, upgrade, disable, removal, crash, and recovery evidence | `not-started` | release packaging |
@@ -598,19 +601,18 @@ Exit condition: `G5` after every `HRD-*` item is complete.
 
 ## Immediate next work
 
-`G0`–`G4` and Phase 3–5 Strategy A are complete on this tree. Capture stays disabled by
+`G0`–`G4` and Phase 3–5 and Phase 8 Strategy A are complete on this tree.
+Capture stays disabled by
 default. Unmet percentile leftovers are `deferred` and must not block product
 slices (`docs/latency-budget-deferral.md`). `HIST-010` / `GIT-003` CLI filters
 are already on `main`; do not duplicate them.
 
-1. `SRCH-003` stays `validation`. Remaining leftover is 100k interactive
-   (latency `deferred`). Overlay is `deferred`. Do not mark `SRCH-003` complete.
-2. `HRD-001` macOS is host-blocked (Phase 9 / `G5`). Close superseded draft
+1. `HRD-001` macOS is host-blocked (Phase 9 / `G5`). Close superseded draft
    PRs #31 (`search failed`; on main) and #34 (`PRM-006` already complete)
    when authorized. Do not spend a slice on FND-001 SHA refresh or percentile
    benches unless a functional prompt-path defect is proven. Do not mark
    `COMP-004` complete (overlay strategy still `discovery`). Do not start
-   highlighting or dim paint.
+   highlighting or dim paint. Do not fake the macOS matrix on Linux.
 
 ## Provisional performance and safety budgets
 
@@ -780,3 +782,4 @@ an accepted decoration/ownership ADR.
 | 2026-08-25 | Closed `COMP-005` Strategy A insert/fallthrough (`docs/comp-005-strategy-a-close-plan.md`). Existing G4/COMP-002 parity, ranked-accept, ranked-cycle, and `GIT-004` kinds. Overlay leftover stays `COMP-004` `discovery`. Phase 5 Strategy A is `complete`. Do not start highlighting or dim paint. |
 | 2026-08-25 | Closed `BST-002`–`BST-004`, `PRM-001`, and `PRM-009` (`docs/bst-prm-g0-leftover-close-plan.md`). Re-source idempotence and nerd-icon glyph asserts added. Platform matrix leftover stays `HRD-001`. Broader lifecycle tracing stays `deferred`. `SRCH-003` stays `validation`. |
 | 2026-08-25 | Closed Phase 7 MVP Git/provider expansion (`docs/git-phase7-mvp-close-plan.md`). `GIT-001`–`GIT-004` evidenced; `GIT-005` stays `deferred`. Upstream/remotes/tags unauthorized. Do not mark `G5` complete. |
+| 2026-08-25 | Closed `SRCH-003` Strategy A metadata filters + signal (`docs/srch-003-failed-filter-plan.md`; F-1–F-3). Opt-in `MBX_SEARCH_FAILED=1` empty-line insert. Overlay leftover `deferred`. 100k interactive leftover `deferred`. Interactive repo insert unauthorized. Phase 8 Strategy A is `complete`. `HRD-001` / `G5` stay host-blocked. Do not start highlighting or dim paint. |

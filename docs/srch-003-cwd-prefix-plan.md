@@ -1,9 +1,9 @@
 # SRCH-003 leftover: cwd-scoped prefix and fuzzy search (C-5–C-8)
 
-Status: `complete` for this Strategy A cwd-filter slice (2026-08-17). Age/status
-overlay, 100k interactive latency, repo filters, and failed-command filters
-remain. Signal/terminal-state PTY is recorded in
-`docs/srch-003-signal-plan.md`. Do **not** mark `SRCH-003` complete.
+Status: `complete` for this Strategy A cwd-filter slice (2026-08-17).
+`SRCH-003` Strategy A close is `docs/srch-003-failed-filter-plan.md`. Overlay
+and 100k interactive percentiles stay `deferred`. Interactive repo insert
+stays unauthorized.
 
 ## Why this slice
 
@@ -31,7 +31,8 @@ and does not draw metadata, steal `\C-r`, or duplicate `HIST-010`.
    global fuzzy. Empty-line behavior is unchanged.
 3. `MBX_SEARCH_CWD=0` skips cwd-scoped prefix/fuzzy (global only).
 4. CLI stdout remains command text only. Do not log command text or cwd
-   (M-023). Do not mark `SRCH-003` complete.
+   (M-023). Remaining Strategy A metadata leftover is opt-in failed insert
+   (`docs/srch-003-failed-filter-plan.md`).
 
 ## Out of scope (hard)
 
@@ -40,7 +41,8 @@ and does not draw metadata, steal `\C-r`, or duplicate `HIST-010`.
 - Logging command text
 - `set -euo pipefail` in sourced modules
 - Stealing `\C-r` / `\C-g`
-- Marking `SRCH-003` complete
+- Marking `SRCH-003` complete in this prefix-only slice (close is
+  `docs/srch-003-failed-filter-plan.md`)
 
 ## Asserts
 
@@ -53,5 +55,5 @@ and does not draw metadata, steal `\C-r`, or duplicate `HIST-010`.
 
 ## Stop
 
-Do not start overlay, ghost, `HIST-010`, or failed-command search. Do not mark
-`SRCH-003` complete.
+Do not start overlay, ghost, or highlighting. `SRCH-003` Strategy A close is
+`docs/srch-003-failed-filter-plan.md`.

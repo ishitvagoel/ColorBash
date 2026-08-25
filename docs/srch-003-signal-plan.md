@@ -1,8 +1,9 @@
 # SRCH-003 leftover: search signal and terminal-state PTY (T-1–T-4)
 
 Status: `complete` for this Strategy A signal/terminal-state slice (2026-08-17).
-Age/status overlay, 100k interactive latency, repo filters, and failed-command
-filters remain. Do **not** mark `SRCH-003` complete.
+`SRCH-003` Strategy A close is `docs/srch-003-failed-filter-plan.md`. Overlay
+and 100k interactive percentiles stay `deferred`. Interactive repo insert
+stays unauthorized.
 
 ## Why this slice
 
@@ -30,8 +31,9 @@ terminal restoration.
 3. Resize after insert still submits the match; a follow-up command runs.
 4. Ctrl+Z stops a foreground job, returns to the prompt, and `\C-xh` still
    inserts without executing until Enter.
-5. Do not mark `SRCH-003` complete. Do not start overlay, ghost, highlighting,
-   `HIST-010`, or failed-command CLI.
+5. Remaining Strategy A metadata leftover is opt-in failed insert
+   (`docs/srch-003-failed-filter-plan.md`). Do not start overlay, ghost, or
+   highlighting.
 
 ## Out of scope (hard)
 
@@ -41,6 +43,8 @@ terminal restoration.
 - Logging command text (`M-023`)
 - `set -euo pipefail` in sourced modules
 - Marking `SRCH-003`, `COMP-004`, `COMP-005`, `GHST-*`, or `HLT-*` complete
+  in this signal-only slice (`SRCH-003` Strategy A close is
+  `docs/srch-003-failed-filter-plan.md`)
 - Taking Readline ownership (ADR 0003)
 
 ## Asserts
@@ -54,5 +58,5 @@ terminal restoration.
 
 ## Stop
 
-Do not start overlay, ghost, highlighting, or `HIST-010`. Do not mark
-`SRCH-003` complete.
+Do not start overlay, ghost, or highlighting. `SRCH-003` Strategy A close is
+`docs/srch-003-failed-filter-plan.md`.

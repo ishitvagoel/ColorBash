@@ -4,7 +4,8 @@ Status: `complete` (2026-08-25). `G0` is already `complete`. This packet
 closes the remaining Phase 1–2 IDs that stayed in `validation`/`discovery`
 after the gate: interactive loader contracts, MBX1 adapters, no-command-text
 trace, prompt segments, and the `PRM-009` encoding reassessment. Platform
-matrix leftovers stay `HRD-001`. Do not mark `SRCH-003`, `COMP-004`, or `G5`
+matrix leftovers stay `HRD-001`. `SRCH-003` Strategy A is closed in
+`docs/srch-003-failed-filter-plan.md`. Do not mark `COMP-004` or `G5`
 complete.
 
 ## Why this slice
@@ -12,8 +13,8 @@ complete.
 Immediate next work after `COMP-005`. These IDs have implementations and
 tests; they were never given a gate-close inventory. `PRM-002` is complete,
 so `PRM-009` can decide against a speculative typed-PS1 abstraction.
-`SRCH-003` stays `validation` (100k leftover `deferred`). Overlay stays
-`deferred`.
+`SRCH-003` Strategy A is closed (`docs/srch-003-failed-filter-plan.md`).
+Overlay stays `deferred`.
 
 This is a **gate-close / decision** slice. Product code only for named rows
 that lacked an assert.
@@ -95,6 +96,7 @@ Do not add overlay, macOS, or 100k cases.
 
 ## Remaining after this slice
 
-`SRCH-003` stays `validation` (100k leftover `deferred`; overlay `deferred`).
+`SRCH-003` Strategy A is closed in `docs/srch-003-failed-filter-plan.md`
+(100k leftover `deferred`; overlay `deferred`).
 `COMP-004` stays `discovery`. `HRD-001` / `G5` stay host-blocked. Broader
 lifecycle tracing stays `deferred`. Do not start highlighting or dim paint.

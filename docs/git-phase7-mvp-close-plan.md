@@ -4,7 +4,8 @@ Status: `complete` (2026-08-25). `GIT-001`–`GIT-004` have durable evidence.
 This packet closes Phase 7 for the Strategy A MVP: prompt status, bounded
 Git acquisition, history root/branch, and completion kinds. `GIT-005`
 generic SDK stays `deferred` post-MVP. Upstream/remotes/tags stay
-unauthorized. Do not mark `SRCH-003`, `COMP-004`, or `G5` complete.
+unauthorized. `SRCH-003` Strategy A is closed in
+`docs/srch-003-failed-filter-plan.md`. Do not mark `COMP-004` or `G5` complete.
 
 ## Why this slice
 
@@ -19,7 +20,6 @@ This is a **gate-close decision**. No product code.
 | --- | --- | --- |
 | 1 | Phase 7 MVP close (this plan) | Exits already evidenced. |
 | — | Upstream/remotes/tags / generic SDK | `GIT-005` `deferred`; ADR 0007 update required. |
-| — | `SRCH-003` complete | 100k leftover `deferred`; overlay `deferred`. |
 | — | Overlay / highlighting | ADR 0003. |
 | — | `HRD-001` macOS | Needs a macOS host. |
 
@@ -42,5 +42,5 @@ This is a **gate-close decision**. No product code.
 
 ## Remaining
 
-`SRCH-003` stays `validation`. `COMP-004` stays `discovery`. `HRD-001` /
+`COMP-004` stays `discovery`. `HRD-001` /
 `G5` stay host-blocked. Do not start a generic SDK.

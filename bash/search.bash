@@ -3,6 +3,7 @@
 # sidecar match without executing it. Not after-every-key decoration.
 # Default insert `\C-xh` and restore `\C-xl` are unbound in stock emacs.
 # Empty-line search prefers `history search cwd "$PWD"` (HIST-008), then recent.
+# `MBX_SEARCH_FAILED=1` prefers `history search failed` first on an empty line.
 # Non-empty search prefers prefix/fuzzy with `--cwd "$PWD"`, then global.
 # Do not use `\C-x\C-r` (re-read-init-file), `\C-x\C-s` (terminal XOFF / IXON),
 # `\C-g` / `\C-x\C-g` (abort), or `\C-r` (reverse-i-search).
@@ -110,6 +111,12 @@ _mbx_search_query() {
     _mbx_search_limit
     limit=$REPLY
     if [[ -z $query ]]; then
+        if [[ ${MBX_SEARCH_FAILED:-0} == 1 ]]; then
+            _mbx_search_helper "$limit" history search failed --limit "$limit" || true
+            if ((${#_MBX_SEARCH_MATCHES[@]} > 0)); then
+                return 0
+            fi
+        fi
         if [[ ${MBX_SEARCH_CWD:-1} == 1 && -n $cwd ]]; then
             _mbx_search_helper "$limit" history search cwd "$cwd" --limit "$limit" || true
             if ((${#_MBX_SEARCH_MATCHES[@]} > 0)); then
