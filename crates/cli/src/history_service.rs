@@ -634,7 +634,8 @@ mod tests {
         let encoded = encode_mbx2_error(1, &format!("unknown MBX2 kind: {huge}"));
         assert!(encoded.len() <= MAX_MESSAGE_BYTES);
         assert_eq!(encoded, "MBX2\t1\tERROR\tinvalid");
-        assert!(!encoded.contains('X'));
+        assert!(!encoded.contains("unknown"));
+        assert!(!encoded.contains(&huge[..32]));
     }
 
     #[test]
