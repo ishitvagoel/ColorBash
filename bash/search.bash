@@ -70,6 +70,13 @@ _mbx_search_read_line() {
     esac
 }
 
+_mbx_search_restore_jobs() {
+    ((${_MBX_SEARCH_SAVED_NOTIFY:-0} == 1)) && set -b
+    ((${_MBX_SEARCH_SAVED_MONITOR:-0} == 1)) && set -m
+    _MBX_SEARCH_SAVED_NOTIFY=0
+    _MBX_SEARCH_SAVED_MONITOR=0
+}
+
 _mbx_search_helper() {
     local limit=$1
     shift
@@ -82,6 +89,15 @@ _mbx_search_helper() {
     _mbx_deadline_after "${MBX_SEARCH_TIMEOUT:-${MBX_HISTORY_TIMEOUT:-0.10}}" || \
         return 1
     deadline=$REPLY
+    # bind -x under `set -m`/`set -b` can print job noise into the line buffer.
+    # Ghost already suspends monitor/notify around the same process-substitution
+    # helper; search must match that (M-049).
+    _MBX_SEARCH_SAVED_MONITOR=0
+    _MBX_SEARCH_SAVED_NOTIFY=0
+    [[ $- == *m* ]] && _MBX_SEARCH_SAVED_MONITOR=1
+    [[ $- == *b* ]] && _MBX_SEARCH_SAVED_NOTIFY=1
+    set +m
+    set +b
     exec {output_fd}< <(exec "$MBX_BIN" "$@" 2>/dev/null)
     child_pid=$!
     while ((${#_MBX_SEARCH_MATCHES[@]} < limit)); do
@@ -97,6 +113,7 @@ _mbx_search_helper() {
     else
         child_status=$REPLY
     fi
+    _mbx_search_restore_jobs
     if ((${#_MBX_SEARCH_MATCHES[@]} > 0)); then
         return 0
     fi

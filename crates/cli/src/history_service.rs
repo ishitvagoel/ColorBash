@@ -50,8 +50,8 @@ impl HistoryHandler for HistoryService {
             "RECORD" => handle_record(self.recorder.as_ref(), self.policy.as_ref(), fields),
             "QUERY" => handle_query(self.search.as_ref(), fields),
             "CANCEL" => handle_cancel(fields),
-            "PING" => HistoryResponse::Error("invalid field count".to_owned()),
-            _ => HistoryResponse::Error(format!("unknown MBX2 kind: {kind}")),
+            "PING" => HistoryResponse::Error("invalid".to_owned()),
+            _ => HistoryResponse::Error("unsupported".to_owned()),
         }
     }
 }
@@ -62,52 +62,45 @@ fn handle_record(
     fields: &[String],
 ) -> HistoryResponse {
     if fields.len() != RECORD_FIELD_COUNT {
-        return HistoryResponse::Error("invalid field count".to_owned());
+        return HistoryResponse::Error("invalid".to_owned());
     }
     let entry = match decode_record(fields) {
         Ok(entry) => entry,
-        Err(error) => return HistoryResponse::Error(error),
+        Err(_) => return HistoryResponse::Error("invalid".to_owned()),
     };
     if !policy.allows(&entry) {
         return HistoryResponse::Ack;
     }
     match recorder.record(entry) {
         Ok(()) => HistoryResponse::Ack,
-        Err(error) => HistoryResponse::Error(error.kind().as_str().to_owned()),
+        Err(error) => HistoryResponse::Error(mbx2_error_kind(error.kind().as_str()).to_owned()),
     }
 }
 
 fn handle_query(search: &dyn HistorySearch, fields: &[String]) -> HistoryResponse {
     if fields.len() != QUERY_FIELD_COUNT {
-        return HistoryResponse::Error("invalid field count".to_owned());
+        return HistoryResponse::Error("invalid".to_owned());
     }
-    let generation = match unescape_field(&fields[0])
-        .map_err(|error| error.to_string())
-        .and_then(|value| {
-            value
-                .parse::<u64>()
-                .map_err(|_| "invalid generation".to_owned())
-        }) {
-        Ok(value) => value,
-        Err(error) => return HistoryResponse::Error(error),
+    let Some(generation) = unescape_field(&fields[0])
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+    else {
+        return HistoryResponse::Error("invalid".to_owned());
     };
     let mode = match unescape_field(&fields[1]) {
         Ok(value) => value,
-        Err(error) => return HistoryResponse::Error(error.to_string()),
+        Err(_) => return HistoryResponse::Error("invalid".to_owned()),
     };
     let text = match unescape_field(&fields[2]) {
         Ok(value) => value,
-        Err(error) => return HistoryResponse::Error(error.to_string()),
+        Err(_) => return HistoryResponse::Error("invalid".to_owned()),
     };
-    let limit = match unescape_field(&fields[3])
-        .map_err(|error| error.to_string())
-        .and_then(|value| {
-            value
-                .parse::<usize>()
-                .map_err(|_| "invalid limit".to_owned())
-        }) {
-        Ok(value) => value.min(MAX_QUERY_LIMIT),
-        Err(error) => return HistoryResponse::Error(error),
+    let Some(limit) = unescape_field(&fields[3])
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .map(|value| value.min(MAX_QUERY_LIMIT))
+    else {
+        return HistoryResponse::Error("invalid".to_owned());
     };
 
     let entries = match run_search(search, &mode, &text, limit) {
@@ -133,65 +126,63 @@ fn run_search(
     let result = match mode {
         "prefix" => {
             if text == "-" {
-                return Err("invalid query text".to_owned());
+                return Err("invalid".to_owned());
             }
             search.exact_prefix(text, limit)
         }
         "fuzzy" => {
             if text == "-" {
-                return Err("invalid query text".to_owned());
+                return Err("invalid".to_owned());
             }
             search.fuzzy(text, limit)
         }
         "cwd" => {
             if text == "-" {
-                return Err("invalid query text".to_owned());
+                return Err("invalid".to_owned());
             }
             search.by_cwd(text, limit)
         }
         "repo" => {
             if text == "-" {
-                return Err("invalid query text".to_owned());
+                return Err("invalid".to_owned());
             }
             search.by_repo(text, limit)
         }
         "branch" => {
             if text == "-" {
-                return Err("invalid query text".to_owned());
+                return Err("invalid".to_owned());
             }
             search.by_branch(text, limit)
         }
         "failed" => {
             if text != "-" {
-                return Err("invalid query text".to_owned());
+                return Err("invalid".to_owned());
             }
             search.failed(limit)
         }
         "recent" => {
             if text != "-" {
-                return Err("invalid query text".to_owned());
+                return Err("invalid".to_owned());
             }
             search.recent(limit)
         }
         _ => return Err("unsupported query mode".to_owned()),
     };
-    result.map_err(|error| error.kind().as_str().to_owned())
+    result.map_err(|error| mbx2_error_kind(error.kind().as_str()).to_owned())
 }
 
 fn handle_cancel(fields: &[String]) -> HistoryResponse {
     if fields.len() != CANCEL_FIELD_COUNT {
-        return HistoryResponse::Error("invalid field count".to_owned());
+        return HistoryResponse::Error("invalid".to_owned());
     }
-    match unescape_field(&fields[0])
-        .map_err(|error| error.to_string())
-        .and_then(|value| {
-            value
-                .parse::<u64>()
-                .map_err(|_| "invalid generation".to_owned())
-        }) {
-        Ok(_) => HistoryResponse::Ack,
-        Err(error) => HistoryResponse::Error(error),
+    if unescape_field(&fields[0])
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .is_none()
+    {
+        return HistoryResponse::Error("invalid".to_owned());
     }
+    HistoryResponse::Ack
 }
 
 fn decode_record(fields: &[String]) -> Result<HistoryEntry, String> {
@@ -259,8 +250,23 @@ pub fn encode_mbx2(request_id: u64, kind: &str) -> String {
     format!("{MBX2_MAGIC}\t{request_id}\t{kind}")
 }
 
+/// Maps helper failures onto the protocol allowlist. Unknown/untrusted kind
+/// text is never echoed (M-048).
+pub fn mbx2_error_kind(kind: &str) -> &'static str {
+    match kind {
+        "unsupported" => "unsupported",
+        "unsupported query mode" => "unsupported query mode",
+        "queue_full" => "queue_full",
+        "storage" | "storage_failure" | "open" | "migrate" | "write" | "read" => "storage",
+        _ => "invalid",
+    }
+}
+
 pub fn encode_mbx2_error(request_id: u64, kind: &str) -> String {
-    format!("{MBX2_MAGIC}\t{request_id}\tERROR\t{kind}")
+    format!(
+        "{MBX2_MAGIC}\t{request_id}\tERROR\t{}",
+        escape_field(mbx2_error_kind(kind))
+    )
 }
 
 /// Encodes a RESULT frame, dropping trailing candidates that would exceed
@@ -576,10 +582,7 @@ mod tests {
     fn query_rejects_bad_field_count() {
         let service = service_allow();
         let response = service.handle(8, "QUERY", &["1".to_owned()]);
-        assert_eq!(
-            response,
-            HistoryResponse::Error("invalid field count".to_owned())
-        );
+        assert_eq!(response, HistoryResponse::Error("invalid".to_owned()));
     }
 
     #[test]
@@ -595,10 +598,7 @@ mod tests {
                 "5".to_owned(),
             ],
         );
-        assert_eq!(
-            response,
-            HistoryResponse::Error("invalid query text".to_owned())
-        );
+        assert_eq!(response, HistoryResponse::Error("invalid".to_owned()));
     }
 
     #[test]
@@ -623,6 +623,34 @@ mod tests {
         assert!(encoded.len() <= MAX_MESSAGE_BYTES);
         assert!(encoded.contains("RESULT\t1\t0") || encoded.ends_with("\t0"));
         assert!(!encoded.contains("kept-small"));
+    }
+
+    #[test]
+    fn unknown_kind_is_unsupported_and_does_not_echo() {
+        let service = service_allow();
+        let huge = "X".repeat(MAX_MESSAGE_BYTES);
+        let response = service.handle(1, &huge, &[]);
+        assert_eq!(response, HistoryResponse::Error("unsupported".to_owned()));
+        let encoded = encode_mbx2_error(1, &format!("unknown MBX2 kind: {huge}"));
+        assert!(encoded.len() <= MAX_MESSAGE_BYTES);
+        assert_eq!(encoded, "MBX2\t1\tERROR\tinvalid");
+        assert!(!encoded.contains('X'));
+    }
+
+    #[test]
+    fn encode_error_uses_typed_kinds_and_escapes() {
+        assert_eq!(
+            encode_mbx2_error(4, "queue_full"),
+            "MBX2\t4\tERROR\tqueue_full"
+        );
+        assert_eq!(
+            encode_mbx2_error(4, "storage_failure"),
+            "MBX2\t4\tERROR\tstorage"
+        );
+        assert_eq!(
+            encode_mbx2_error(4, "unsupported query mode"),
+            "MBX2\t4\tERROR\tunsupported query mode"
+        );
     }
 
     #[test]

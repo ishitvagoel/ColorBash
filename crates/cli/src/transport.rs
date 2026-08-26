@@ -1,7 +1,7 @@
 use crate::history_service::{HistoryHandler, MBX2_MAGIC};
 use crate::service::RequestHandler;
 use crate::telemetry::trace_message;
-use mbx_protocol::{MAX_MESSAGE_BYTES, Request, Response, ResponseKind};
+use mbx_protocol::{MAX_MESSAGE_BYTES, Request, Response, ResponseKind, validate_message_line};
 use std::fs;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
 use std::os::unix::fs::{FileTypeExt, PermissionsExt};
@@ -95,17 +95,21 @@ fn serve_connection(
 }
 
 fn handle_mbx2_line(line: &str, history: Option<&dyn HistoryHandler>) -> String {
+    let request_id = mbx2_request_id(line);
     let Some(handler) = history else {
-        return crate::history_service::encode_mbx2_error(0, "unsupported");
+        return crate::history_service::encode_mbx2_error(request_id, "unsupported");
     };
+    if validate_message_line(line).is_err() {
+        return crate::history_service::encode_mbx2_error(request_id, "invalid");
+    }
     let mut fields = line.split('\t');
     let magic = fields.next().unwrap_or_default();
     if magic != MBX2_MAGIC {
-        return crate::history_service::encode_mbx2_error(0, "invalid");
+        return crate::history_service::encode_mbx2_error(request_id, "invalid");
     }
     let request_id = match fields.next().and_then(|value| value.parse::<u64>().ok()) {
         Some(id) => id,
-        None => return crate::history_service::encode_mbx2_error(0, "invalid"),
+        None => return crate::history_service::encode_mbx2_error(request_id, "invalid"),
     };
     let kind = fields.next().unwrap_or_default();
     let rest: Vec<String> = fields.map(str::to_owned).collect();
@@ -124,6 +128,17 @@ fn handle_mbx2_line(line: &str, history: Option<&dyn HistoryHandler>) -> String 
             crate::history_service::encode_mbx2_error(request_id, &kind)
         }
     }
+}
+
+fn mbx2_request_id(line: &str) -> u64 {
+    let mut fields = line.split('\t');
+    if fields.next() != Some(MBX2_MAGIC) {
+        return 0;
+    }
+    fields
+        .next()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(0)
 }
 
 pub struct ClientSession<R, W> {
@@ -420,7 +435,7 @@ mod tests {
 
         assert_eq!(
             String::from_utf8(writer).unwrap(),
-            "MBX2\t0\tERROR\tunsupported\n"
+            "MBX2\t3\tERROR\tunsupported\n"
         );
         assert!(handler.requests.borrow().is_empty());
     }
@@ -438,6 +453,23 @@ mod tests {
         assert_eq!(
             String::from_utf8(writer).unwrap(),
             "MBX2\t0\tERROR\tinvalid\n"
+        );
+        assert!(handler.requests.borrow().is_empty());
+    }
+
+    #[test]
+    fn mbx2_unescaped_control_fails_closed_with_request_id() {
+        let input = b"MBX2\t5\tQUERY\t1\tprefix\t\x01needle\t8\n";
+        let mut reader = Cursor::new(input.to_vec());
+        let mut writer = Vec::new();
+        let handler = RecordingHandler::returning(ResponseKind::Prompt("x".to_owned()));
+        let history = RecordingHistoryStub;
+
+        serve_connection(&mut reader, &mut writer, &handler, Some(&history)).unwrap();
+
+        assert_eq!(
+            String::from_utf8(writer).unwrap(),
+            "MBX2\t5\tERROR\tinvalid\n"
         );
         assert!(handler.requests.borrow().is_empty());
     }

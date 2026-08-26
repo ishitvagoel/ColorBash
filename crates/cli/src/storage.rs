@@ -57,29 +57,41 @@ CREATE INDEX IF NOT EXISTS history_repo_root ON history (repo_root);
 const HISTORY_COLUMNS: &str = "session_id, event_sequence, history_number, command_text, \
      start_cwd, completed_at, status, duration_ms, host, user, repo_root, repo_branch";
 
-const EXACT_PREFIX_SQL: &str = "SELECT session_id, event_sequence, history_number, command_text, \
-     start_cwd, completed_at, status, duration_ms, host, user, repo_root, repo_branch \
-     FROM history INDEXED BY history_prefix_completed \
-     WHERE command_text COLLATE NOCASE LIKE ?1 \
-     ORDER BY completed_at DESC, event_sequence DESC LIMIT ?2";
+fn exact_prefix_sql() -> String {
+    format!(
+        "SELECT {HISTORY_COLUMNS} \
+         FROM history INDEXED BY history_prefix_completed \
+         WHERE command_text COLLATE NOCASE LIKE ?1 \
+         ORDER BY completed_at DESC, event_sequence DESC LIMIT ?2"
+    )
+}
 
-const EXACT_PREFIX_ESCAPE_SQL: &str = "SELECT session_id, event_sequence, history_number, \
-     command_text, start_cwd, completed_at, status, duration_ms, host, user, repo_root, repo_branch \
-     FROM history INDEXED BY history_prefix_completed \
-     WHERE command_text COLLATE NOCASE LIKE ?1 ESCAPE '\\' \
-     ORDER BY completed_at DESC, event_sequence DESC LIMIT ?2";
+fn exact_prefix_escape_sql() -> String {
+    format!(
+        "SELECT {HISTORY_COLUMNS} \
+         FROM history INDEXED BY history_prefix_completed \
+         WHERE command_text COLLATE NOCASE LIKE ?1 ESCAPE '\\' \
+         ORDER BY completed_at DESC, event_sequence DESC LIMIT ?2"
+    )
+}
 
-const EXACT_PREFIX_CWD_SQL: &str = "SELECT session_id, event_sequence, history_number, \
-     command_text, start_cwd, completed_at, status, duration_ms, host, user, repo_root, repo_branch \
-     FROM history \
-     WHERE command_text COLLATE NOCASE LIKE ?1 AND start_cwd = ?2 \
-     ORDER BY completed_at DESC, event_sequence DESC LIMIT ?3";
+fn exact_prefix_cwd_sql() -> String {
+    format!(
+        "SELECT {HISTORY_COLUMNS} \
+         FROM history \
+         WHERE command_text COLLATE NOCASE LIKE ?1 AND start_cwd = ?2 \
+         ORDER BY completed_at DESC, event_sequence DESC LIMIT ?3"
+    )
+}
 
-const EXACT_PREFIX_CWD_ESCAPE_SQL: &str = "SELECT session_id, event_sequence, history_number, \
-     command_text, start_cwd, completed_at, status, duration_ms, host, user, repo_root, repo_branch \
-     FROM history \
-     WHERE command_text COLLATE NOCASE LIKE ?1 ESCAPE '\\' AND start_cwd = ?2 \
-     ORDER BY completed_at DESC, event_sequence DESC LIMIT ?3";
+fn exact_prefix_cwd_escape_sql() -> String {
+    format!(
+        "SELECT {HISTORY_COLUMNS} \
+         FROM history \
+         WHERE command_text COLLATE NOCASE LIKE ?1 ESCAPE '\\' AND start_cwd = ?2 \
+         ORDER BY completed_at DESC, event_sequence DESC LIMIT ?3"
+    )
+}
 
 enum QueueMessage {
     Write(Box<HistoryEntry>),
@@ -341,11 +353,15 @@ impl HistorySearch for QueuedHistoryStore {
         let escaped = escape_like(prefix);
         let pattern = format!("{escaped}%");
         if escaped == prefix {
-            query(&connection, EXACT_PREFIX_SQL, &[pattern, limit.to_string()])
+            query(
+                &connection,
+                &exact_prefix_sql(),
+                &[pattern, limit.to_string()],
+            )
         } else {
             query(
                 &connection,
-                EXACT_PREFIX_ESCAPE_SQL,
+                &exact_prefix_escape_sql(),
                 &[pattern, limit.to_string()],
             )
         }
@@ -362,9 +378,9 @@ impl HistorySearch for QueuedHistoryStore {
         let pattern = format!("{escaped}%");
         let params = [pattern, cwd.to_owned(), limit.to_string()];
         if escaped == prefix {
-            query(&connection, EXACT_PREFIX_CWD_SQL, &params)
+            query(&connection, &exact_prefix_cwd_sql(), &params)
         } else {
-            query(&connection, EXACT_PREFIX_CWD_ESCAPE_SQL, &params)
+            query(&connection, &exact_prefix_cwd_escape_sql(), &params)
         }
     }
 
@@ -2391,7 +2407,7 @@ mod tests {
         assert!(rows.iter().all(|row| row.command_text.starts_with("git ")));
         let connection = rusqlite::Connection::open(&path).unwrap();
         let mut statement = connection
-            .prepare(&format!("EXPLAIN QUERY PLAN {EXACT_PREFIX_SQL}"))
+            .prepare(&format!("EXPLAIN QUERY PLAN {}", exact_prefix_sql()))
             .unwrap();
         let plan_rows = statement
             .query_map(["git%", "5"], |row| row.get::<_, String>(3))

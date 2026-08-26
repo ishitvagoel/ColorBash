@@ -740,14 +740,18 @@ to prevent recurrence, not to assign blame.
 - Impact: prefix `aa` plus ranked `aaflag` became `aaaaflag`. A stale ranked
   snapshot could also splice into a later unrelated word on the same line.
 - Correction: `_mbx_comp_accept_ranked` replaces the current whitespace-delimited
-  word when it is a non-empty prefix of `_MBX_COMP_RANKED_REPLY`. Unrelated words
-  are left unchanged. The snapshot is cleared at the next prompt.
+  word when it is a non-empty prefix of `_MBX_COMP_RANKED_REPLY` **and** the
+  word still starts at the Tab snapshot offset. Unrelated words and later
+  prefix-colliding words (`echo aa` after Tab on `aa`) are left unchanged.
+  The snapshot is cleared at the next prompt.
 - Prevention: a completion-accept action must replace the current word, not
   splice after it. PTY tests must cover Tab-without-chord, accept-with-prefix,
-  and a stale unrelated word. Ranked-cycle must also replace when the current
+  and a stale unrelated word. Module tests must also cover a prefix-colliding
+  word at a different offset. Ranked-cycle must also replace when the current
   word equals `_MBX_COMP_RANKED_REPLY` (prefix-only cannot rotate `aaflag` to
   `zzflag`) and must not rotate the list unless replacement is allowed.
-- Evidence: `_mbx_comp_accept_ranked` in `bash/completion.bash`;
+- Evidence: `_mbx_comp_accept_ranked` / `_mbx_comp_ranked_word_eligible` in
+  `bash/completion.bash`;
   `ranked_accept_inserts_top_ranked_bytes`,
   `ranked_accept_tab_without_chord_keeps_prefix`, and
   `ranked_accept_refuses_stale_unrelated_word` in
@@ -891,11 +895,67 @@ to prevent recurrence, not to assign blame.
 - Impact: `query()` reads `repo_root` at index 10. The cwd-prefix statements
   stopped at `user`, so `queries_return_bounded_recent_prefix_and_cwd` failed
   with `Invalid column index: 10`.
-- Correction: `EXACT_PREFIX_CWD_SQL` and `EXACT_PREFIX_CWD_ESCAPE_SQL` select
-  the same twelve columns as `HISTORY_COLUMNS`.
+- Correction: prefix SQL builders interpolate `HISTORY_COLUMNS` so cwd/global
+  prefix queries cannot drift from `query()`'s mapped indexes.
 - Prevention: any new history `SELECT` must use `HISTORY_COLUMNS` or list every
   mapped index. Rebasing a query helper across a schema version requires a
   focused read of `query()`.
-- Evidence: `crates/cli/src/storage.rs` and
+- Evidence: `exact_prefix_sql` / `exact_prefix_cwd_sql` in
+  `crates/cli/src/storage.rs` and
   `storage::tests::queries_return_bounded_recent_prefix_and_cwd`.
+
+## M-047 — Ghost Up/Down stripped only the first history-list digit
+
+- Discovered: 2026-08-26
+- Status: Fixed
+- Failed assumption: `${entry#*[0-9]}` removed the `history` list number the
+  same way `_mbx_history_parse_latest` does.
+- Impact: after ten or more session entries, `history 12  echo …` became
+  `2  echo …` in `READLINE_LINE`. Enter executed that corrupted text.
+- Correction: ghost uses the same `number` + two-space separator parse as the
+  sidecar recorder.
+- Prevention: any `history` list-line parser must match the recorder regex and
+  have a two-digit list-number contract. Do not strip a single digit.
+- Evidence: `_mbx_ghost_history_entry` in `bash/ghost.bash` and the 12-entry
+  module contract in `tests/bash/modules.bash`.
+
+## M-048 — MBX2 ERROR echoed untrusted kind text and dropped correlation
+
+- Discovered: 2026-08-26
+- Status: Fixed
+- Failed assumption: embedding the raw third field in `unknown MBX2 kind: …`
+  and answering a missing history handler with `request_id=0` was a typed
+  protocol error.
+- Impact: a near-max unknown kind produced an ERROR frame over 64 KiB, so
+  `write_message` aborted the serve loop. Bash ERROR decode requires the
+  request id, so a disabled-history peer could not correlate. Free-form kinds
+  also contradicted the protocol allowlist.
+- Correction: unknown kinds map to `unsupported` without echoing. Parse and
+  storage failures map to `invalid` / `storage` / `queue_full`. Missing
+  handler echoes the client id. ERROR kinds are escaped and bounded.
+- Prevention: never interpolate untrusted protocol fields into ERROR kinds.
+  Encode ERROR only from the documented allowlist; prove an oversized unknown
+  kind stays under `MAX_MESSAGE_BYTES` and still correlates.
+- Evidence: `mbx2_error_kind` / `encode_mbx2_error` in
+  `crates/cli/src/history_service.rs`; `mbx2_request_id` in
+  `crates/cli/src/transport.rs`; `unknown_kind_is_unsupported_and_does_not_echo`
+  and `mbx2_without_history_handler_fails_closed`.
+
+## M-049 — History-search helper left monitor/notify enabled
+
+- Discovered: 2026-08-26
+- Status: Fixed
+- Failed assumption: process-substitution `$!` wait/kill was enough for a
+  `bind -x` sidecar lookup, matching the ghost CLI helper.
+- Impact: interactive Bash defaults to monitor mode. A search chord could emit
+  job-control noise into the editing buffer, unlike ghost which already
+  suspends `set -m` / `set -b`.
+- Correction: `_mbx_search_helper` saves and restores monitor/notify around
+  the helper the same way `_mbx_ghost_query` does.
+- Prevention: every sourced `bind -x` process substitution must suspend
+  monitor/notify and restore them on every return path. Add a restore
+  contract next to the helper.
+- Evidence: `_mbx_search_helper` / `_mbx_search_restore_jobs` in
+  `bash/search.bash` and the monitor-restore contract in
+  `tests/bash/modules.bash`.
 

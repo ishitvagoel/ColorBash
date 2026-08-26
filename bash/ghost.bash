@@ -494,11 +494,14 @@ _mbx_ghost_history_entry() {
 
     ((offset >= 1)) || return 1
     entry=$(HISTTIMEFORMAT= history "$offset" 2>/dev/null | head -n 1) || return 1
-    entry=${entry#"${entry%%[![:space:]]*}"}
-    entry=${entry#*[0-9]}
-    entry=${entry#"${entry%%[![:space:]]*}"}
-    [[ -n $entry ]] || return 1
-    REPLY=$entry
+    # Same list-number parse as `_mbx_history_parse_latest` (M-026 / M-047).
+    # `${entry#*[0-9]}` only strips the first digit, so `12  echo` became `2  echo`.
+    if [[ $entry =~ ^[[:space:]]*[0-9]+[[:space:]][[:space:]](.*)$ ]]; then
+        REPLY=${BASH_REMATCH[1]}
+        [[ -n $REPLY ]] || return 1
+        return 0
+    fi
+    return 1
 }
 
 _mbx_ghost_previous_history() {

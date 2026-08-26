@@ -312,6 +312,11 @@ fn validate_line(line: &str) -> Result<(), ProtocolError> {
     Ok(())
 }
 
+/// Shared MBX1/MBX2 line check: payload bound and no unescaped C0 except TAB.
+pub fn validate_message_line(line: &str) -> Result<(), ProtocolError> {
+    validate_line(line)
+}
+
 fn hex_digit(value: u8) -> char {
     match value {
         0..=9 => char::from(b'0' + value),
@@ -362,6 +367,8 @@ mod tests {
         assert!(Request::decode("MBX1\tbogus\tPING").is_err());
         assert!(Request::decode("MBX1\t1\tPROMPT\t/tmp\t0\t-\t0\textra").is_err());
         assert!(Request::decode("MBX1\t1\tPROMPT\tbad\u{1b}path\t0\t-\t0").is_err());
+        assert!(validate_message_line("MBX2\t5\tQUERY\t1\tprefix\t\u{1}x\t8").is_err());
+        assert!(validate_message_line("MBX2\t5\tPING").is_ok());
         assert!(unescape_field("bad%0Z").is_err());
         assert!(unescape_field("bad%00value").is_err());
     }

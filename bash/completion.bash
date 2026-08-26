@@ -169,10 +169,40 @@ _mbx_comp_fill_ranked_list() {
     fi
 }
 
+# Remember the completing word's offset so accept/cycle cannot rewrite a later
+# prefix-colliding word (M-039). `echo aa` after Tab on `aa` must stay `echo aa`.
+_mbx_comp_snapshot_word() {
+    local line=${COMP_LINE-}
+    local point=${COMP_POINT:-0}
+    local start=$point end=$point char
+    while ((start > 0)); do
+        char=${line:start-1:1}
+        [[ $char == [[:space:]] ]] && break
+        start=$((start - 1))
+    done
+    while ((end < ${#line})); do
+        char=${line:end:1}
+        [[ $char == [[:space:]] ]] && break
+        end=$((end + 1))
+    done
+    _MBX_COMP_SNAP_START=$start
+    _MBX_COMP_SNAP_WORD=${line:start:end-start}
+}
+
+_mbx_comp_ranked_word_eligible() {
+    local current=$1
+    local token=${_MBX_COMP_RANKED_REPLY-}
+    local start=${_MBX_COMP_WORD_START:-0}
+    [[ -n $current && -n $token && $token == "$current"* ]] || return 1
+    [[ $start == "${_MBX_COMP_SNAP_START:-}" ]] || return 1
+    return 0
+}
+
 _mbx_comp_wrap_backend() {
     local backend=$1
     shift
     _mbx_comp_snapshot
+    _mbx_comp_snapshot_word
     _MBX_COMP_BACKEND_KINDS=()
     _MBX_COMP_BACKEND_DESCS=()
     "$backend" "$@"
@@ -317,9 +347,9 @@ _mbx_comp_accept_ranked() {
     _mbx_comp_readline_word
     current=$REPLY
     # Replace the current word only when it is a non-empty prefix of the ranked
-    # candidate. That accepts `aa` → `aaflag` and refuses a stale snapshot on
-    # an unrelated word such as `ok`.
-    [[ -n $current && $token == "$current"* ]] || return 0
+    # candidate at the snapshotted completion offset. That accepts `aa` →
+    # `aaflag` and refuses a stale snapshot on `ok` or a later `echo aa`.
+    _mbx_comp_ranked_word_eligible "$current" || return 0
     _mbx_comp_apply_word_token "$token"
 }
 
@@ -332,11 +362,11 @@ _mbx_comp_cycle_ranked() {
     _mbx_comp_readline_word
     current=$REPLY
     [[ -n $current ]] || return 0
-    if [[ $token == "$current"* && $current != "$token" ]]; then
+    _mbx_comp_ranked_word_eligible "$current" || return 0
+    if [[ $current != "$token" ]]; then
         _mbx_comp_apply_word_token "$token"
         return 0
     fi
-    [[ $current == "$token" ]] || return 0
     ((n >= 2)) || return 0
     if [[ $direction == prev ]]; then
         first=${_MBX_COMP_RANKED_LIST[n - 1]}

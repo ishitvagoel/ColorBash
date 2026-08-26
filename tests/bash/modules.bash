@@ -751,6 +751,15 @@ _MBX_COMP_RANKED_REPLY=aaflag
 _mbx_comp_accept_ranked
 assert_eq 'echo ok' "$READLINE_LINE" \
     'ranked accept must not mutate an unrelated current word'
+_mbx_comp_wrap_backend _mbx_comp_r2_backend
+READLINE_LINE='echo aa'
+READLINE_POINT=${#READLINE_LINE}
+_mbx_comp_accept_ranked
+assert_eq 'echo aa' "$READLINE_LINE" \
+    'ranked accept must not replace a prefix-colliding word at a different offset'
+_mbx_comp_cycle_next
+assert_eq 'echo aa' "$READLINE_LINE" \
+    'ranked cycle must not replace a prefix-colliding word at a different offset'
 
 # COMP-004 ranked cycle: prefix inserts head; equal head rotates; unrelated is no-op.
 _mbx_comp_wrap_backend _mbx_comp_r2_backend
@@ -1070,6 +1079,13 @@ _mbx_ghost_next_history
 assert_eq 'echo MBX_GHST:beta' "$READLINE_LINE" \
     'ghost Down from offset 2 should load the newer history row'
 assert_eq 1 "${_MBX_GHOST_HIST_OFFSET:-missing}" 'ghost Down should decrement the history offset'
+history -c
+for history_n in $(seq 1 12); do
+    history -s "echo MBX_GHST:$history_n"
+done
+_mbx_ghost_history_entry 1 || fail 'ghost history parse should accept a two-digit list number'
+assert_eq 'echo MBX_GHST:12' "$REPLY" \
+    'ghost Up must strip the full history list number, not only the first digit (M-047)'
 _MBX_GHOST_DELETE_KEYSEQ='\C-x\C-d'
 _MBX_GHOST_ACCEPT_KEYSEQ='\C-x\C-m'
 _mbx_ghost_enter_delete_macro 4
@@ -1166,6 +1182,11 @@ _mbx_search_insert
 assert_eq "printf 'MBX_SRCH:hit'" "$READLINE_LINE" \
     'search should replace the line with the helper match'
 assert_eq 21 "$READLINE_POINT" 'search should move the cursor to the end of the match'
+
+set -m
+_mbx_search_helper 8 history search prefix printf --limit 8 || true
+[[ $- == *m* ]] || fail 'search helper must restore monitor mode after a lookup (M-049)'
+set +m
 
 cat >"$search_stub_dir/mbx" <<'EOF'
 #!/bin/sh
