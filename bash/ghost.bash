@@ -174,20 +174,13 @@ _mbx_ghost_usable_match() {
     local typed=$1
     local match=$2
     local suffix
-    local i c
-    local LC_ALL=C
 
     [[ -n $typed && -n $match ]] || return 1
     [[ $match == "$typed"* ]] || return 1
     suffix=${match#"$typed"}
     [[ -n $suffix ]] || return 1
     ((${#suffix} <= 256)) || return 1
-    for ((i = 0; i < ${#suffix}; i++)); do
-        c=${suffix:i:1}
-        if [[ $c < ' ' || $c == $'\177' ]]; then
-            return 1
-        fi
-    done
+    _mbx_text_has_c0_or_del "$suffix" && return 1
     REPLY=$match
 }
 

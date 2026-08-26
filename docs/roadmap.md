@@ -5,9 +5,9 @@
 > brief remains `CODEX_MODERN_BASH_ARCHITECTURE.md`; its checkboxes describe the
 > intended program and are not a status tracker.
 
-- Last reviewed: 2026-08-25 UTC
-- Current milestone: Phase 3 sidecar, Phase 4 Strategy A ghost, Phase 5 Strategy A insert/fallthrough, Phase 7 MVP Git/provider, and Phase 8 Strategy A search exits are on this tree; `G0`–`G4` complete; ADR 0011 QUERY wire, generation skip, and overlapping delayed-RESULT PTY recorded; Strategy A search insert, cycling, restore, cwd, signal, and opt-in failed insert recorded; `COMP-005` complete (overlay leftover stays `COMP-004` `discovery`); `BST-002`–`BST-004`, `PRM-001`, and `PRM-009` complete; `GIT-005` `deferred`; `SRCH-003` complete (100k leftover `deferred`; overlay `deferred`; interactive repo insert unauthorized)
-- Active workstream: `HRD-001` / `G5` remain host-blocked
+- Last reviewed: 2026-08-26 UTC
+- Current milestone: Phase 9 release hardening is `in-progress`; `HRD-002` and `HRD-004` complete; `HRD-001` macOS host-blocked; `HRD-003` percentiles `deferred`; Phase 3 sidecar, Phase 4 Strategy A ghost, Phase 5 Strategy A insert/fallthrough, Phase 7 MVP Git/provider, and Phase 8 Strategy A search exits are on this tree; `G0`–`G4` complete; `GIT-005` `deferred`; overlay `deferred`
+- Active workstream: `HRD-002` and `HRD-004` complete; `HRD-001` / `G5` remain host-blocked; `HRD-003` `deferred`
 - Next decision gate: `G5` / `HRD-*`. Continuous decoration **defers** highlighting and GUI overlay only
 - Editor-facing work: opt-in ghost suffix is on main (ADR 0010). Async QUERY with stale-generation skip is recorded (ADR 0011). Explicit history-search insert (`\C-xh`), cycling, restore (`\C-xl`), cwd preference, and opt-in failed empty-line insert are recorded (ADR 0009). Highlighting, dim paint, and GUI overlays are `deferred` from this MVP (G5 revisit)
 - Timing policy: unmet percentile targets are `deferred` and do not block
@@ -346,7 +346,7 @@ pass unless an ADR ratifies them.
 | 6 | Syntax highlighting | `deferred` | no after-every-key paint hook (ADR 0003); G5 revisit; IDs kept |
 | 7 | Git/provider expansion | `complete` | MVP exits `GIT-002` / `GIT-004` (`docs/git-phase7-mvp-close-plan.md`); `GIT-005` SDK `deferred`; upstream/remotes/tags unauthorized |
 | 8 | Enhanced Ctrl+R | `complete` | `SRCH-001`–`SRCH-003` complete (ADR 0009); cwd/signal/opt-in failed insert recorded; 100k interactive leftover `deferred`; overlay `deferred`; interactive repo insert unauthorized |
-| 9 | Release hardening | `not-started` | Full compatibility matrix; `HRD-001` macOS host-blocked |
+| 9 | Release hardening | `in-progress` | `HRD-002` and `HRD-004` complete; `HRD-001` macOS host-blocked; `HRD-003` `deferred` |
 
 ## Phase details
 
@@ -580,8 +580,9 @@ block this Strategy A exit. Interactive repo insert stays unauthorized.
 
 ### Phase 9 — Release hardening
 
-Status: `not-started` as a release campaign. Foundation tests already provide a
-starting corpus, but they do not satisfy `G5`.
+Status: `in-progress` as a release campaign. `HRD-002` and `HRD-004` are
+complete. Foundation tests already provide a starting corpus, but they do not
+satisfy `G5`.
 
 The final matrix must include supported Bash 5.x releases; Linux, WSL, and macOS;
 interactive/login/nested shells; emacs/vi modes; tmux and SSH; 16/256/true color;
@@ -593,26 +594,27 @@ combinations are impractical.
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
 | `HRD-001` | Supported Bash/OS/terminal pairwise PTY matrix | `blocked` | Strategy A MVP feature exits are recorded (not deferred `HLT-*` / overlay); Darwin PTY constant pre-work (D-1–D-3) recorded in `docs/hrd-001-darwin-pty-constants-plan.md`; full macOS matrix is host-blocked on this Linux runner |
-| `HRD-002` | Hostile input, protocol bounds, privacy, and no-execution audit | `not-started` | feature-complete candidate |
-| `HRD-003` | Release-mode end-to-end latency and resource evidence | `not-started` | accepted workloads/budgets |
-| `HRD-004` | Install, upgrade, disable, removal, crash, and recovery evidence | `not-started` | release packaging |
+| `HRD-002` | Hostile input, protocol bounds, privacy, and no-execution audit | `complete` | `docs/hrd-002-hostile-audit-plan.md` H-1–H-11; C0/DEL insert gate on search/editor; ghost suffix gate; protocol/PS1/privacy/Git evidence; `G5` leftover tmux/SSH/fullscreen stays `HRD-001` |
+| `HRD-003` | Release-mode end-to-end latency and resource evidence | `deferred` | existing warm-Git / history-query / write-ack records; remaining matrix `deferred` (`docs/latency-budget-deferral.md`); do not chase product-code latency |
+| `HRD-004` | Install, upgrade, disable, removal, crash, and recovery evidence | `complete` | `docs/hrd-004-lifecycle-plan.md` L-1–L-6; setup/init never write `~/.bashrc`; helper crash and WAL recovery recorded; no package-manager installer |
 
 Exit condition: `G5` after every `HRD-*` item is complete.
 
 ## Immediate next work
 
 `G0`–`G4` and Phase 3–5 and Phase 8 Strategy A are complete on this tree.
-Capture stays disabled by
+`HRD-002` and `HRD-004` are complete. Capture stays disabled by
 default. Unmet percentile leftovers are `deferred` and must not block product
 slices (`docs/latency-budget-deferral.md`). `HIST-010` / `GIT-003` CLI filters
 are already on `main`; do not duplicate them.
 
-1. `HRD-001` macOS is host-blocked (Phase 9 / `G5`). Close superseded draft
-   PRs #31 (`search failed`; on main) and #34 (`PRM-006` already complete)
-   when authorized. Do not spend a slice on FND-001 SHA refresh or percentile
+1. `HRD-001` macOS pairwise PTY matrix remains host-blocked. `HRD-003`
+   percentiles stay `deferred`. Close superseded draft PRs #31 and #34 when
+   authorized. Do not spend a slice on FND-001 SHA refresh or percentile
    benches unless a functional prompt-path defect is proven. Do not mark
    `COMP-004` complete (overlay strategy still `discovery`). Do not start
-   highlighting or dim paint. Do not fake the macOS matrix on Linux.
+   highlighting or dim paint. Do not fake the macOS matrix on Linux. Do not
+   mark `G5` complete.
 
 ## Provisional performance and safety budgets
 
@@ -783,3 +785,5 @@ an accepted decoration/ownership ADR.
 | 2026-08-25 | Closed `BST-002`–`BST-004`, `PRM-001`, and `PRM-009` (`docs/bst-prm-g0-leftover-close-plan.md`). Re-source idempotence and nerd-icon glyph asserts added. Platform matrix leftover stays `HRD-001`. Broader lifecycle tracing stays `deferred`. `SRCH-003` stays `validation`. |
 | 2026-08-25 | Closed Phase 7 MVP Git/provider expansion (`docs/git-phase7-mvp-close-plan.md`). `GIT-001`–`GIT-004` evidenced; `GIT-005` stays `deferred`. Upstream/remotes/tags unauthorized. Do not mark `G5` complete. |
 | 2026-08-25 | Closed `SRCH-003` Strategy A metadata filters + signal (`docs/srch-003-failed-filter-plan.md`; F-1–F-3). Opt-in `MBX_SEARCH_FAILED=1` empty-line insert. Overlay leftover `deferred`. 100k interactive leftover `deferred`. Interactive repo insert unauthorized. Phase 8 Strategy A is `complete`. `HRD-001` / `G5` stay host-blocked. Do not start highlighting or dim paint. |
+| 2026-08-26 | Closed `HRD-002` hostile/privacy/no-execution audit (`docs/hrd-002-hostile-audit-plan.md`). Search and editor refuse C0/DEL inserts; ghost suffix gate reused. Phase 9 is `in-progress`. `HRD-004` is next. Do not mark `G5` complete. |
+| 2026-08-26 | Closed `HRD-004` install/disable/removal/crash/recovery (`docs/hrd-004-lifecycle-plan.md`). Setup and `source init.bash` never write `~/.bashrc`. Deferred `HRD-003` percentiles with other timing leftovers. `HRD-001` / `G5` stay host-blocked. |

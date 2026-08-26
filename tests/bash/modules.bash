@@ -68,6 +68,16 @@ if _mbx_protocol_decode_prompt 8 $'MBX1\t8\tPROMPT\tbad\evalue'; then
     fail 'an unescaped response control character was accepted'
 fi
 
+if _mbx_text_has_c0_or_del 'echo ok'; then
+    fail 'printable text was treated as a C0/DEL payload'
+fi
+_mbx_text_has_c0_or_del $'echo \033hijack' || \
+    fail 'ESC in command text must be treated as a C0 payload'
+_mbx_text_has_c0_or_del $'echo \thit' || \
+    fail 'TAB in command text must be treated as a C0 payload'
+_mbx_text_has_c0_or_del $'echo \177hit' || \
+    fail 'DEL in command text must be treated as a C0 payload'
+
 unset NO_COLOR MBX_COLOR SSH_TTY
 TERM=dumb
 MBX_ICONS=nerd
@@ -581,6 +591,9 @@ assert_eq 1 "$ps1_writer_count" 'prompt.bash is not the sole PS1 writer'
 for bash_module in "$ROOT"/bash/*.bash; do
     [[ $(<"$bash_module") != *MBX_DBG* ]] || \
         fail "${bash_module##*/} contains the forbidden MBX_DBG channel"
+    if grep -Eq '^[[:space:]]*eval[[:space:]]' "$bash_module"; then
+        fail "${bash_module##*/} contains eval (suggestions must never execute)"
+    fi
 done
 [[ $(<"$ROOT/bash/history.bash") != *chmod* ]] || \
     fail 'history.bash must not spawn chmod on the prompt path'
@@ -1183,6 +1196,30 @@ assert_eq "printf 'MBX_SRCH:hit'" "$READLINE_LINE" \
     'search should replace the line with the helper match'
 assert_eq 21 "$READLINE_POINT" 'search should move the cursor to the end of the match'
 
+cat >"$search_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$(printf 'echo \033hijack')"
+printf '%s\n' 'echo MBX_HRD:ok'
+EOF
+READLINE_LINE='echo'
+READLINE_POINT=4
+_mbx_search_insert
+assert_eq 'echo MBX_HRD:ok' "$READLINE_LINE" \
+    'search should skip C0 matches and insert the next clean line'
+cat >"$search_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$(printf 'echo \033only')"
+EOF
+READLINE_LINE='keep-controls'
+READLINE_POINT=13
+_mbx_search_insert
+assert_eq 'keep-controls' "$READLINE_LINE" \
+    'search should leave the line unchanged when every match contains C0'
+cat >"$search_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+printf '%s\n' "printf 'MBX_SRCH:hit'"
+EOF
+
 set -m
 _mbx_search_helper 8 history search prefix printf --limit 8 || true
 [[ $- == *m* ]] || fail 'search helper must restore monitor mode after a lookup (M-049)'
@@ -1337,5 +1374,21 @@ rm -rf "$search_stub_dir"
 unset MBX_BIN MBX_HISTORY MBX_SEARCH_TIMEOUT MBX_SEARCH_FAILED READLINE_LINE READLINE_POINT \
     _MBX_SEARCH_INSTALLED _MBX_SEARCH_MATCHES _MBX_SEARCH_INDEX \
     _MBX_SEARCH_ORIGINAL _MBX_SEARCH_ORIGINAL_POINT _MBX_SEARCH_HAS_ORIGINAL
+
+source "$ROOT/bash/editor.bash"
+READLINE_LINE='keep-me'
+READLINE_POINT=4
+MBX_EDITOR_INSERT_TOKEN=$'printf \033hijack'
+_mbx_editor_insert_token
+assert_eq 'keep-me' "$READLINE_LINE" \
+    'editor must not insert a token that contains C0'
+assert_eq 4 "$READLINE_POINT" \
+    'editor must leave the cursor unchanged when the token contains C0'
+MBX_EDITOR_INSERT_TOKEN='hello'
+_mbx_editor_insert_token
+assert_eq 'keephello-me' "$READLINE_LINE" \
+    'editor should insert a printable token at the cursor'
+assert_eq 9 "$READLINE_POINT" 'editor should advance the cursor by the token length'
+unset MBX_EDITOR_INSERT_TOKEN READLINE_LINE READLINE_POINT
 
 printf 'PASS: focused Bash module contracts\n'

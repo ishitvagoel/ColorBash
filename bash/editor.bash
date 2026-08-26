@@ -9,6 +9,7 @@ _mbx_editor_insert_token() {
     local token=${MBX_EDITOR_INSERT_TOKEN:-$_MBX_EDITOR_DEFAULT_TOKEN}
     local point=${READLINE_POINT:-0}
     local line=${READLINE_LINE-}
+    _mbx_text_has_c0_or_del "$token" && return 0
     READLINE_LINE=${line:0:point}${token}${line:point}
     READLINE_POINT=$((point + ${#token}))
 }

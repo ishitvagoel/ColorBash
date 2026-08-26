@@ -115,4 +115,26 @@ EOF
 )
 [[ $idempotence_state == *'IDEM:1:2:2'* ]] || fail "re-sourcing init.bash was not idempotent: $idempotence_state"
 
+[[ $(<"$ROOT/scripts/dev-setup.bash") == *'does not modify ~/.bashrc'* ]] || \
+    fail 'dev-setup.bash must state that it does not modify ~/.bashrc'
+if grep -E '>>[[:space:]]*.*bashrc|>[[:space:]]*.*bashrc' "$ROOT/scripts/dev-setup.bash"; then
+    fail 'dev-setup.bash must not redirect into a bashrc path'
+fi
+
+bashrc_home=$(mktemp -d "${TMPDIR:-/tmp}/mbx-bashrc.XXXXXXXX")
+printf 'SENTINEL\n' >"$bashrc_home/.bashrc"
+bashrc_state=$(env HOME="$bashrc_home" MBX_TEST_ROOT="$ROOT" MBX_BIN="$MBX_TEST_BIN" \
+    TERM=dumb bash --noprofile --norc -i 2>/dev/null <<'EOF'
+source "$MBX_TEST_ROOT/bash/init.bash"
+printf 'BASHRC_SOURCED:%s\n' "${_MBX_INITIALIZED:-missing}"
+exit
+EOF
+)
+[[ $bashrc_state == *'BASHRC_SOURCED:1'* ]] || \
+    fail "isolated HOME init did not complete: $bashrc_state"
+[[ $(<"$bashrc_home/.bashrc") == SENTINEL ]] || \
+    fail 'source init.bash modified ~/.bashrc'
+rm -f "$bashrc_home/.bashrc" "$bashrc_home/.bash_history"
+rmdir "$bashrc_home" 2>/dev/null || true
+
 printf 'PASS: Bash compatibility smoke suite\n'

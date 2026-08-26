@@ -38,7 +38,8 @@ These MVP features are **not** implemented for interactive use:
 | macOS PTY matrix | `HRD-001` needs a macOS host |
 
 Canonical status lives in [`docs/roadmap.md`](docs/roadmap.md). `G0`, `G2`,
-`G3`, and `G4` are complete. Explicit history-search insert is ADR 0009.
+`G3`, and `G4` are complete. `HRD-002` hostile-input and `HRD-004`
+install/removal evidence are recorded. Explicit history-search insert is ADR 0009.
 Continuous decoration stays unproven (ADR 0003).
 
 The helper bundles SQLite (`rusqlite` with the `bundled` feature) for the history
@@ -73,6 +74,13 @@ absolute path:
 ```bash
 source /absolute/path/to/ColorBash/bash/init.bash
 ```
+
+Disable without uninstalling by leaving the `source` line in place and setting
+`MBX_DISABLE_RENDERER=1` (Bash-only prompt) and/or omitting `MBX_HISTORY=1`
+(no sidecar). Remove MBX by deleting that `source` line and starting a new
+shell; the loader never writes `.bashrc` for you. The optional history file
+is local SQLite under `$XDG_DATA_HOME/mbx/` or `~/.local/share/mbx/` and can
+be deleted with `"$MBX_BIN" history clear` or by removing that directory.
 
 Use a real terminal (not a pipe). A piped Bash process is not PTY evidence.
 

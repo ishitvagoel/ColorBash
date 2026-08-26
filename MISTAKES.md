@@ -959,3 +959,21 @@ to prevent recurrence, not to assign blame.
   `bash/search.bash` and the monitor-restore contract in
   `tests/bash/modules.bash`.
 
+## M-050 — Search and editor inserted C0 bytes into the line buffer
+
+- Discovered: 2026-08-26
+- Status: Fixed
+- Failed assumption: sidecar search matches and `MBX_EDITOR_INSERT_TOKEN` were
+  already ordinary command bytes, so only ghost suffixes needed a C0/DEL gate.
+- Impact: an ESC in helper stdout or the editor token became `READLINE_LINE`.
+  Readline redisplay could then inject terminal controls. The chord still did
+  not `eval` the text.
+- Correction: `_mbx_text_has_c0_or_del` is shared. Search skips C0/DEL lines;
+  a snapshot of only hostile rows leaves the typed line. The editor token is a
+  no-op when it contains C0/DEL. Ghost still rejects a control suffix.
+- Prevention: every write of untrusted text into `READLINE_LINE` must use the
+  C0/DEL gate. Cover a mixed ESC-then-clean helper and an ESC-only helper.
+- Evidence: `_mbx_text_has_c0_or_del` in `bash/protocol.bash`;
+  `_mbx_search_helper` / `_mbx_editor_insert_token`; H-6/H-7 in
+  `tests/bash/modules.bash` and `docs/hrd-002-hostile-audit-plan.md`.
+

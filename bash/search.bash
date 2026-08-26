@@ -105,6 +105,7 @@ _mbx_search_helper() {
             break
         fi
         [[ -n $REPLY ]] || break
+        _mbx_text_has_c0_or_del "$REPLY" && continue
         _MBX_SEARCH_MATCHES+=("$REPLY")
     done
     exec {output_fd}<&-
@@ -167,6 +168,7 @@ _mbx_search_query() {
 _mbx_search_apply() {
     local match=${_MBX_SEARCH_MATCHES[_MBX_SEARCH_INDEX]-}
     [[ -n $match ]] || return 0
+    _mbx_text_has_c0_or_del "$match" && return 0
     READLINE_LINE=$match
     READLINE_POINT=${#match}
 }

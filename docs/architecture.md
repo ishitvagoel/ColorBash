@@ -14,7 +14,10 @@ without modifying `.bash_history`. Opt-in inline ghost (ADR 0010) is a suffix
 after the cursor, not dim after-every-key paint. An explicit history-search
 `bind -x` chord (default `\C-xh`, ADR 0009) can insert one sidecar match into
 the line buffer, cycle a bounded snapshot with the same chord, and restore the
-typed line with `\C-xl`. Strategy A history search and ghost are unblocked; live highlighting and GUI overlays
+typed line with `\C-xl`. Ghost suffixes, search inserts, and editor tokens
+that contain C0 or DEL are refused so Readline redisplay cannot inject
+terminal controls (`HRD-002`). Strategy A history search and ghost are
+unblocked; live highlighting and GUI overlays
 (completion menu, type-to-filter Ctrl+R) remain `deferred` from this MVP.
 
 ## System boundary
