@@ -336,6 +336,7 @@ _mbx_engine_ping() {
 
 _mbx_engine_start() {
     local original_out original_in
+    local _mbx_saved_monitor=0 _mbx_saved_notify=0
 
     # Starting is idempotent from the caller's perspective and cannot orphan a
     # previously owned coprocess.
@@ -343,8 +344,34 @@ _mbx_engine_start() {
     _MBX_REQUEST_ID=0
     _mbx_coprocess_requested || return 1
 
-    coproc _MBX_ENGINE_COPROC { exec "$MBX_BIN" serve --stdio 2>/dev/null; }
-    _MBX_ENGINE_CHILD_PID=$_MBX_ENGINE_COPROC_PID
+    # Interactive Bash defaults to monitor mode. A long-lived coproc listed as
+    # job #1 shares the shell process group, so Ctrl+C at the prompt SIGINTs
+    # the helper and the `[1]+ Interrupt` line can steal the next command's
+    # first byte (M-051). Suspend monitor/notify only around spawn, ignore
+    # INT/QUIT/TSTP across exec (POSIX SIG_IGN is inherited), then restore
+    # the caller's flags. Do not leave monitor off for the session.
+    [[ $- == *m* ]] && _mbx_saved_monitor=1
+    [[ $- == *b* ]] && _mbx_saved_notify=1
+    set +m
+    set +b
+    coproc _MBX_ENGINE_COPROC {
+        trap '' INT QUIT TSTP
+        exec "$MBX_BIN" serve --stdio 2>/dev/null
+    }
+    _MBX_ENGINE_CHILD_PID=${_MBX_ENGINE_COPROC_PID-}
+    ((_mbx_saved_notify == 1)) && set -b
+    ((_mbx_saved_monitor == 1)) && set -m
+    if [[ -n ${_MBX_ENGINE_CHILD_PID:-} ]]; then
+        builtin disown "$_MBX_ENGINE_CHILD_PID" 2>/dev/null || true
+    fi
+
+    if [[ -z ${_MBX_ENGINE_CHILD_PID:-} || \
+        -z ${_MBX_ENGINE_COPROC[0]:-} || \
+        -z ${_MBX_ENGINE_COPROC[1]:-} ]]; then
+        _mbx_engine_stop
+        return 1
+    fi
+
     exec {_MBX_ENGINE_OUT_FD}<&"${_MBX_ENGINE_COPROC[0]}"
     exec {_MBX_ENGINE_IN_FD}>&"${_MBX_ENGINE_COPROC[1]}"
     original_out=${_MBX_ENGINE_COPROC[0]}

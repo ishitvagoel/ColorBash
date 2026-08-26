@@ -243,7 +243,10 @@ enabled only with `MBX_ENABLE_DURATION_TIMING=1`.
 The loader defaults to a Bash `coproc` running `mbx serve --stdio`. The hot path
 uses Bash builtins (`printf` and `read`) over retained file descriptors. The write
 runs in a short SIGPIPE-isolated Bash subshell so a helper crash cannot terminate
-the interactive parent. Each request has a monotonically increasing ID, and the
+the interactive parent. Spawn suspends monitor/notify only around `coproc`,
+ignores `INT`/`QUIT`/`TSTP` across `exec` so Ctrl+C at the prompt cannot kill the
+session helper or print job-control noise (M-051), then restores the caller's
+flags. Each request has a monotonically increasing ID, and the
 response decoder checks the protocol magic, correlation ID, field count, and
 expected response type.
 

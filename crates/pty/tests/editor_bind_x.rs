@@ -180,11 +180,19 @@ fn next_prompt_usable_after_insert_and_ctrl_c() {
     wait_prompt(&mut session);
     send_keyseq(&mut session, DEFAULT_KEYSEQ);
     session.write_all(&[CTRL_C], deadline(2)).expect("cancel");
-    wait_prompt(&mut session);
+    // The initial prompt already contains "> ", so wait for Bash's Ctrl+C
+    // echo before typing the follow-up. Otherwise printf can land on the
+    // same line as ^C while the coprocess Interrupt notice eats a byte.
+    wait_all(&mut session, &["^C"]);
     session
         .write_str("printf 'MBX_EDT:after_cancel\\n'\n", deadline(2))
         .expect("follow-up");
-    wait_all(&mut session, &["\nMBX_EDT:after_cancel", "> "]);
+    let output = wait_all(&mut session, &["\nMBX_EDT:after_cancel", "> "]);
+    let visible = visible_text(&output);
+    assert!(
+        !visible.contains("coproc _MBX_ENGINE_COPROC"),
+        "Ctrl+C must not SIGINT the engine coprocess: {visible}"
+    );
 }
 
 #[test]

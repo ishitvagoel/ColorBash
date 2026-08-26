@@ -789,3 +789,4 @@ an accepted decoration/ownership ADR.
 | 2026-08-26 | Closed `HRD-002` hostile/privacy/no-execution audit (`docs/hrd-002-hostile-audit-plan.md`). Search and editor refuse C0/DEL inserts; ghost suffix gate reused. Phase 9 is `in-progress`. `HRD-004` is next. Do not mark `G5` complete. |
 | 2026-08-26 | Closed `HRD-004` install/disable/removal/crash/recovery (`docs/hrd-004-lifecycle-plan.md`). Setup and `source init.bash` never write `~/.bashrc`. Deferred `HRD-003` percentiles with other timing leftovers. `HRD-001` / `G5` stay host-blocked. |
 | 2026-08-26 | Recorded `HRD-001` Linux pairwise PTY L-1–L-5 (`docs/hrd-001-linux-pairwise-plan.md`; nested, SSH prompt, login, vim restore, `/usr/bin/tmux`). macOS matrix stays host-blocked. Do not mark `HRD-001` or `G5` complete. |
+| 2026-08-26 | Fixed engine coprocess SIGINT at the prompt (M-051). Ctrl+C no longer kills `mbx serve` or prints coproc job noise. Do not mark `HRD-001` or `G5` complete. |

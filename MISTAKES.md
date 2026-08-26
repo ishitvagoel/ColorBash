@@ -977,3 +977,25 @@ to prevent recurrence, not to assign blame.
   `_mbx_search_helper` / `_mbx_editor_insert_token`; H-6/H-7 in
   `tests/bash/modules.bash` and `docs/hrd-002-hostile-audit-plan.md`.
 
+## M-051 — Engine coprocess died on prompt Ctrl+C
+
+- Discovered: 2026-08-26
+- Status: Fixed
+- Failed assumption: a session-lifetime `coproc` listed as job #1 would stay
+  out of the foreground process group, so only `bind -x` helpers needed
+  monitor/notify isolation (M-049).
+- Impact: Ctrl+C at the prompt SIGINT'd `mbx serve`. Bash printed
+  `[1]+ Interrupt coproc _MBX_ENGINE_COPROC`, which stole the next command's
+  first byte (`rintf` instead of `printf`) and left the helper dead.
+- Correction: `_mbx_engine_start` suspends monitor/notify only around spawn,
+  ignores INT/QUIT/TSTP in the coproc subshell so `exec` inherits SIG_IGN,
+  disowns the child, and restores the caller's flags. TERM/KILL shutdown and
+  helper-crash fallback are unchanged.
+- Prevention: long-lived interactive children must not remain monitored jobs
+  and must ignore terminal interrupt signals across `exec`. Prove SIGINT
+  survival plus monitor restore next to engine start, and assert PTY Ctrl+C
+  does not print coproc job noise.
+- Evidence: `_mbx_engine_start` in `bash/engine.bash`; M-051 contract in
+  `tests/bash/modules.bash`; `next_prompt_usable_after_insert_and_ctrl_c` in
+  `crates/pty/tests/editor_bind_x.rs`.
+

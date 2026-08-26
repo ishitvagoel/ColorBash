@@ -253,6 +253,29 @@ _mbx_engine_stop
 _mbx_engine_stop
 wait_for_deferred_reap
 
+# M-051: the session coprocess must ignore SIGINT and restore monitor/notify.
+MBX_BIN=$MBX_TEST_BIN
+MBX_IPC_MODE=coprocess
+MBX_DISABLE_RENDERER=0
+MBX_IPC_TIMEOUT=.25
+set -m
+set -b
+_mbx_engine_start || fail 'M-051: coprocess did not become ready under monitor mode'
+[[ $- == *m* ]] || fail 'M-051: engine start left monitor mode off'
+[[ $- == *b* ]] || fail 'M-051: engine start left notify off'
+engine_pid=${_MBX_ENGINE_CHILD_PID:-}
+[[ $engine_pid =~ ^[1-9][0-9]*$ ]] || fail 'M-051: missing engine child pid'
+jobs_out=$(jobs 2>/dev/null || true)
+[[ $jobs_out != *_MBX_ENGINE_COPROC* ]] || \
+    fail 'M-051: engine coprocess remained a monitored job'
+kill -INT "$engine_pid"
+_mbx_engine_ping || fail 'M-051: coprocess did not survive SIGINT'
+kill -0 "$engine_pid" 2>/dev/null || fail 'M-051: engine pid exited after SIGINT'
+_mbx_engine_stop
+set +m
+set +b
+wait_for_deferred_reap
+
 run_bounded_read_case() {
     local size=$1
     local terminator=$2
