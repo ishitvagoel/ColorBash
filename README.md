@@ -35,7 +35,7 @@ These MVP features are **not** implemented for interactive use:
 | Completion popup | Overlay unproven; ranked-accept and cycle chords exist |
 | Syntax highlighting | Same continuous-decoration leftover |
 | Enhanced Ctrl+R overlay | Type-to-filter list still needs a leftover; `\C-xh` insert, cycling, `\C-xl` restore, cwd preference, opt-in failed insert, and signal PTY exist |
-| macOS PTY matrix | `HRD-001` needs a macOS host |
+| macOS PTY matrix | `HRD-001` needs a macOS host; Linux nested/SSH/login/vim/tmux PTY is recorded |
 
 Canonical status lives in [`docs/roadmap.md`](docs/roadmap.md). `G0`, `G2`,
 `G3`, and `G4` are complete. `HRD-002` hostile-input and `HRD-004`
