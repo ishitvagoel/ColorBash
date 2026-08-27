@@ -415,21 +415,19 @@ write-ack percentile leftover is `deferred` (not a budget pass;
 ## Reassessment gate
 
 The foundation supports continuing, with conditions. Before autocomplete or live
-highlighting:
+highlighting on a **G5 revisit** slice:
 
-1. run PTY tests under tmux, SSH, WSL, Linux, and macOS Bash variants;
+1. run the deferred macOS `HRD-001` pairwise matrix when a host is available
+   (ADR 0012); Linux L-1–L-5 are recorded;
 2. remaining representative dirty/large, cold-refresh, fallback, PTY, and
    platform p50/p95/p99 workloads are `deferred` and do not block product
    development (`docs/latency-budget-deferral.md`);
-3. test prompt callback ordering against popular prompt/preexec frameworks;
-4. prototype one non-destructive `bind -x` editing action that only inserts text
-   (`bash/editor.bash`, `crates/pty/tests/editor_bind_x.rs`; `EDT-001` E-1–E-4,
-   M-1–M-4, B-1–B-4; B-5 redraw note in `docs/edt-001-exact-bytes-plan.md`);
-5. prototype reuse of one standard completion function (`bash/completion.bash`;
-   COMP-001 H-1–H-4, COMP-002 P-1–P-4 and inspect-before-wrap F-1–F-4;
-   leftover matrix, N-1–N-2, wrap fallthrough S-1–S-4, `G4` gate close in
-   `docs/g4-gate-close-plan.md`, and COMP-003 K-1–K-4 typed metadata in
-   `docs/comp-003-metadata-plan.md`);
+3. `PROMPT_COMMAND` ordering is covered by `tests/bash/smoke.bash`; popular
+   preexec frameworks remain a G5 revisit optional;
+4. non-destructive `bind -x` editing is complete (`EDT-001`; `bash/editor.bash`,
+   `crates/pty/tests/editor_bind_x.rs`);
+5. stock completion adapter is complete (`bash/completion.bash`; `G4` /
+   `COMP-005`);
 6. duration timing remains opt-in; do not compose unknown `DEBUG` traps
    (`docs/prm-006-duration-plan.md`; `PRM-006` complete).
 

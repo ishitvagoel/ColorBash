@@ -28,12 +28,13 @@ Correctness, Bash compatibility, and “never break the shell” still block.
 | `COMP-002` adapter overhead <= 5 ms over stock | `deferred` | Functional S-1–S-4 landed (`docs/comp-002-fallthrough-plan.md`); no p50/p95/p99 record (`docs/g4-decision-plan.md`) |
 | `SRCH-003` 100k interactive query percentiles | `deferred` | Strategy A cwd/signal/failed-insert evidence is recorded (`docs/srch-003-failed-filter-plan.md`); CLI 100k benches remain on file |
 | `HRD-003` release-mode e2e latency matrix | `deferred` | Existing prompt/IPC/history benches remain on file; do not chase product-code latency |
+| `HRD-001` macOS pairwise PTY matrix | `deferred` | Linux L-1–L-5 recorded; ADR 0012; needs a macOS host — not a timing leftover |
 
 ## What this is not
 
 - Not a budget pass
 - Not permission to enable capture by default
-- Not a close of `HRD-001` (macOS/platform matrix is not a timing leftover)
+- Not permission to fake macOS PTY evidence on Linux (ADR 0012)
 - Not a change to ACK meaning, MBX1/MBX2, or Readline ownership
 
 ## Revisit

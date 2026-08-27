@@ -35,12 +35,13 @@ These MVP features are **not** implemented for interactive use:
 | Completion popup | Overlay unproven; ranked-accept and cycle chords exist |
 | Syntax highlighting | Same continuous-decoration leftover |
 | Enhanced Ctrl+R overlay | Type-to-filter list still needs a leftover; `\C-xh` insert, cycling, `\C-xl` restore, cwd preference, opt-in failed insert, and signal PTY exist |
-| macOS PTY matrix | `HRD-001` needs a macOS host; Linux nested/SSH/login/vim/tmux PTY is recorded |
+| macOS PTY matrix | `deferred` (ADR 0012); needs a macOS host. Linux nested/SSH/login/vim/tmux PTY is recorded |
 
-Canonical status lives in [`docs/roadmap.md`](docs/roadmap.md). `G0`, `G2`,
-`G3`, and `G4` are complete. `HRD-002` hostile-input and `HRD-004`
-install/removal evidence are recorded. Explicit history-search insert is ADR 0009.
-Continuous decoration stays unproven (ADR 0003).
+Canonical status lives in [`docs/roadmap.md`](docs/roadmap.md). Strategy A MVP
+on Linux is `complete` (`G5` 2026-08-27). `G0`–`G4` are complete. `HRD-002`
+hostile-input and `HRD-004` install/removal evidence are recorded. Explicit
+history-search insert is ADR 0009. Continuous decoration stays unproven (ADR
+0003). Overlay, highlighting, and macOS matrix are **G5 revisit**.
 
 The helper bundles SQLite (`rusqlite` with the `bundled` feature) for the history
 store. The protocol crate remains dependency-free. History capture stays off

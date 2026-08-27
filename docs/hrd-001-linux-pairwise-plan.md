@@ -1,7 +1,8 @@
 # HRD-001 Linux pairwise PTY (host-possible slice)
 
-Status: `complete` for L-1–L-5 (2026-08-26). The full `HRD-001` matrix stays
-**blocked on macOS**. Do not mark `HRD-001` or `G5` complete. Overlay,
+Status: `complete` for L-1–L-5 (2026-08-26). Linux is the satisfied `HRD-001`
+slice for Strategy A MVP / `G5` close (`docs/g5-strategy-a-close-plan.md`).
+The macOS leg is **`deferred`** (ADR 0012), not `blocked`. Overlay,
 highlighting, dim paint, and percentile benches stay `deferred`.
 
 ## Why this slice
@@ -22,7 +23,7 @@ produce Linux PTY evidence now without faking Darwin.
 
 1. Record Linux PTY evidence for nested interactive Bash, SSH context in the
    live prompt, login-shell install, vim fullscreen then restore, and tmux.
-2. Keep `HRD-001` `blocked` (macOS leftover). Do not mark `G5` complete.
+2. Record Linux evidence; macOS is `deferred` per ADR 0012 (not faked here).
 3. Use `/usr/bin/tmux`, not the agent `exec-daemon` wrapper.
 
 ## Out of scope (hard)
@@ -32,7 +33,7 @@ produce Linux PTY evidence now without faking Darwin.
 - Percentile benches
 - Real `sshd` round-trips (no daemon on this host)
 - Package-manager installers
-- Marking `HRD-001` or `G5` complete
+- Faking macOS PTY evidence on Linux
 - `set -euo pipefail` or `MBX_DBG` in sourced modules
 
 ## Asserts
@@ -47,10 +48,9 @@ produce Linux PTY evidence now without faking Darwin.
 
 ## Docs to update
 
-1. `docs/roadmap.md` — `HRD-001` stays `blocked`; note Linux L-1–L-5. Changelog.
-   Immediate next work remains macOS. Do not mark `G5` complete.
+1. `docs/roadmap.md` — Linux L-1–L-5 recorded; macOS `deferred` (ADR 0012).
 2. This file — Status `complete` after the tests are green.
 
 ## Remaining
 
-macOS pairwise. `HRD-003` deferred. Overlay deferred.
+macOS pairwise (`deferred`, ADR 0012). `HRD-003` deferred. Overlay deferred.
