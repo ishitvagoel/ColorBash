@@ -340,7 +340,7 @@ targets stay `deferred` and are not a pass/fail requirement for this close.
 | 5 | Completion | `complete` | Strategy A insert/fallthrough (`COMP-005`); `G4` / `COMP-001`–`COMP-003` / `GIT-004` complete; ranked-cycle `\C-xn` / `\C-xp`; `COMP-004` overlay leftover `discovery`; overlay `deferred` |
 | 6 | Syntax highlighting | `deferred` | no after-every-key paint hook (ADR 0003); G5 revisit; IDs kept |
 | 7 | Git/provider expansion | `complete` | MVP exits `GIT-002` / `GIT-004` (`docs/git-phase7-mvp-close-plan.md`); `GIT-005` SDK `deferred`; upstream/remotes/tags unauthorized |
-| 8 | Enhanced Ctrl+R | `complete` | `SRCH-001`–`SRCH-003` complete (ADR 0009); cwd/signal/opt-in failed insert recorded; 100k interactive leftover `deferred`; overlay `deferred`; interactive repo insert unauthorized |
+| 8 | Enhanced Ctrl+R | `complete` | `SRCH-001`–`SRCH-003` complete (ADR 0009); cwd/signal/opt-in failed/repo insert recorded; 100k interactive leftover `deferred`; overlay `deferred` |
 | 9 | Release hardening | `complete` | `HRD-002` and `HRD-004` complete; Linux `HRD-001` L-1–L-5 recorded; macOS `HRD-001` `deferred` (ADR 0012); `HRD-003` `deferred`; `G5` closed (`docs/g5-strategy-a-close-plan.md`) |
 
 ## Phase details
@@ -560,18 +560,18 @@ metadata; bounded filtering; safe cancellation; exact insertion without
 execution; and terminal restoration. Age/cwd/status columns stay overlay
 `deferred`. CLI `search repo` / `search branch` / `search failed` exist on
 main (`HIST-010`). Interactive empty-line `\C-xh` uses cwd, then recent;
-`MBX_SEARCH_FAILED=1` prefers `search failed` first. Interactive `search repo`
-insert stays unauthorized (needs a trusted repo root in Bash).
+`MBX_SEARCH_FAILED=1` prefers `search failed` first. Opt-in `MBX_SEARCH_REPO=1`
+prefers `search repo` after `mbx repo root --cwd "$PWD"`.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
 | `SRCH-001` | Configurable bounded history-search action and result view | `complete` | insert S-1–S-7 and cycling V-1–V-4 in `bash/search.bash`, `crates/pty/tests/history_search.rs`, `tests/bash/modules.bash`; ADR 0009; `docs/srch-001-history-search-plan.md`; `docs/srch-001-result-view-plan.md`. Overlay is not required |
 | `SRCH-002` | Cancel restoration and exact insertion without execution | `complete` | restore R-1–R-4 in `bash/search.bash`, `crates/pty/tests/history_search.rs`, `tests/bash/modules.bash`; ADR 0009; `docs/srch-002-cancel-restore-plan.md`. Overlay is not required |
-| `SRCH-003` | Metadata filters, 100k-row latency, signal, and terminal-state evidence | `complete` | cwd empty-line C-1–C-4, prefix/fuzzy cwd, signal/terminal-state T-1–T-4, and opt-in failed insert F-1–F-3 in `bash/search.bash`, `crates/pty/tests/history_search.rs`, `tests/bash/modules.bash`; `docs/srch-003-cwd-filter-plan.md`; `docs/srch-003-cwd-prefix-plan.md`; `docs/srch-003-signal-plan.md`; `docs/srch-003-failed-filter-plan.md`. Overlay `deferred`; 100k interactive leftover `deferred`; interactive repo insert unauthorized. CLI `search failed` / `search repo` / `search branch` are on main |
+| `SRCH-003` | Metadata filters, 100k-row latency, signal, and terminal-state evidence | `complete` | cwd empty-line C-1–C-4, prefix/fuzzy cwd, signal/terminal-state T-1–T-4, opt-in failed insert F-1–F-3, and opt-in repo insert R-1–R-3 in `bash/search.bash`, `crates/pty/tests/history_search.rs`, `tests/bash/modules.bash`; `docs/srch-003-cwd-filter-plan.md`; `docs/srch-003-cwd-prefix-plan.md`; `docs/srch-003-signal-plan.md`; `docs/srch-003-failed-filter-plan.md`; `docs/srch-003-repo-filter-plan.md`. Overlay `deferred`; 100k interactive leftover `deferred`. CLI `search failed` / `search repo` / `search branch` and `mbx repo root` are on main |
 
 Exit condition: `SRCH-003`. Overlay leftover stays `deferred`. 100k interactive
 percentiles stay `deferred` (`docs/latency-budget-deferral.md`) and do not
-block this Strategy A exit. Interactive repo insert stays unauthorized.
+block this Strategy A exit.
 
 ### Phase 9 — Release hardening
 
@@ -787,3 +787,4 @@ an accepted decoration/ownership ADR.
 | 2026-08-26 | Recorded `HRD-001` Linux pairwise PTY L-1–L-5 (`docs/hrd-001-linux-pairwise-plan.md`; nested, SSH prompt, login, vim restore, `/usr/bin/tmux`). macOS matrix stays host-blocked. Do not mark `HRD-001` or `G5` complete. |
 | 2026-08-26 | Fixed engine coprocess SIGINT at the prompt (M-051). Ctrl+C no longer kills `mbx serve` or prints coproc job noise. |
 | 2026-08-27 | Accepted ADR 0012 macOS `HRD-001` deferral. Closed `G5` and Phase 9 for Strategy A MVP on Linux (`docs/g5-strategy-a-close-plan.md`). `HRD-001` Linux `complete`; macOS `deferred`. Overlay/highlighting/percentiles stay `deferred`. |
+| 2026-08-27 | Landed opt-in interactive repo empty-line insert (`docs/srch-003-repo-filter-plan.md`; R-1–R-3). `mbx repo root --cwd PATH` uses the ADR 0007 Git adapter; `MBX_SEARCH_REPO=1` prefers `history search repo ROOT` on empty `\C-xh`. |

@@ -5,8 +5,8 @@ signal/terminal-state PTY are recorded. CLI `search failed` / `search repo` /
 `search branch` are on main (`HIST-010`). This packet adds opt-in empty-line
 `\C-xh` use of `history search failed` and closes `SRCH-003` Strategy A
 metadata filters. Overlay/age columns stay `deferred`. 100k interactive
-percentiles stay `deferred`. Interactive repo-root insert stays unauthorized
-(needs a trusted root; CLI `search repo` remains). Do not start highlighting
+percentiles stay `deferred`. Interactive repo insert is recorded
+(`docs/srch-003-repo-filter-plan.md`). Do not start highlighting
 or dim paint.
 
 ## Why this slice
@@ -75,4 +75,5 @@ bash tests/run.bash
 ## Remaining after this slice
 
 Overlay/age columns `deferred`. 100k interactive `deferred`. Interactive repo
-insert unauthorized. `HRD-001` host-blocked. Do not start highlighting.
+insert recorded (`docs/srch-003-repo-filter-plan.md`). `HRD-001` macOS
+`deferred`. Do not start highlighting.

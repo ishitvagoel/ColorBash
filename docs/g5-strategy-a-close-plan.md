@@ -33,7 +33,8 @@ This is a **gate-close decision** slice, not new product scope.
 - macOS / fake Darwin PTY runs
 - Overlay, highlighting, dim paint, or `COMP-004` complete
 - `HRD-003` / `PRM-004` percentile measurement or product-code latency work
-- Interactive `search repo` insert (unauthorized)
+- Interactive `search repo` insert (unauthorized) — superseded by
+  `docs/srch-003-repo-filter-plan.md` (`MBX_SEARCH_REPO=1`, `mbx repo root`)
 - Git upstream/remotes/tags (unauthorized)
 - `set -euo pipefail` or `MBX_DBG` in sourced modules
 - Committing unless asked

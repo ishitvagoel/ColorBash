@@ -55,6 +55,11 @@ pub enum HistoryCommand {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RepoCommand {
+    Root { cwd: String },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CliCommand {
     Handshake,
     Prompt(PromptContext),
@@ -65,6 +70,7 @@ pub enum CliCommand {
         iterations: NonZeroU64,
     },
     History(HistoryCommand),
+    Repo(RepoCommand),
     Version,
     Help,
 }
@@ -82,6 +88,7 @@ pub fn parse(
         Some("socket-ping") => parse_socket_path(&args[1..]).map(CliCommand::SocketPing),
         Some("benchmark-client") => parse_benchmark(&args[1..]),
         Some("history") => parse_history(&args[1..]).map(CliCommand::History),
+        Some("repo") => parse_repo(&args[1..], prompt_defaults()?).map(CliCommand::Repo),
         Some("--version" | "-V") => Ok(CliCommand::Version),
         Some("--help" | "-h") | None => Ok(CliCommand::Help),
         Some(command) => Err(format!("unknown command: {command}")),
@@ -102,7 +109,8 @@ pub fn help_text(version: &str) -> String {
          mbx history search repo ROOT [--limit N]\n  \
          mbx history search branch NAME [--limit N]\n  \
          mbx history search fuzzy TEXT [--cwd PATH] [--limit N]\n  \
-         mbx history search failed [--limit N]\n\n\
+         mbx history search failed [--limit N]\n  \
+         mbx repo root [--cwd PATH]\n\n\
          PROMPT OPTIONS:\n  --cwd PATH  --status N  --duration-ms N  --flags BITS\n  \
          --no-color  --ascii  --nerd-font  --ssh  --production  --disable-git"
     )
@@ -171,6 +179,31 @@ fn parse_socket_path(args: &[String]) -> Result<PathBuf, String> {
     match args {
         [option, socket] if option == "--socket" => Ok(PathBuf::from(socket)),
         _ => Err("--socket PATH is required".to_owned()),
+    }
+}
+
+fn parse_repo(args: &[String], defaults: PromptDefaults) -> Result<RepoCommand, String> {
+    match args.first().map(String::as_str) {
+        Some("root") => {
+            let mut cwd = defaults.cwd;
+            let mut index = 1;
+            while index < args.len() {
+                match args[index].as_str() {
+                    "--cwd" => {
+                        index += 1;
+                        cwd = args.get(index).ok_or("--cwd requires a value")?.clone();
+                        if cwd.is_empty() {
+                            return Err("--cwd requires a value".to_owned());
+                        }
+                    }
+                    unknown => return Err(format!("unknown repo root option: {unknown}")),
+                }
+                index += 1;
+            }
+            Ok(RepoCommand::Root { cwd })
+        }
+        Some(command) => Err(format!("unknown repo command: {command}")),
+        None => Err("repo requires a subcommand (root)".to_owned()),
     }
 }
 
@@ -550,6 +583,29 @@ mod tests {
             ),)
             .unwrap_err(),
             "unknown search option: git"
+        );
+        let repo_root = parse(&args(&["repo", "root", "--cwd", "/work/repo"]), || {
+            Ok(defaults())
+        })
+        .unwrap();
+        assert_eq!(
+            repo_root,
+            CliCommand::Repo(RepoCommand::Root {
+                cwd: "/work/repo".to_owned(),
+            })
+        );
+        let repo_default_cwd = parse(&args(&["repo", "root"]), || {
+            Ok(PromptDefaults {
+                cwd: "/default/cwd".to_owned(),
+                flags: PromptFlags::empty(),
+            })
+        })
+        .unwrap();
+        assert_eq!(
+            repo_default_cwd,
+            CliCommand::Repo(RepoCommand::Root {
+                cwd: "/default/cwd".to_owned(),
+            })
         );
     }
 }

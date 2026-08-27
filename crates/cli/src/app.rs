@@ -1,7 +1,9 @@
 use crate::VERSION;
-use crate::cli::{self, CliCommand, HistoryCommand, ServeTarget};
+use crate::cli::{self, CliCommand, HistoryCommand, RepoCommand, ServeTarget};
 use crate::environment;
-use crate::history::{HistoryControl, HistoryError, HistoryPolicy, HistorySearch};
+use crate::history::{
+    HistoryControl, HistoryError, HistoryPolicy, HistorySearch, sanitize_repo_root,
+};
 use crate::prompt::PromptRendering;
 use crate::provider::{
     GitRepositoryStatusProvider, NullRepositoryContextProvider, RepositoryContextProvider,
@@ -13,6 +15,7 @@ use crate::transport::{self, SocketClient};
 use mbx_protocol::{Request, RequestKind, ResponseKind};
 use std::io::{self, Write};
 use std::num::NonZeroU64;
+use std::path::Path;
 use std::time::Instant;
 
 pub fn execute(command: CliCommand, renderer: &dyn PromptRendering) -> Result<(), String> {
@@ -54,6 +57,7 @@ pub fn execute(command: CliCommand, renderer: &dyn PromptRendering) -> Result<()
         CliCommand::SocketPing(path) => socket_ping(&path),
         CliCommand::BenchmarkClient { socket, iterations } => benchmark_client(&socket, iterations),
         CliCommand::History(history) => execute_history(history),
+        CliCommand::Repo(repo) => execute_repo(repo),
         CliCommand::Version => {
             println!("mbx {VERSION}");
             Ok(())
@@ -151,6 +155,30 @@ fn execute_history(command: HistoryCommand) -> Result<(), String> {
         HistoryCommand::SearchFailed { limit } => {
             let store = open_history_store()?;
             print_entries(store.failed(limit).map_err(|error| error.to_string())?)
+        }
+    }
+}
+
+fn execute_repo(command: RepoCommand) -> Result<(), String> {
+    match command {
+        RepoCommand::Root { cwd } => {
+            if environment::git_discovery_disabled() {
+                return Ok(());
+            }
+            let cwd_path = Path::new(&cwd);
+            if !cwd_path.is_absolute() {
+                return Ok(());
+            }
+            let provider = GitRepositoryStatusProvider::default();
+            let context = provider
+                .context(cwd_path)
+                .map_err(|error| error.to_string())?;
+            if let Some(context) = context {
+                if let Some(root) = sanitize_repo_root(&context.root) {
+                    println!("{root}");
+                }
+            }
+            Ok(())
         }
     }
 }

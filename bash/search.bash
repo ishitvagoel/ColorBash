@@ -4,6 +4,8 @@
 # Default insert `\C-xh` and restore `\C-xl` are unbound in stock emacs.
 # Empty-line search prefers `history search cwd "$PWD"` (HIST-008), then recent.
 # `MBX_SEARCH_FAILED=1` prefers `history search failed` first on an empty line.
+# `MBX_SEARCH_REPO=1` prefers `history search repo ROOT` when `mbx repo root`
+# resolves a trusted absolute root (ADR 0007), then falls through to cwd/recent.
 # Non-empty search prefers prefix/fuzzy with `--cwd "$PWD"`, then global.
 # Do not use `\C-x\C-r` (re-read-init-file), `\C-x\C-s` (terminal XOFF / IXON),
 # `\C-g` / `\C-x\C-g` (abort), or `\C-r` (reverse-i-search).
@@ -121,6 +123,42 @@ _mbx_search_helper() {
     ((child_status == 0))
 }
 
+_mbx_search_repo_root() {
+    local cwd=$1
+    local deadline output_fd child_pid child_status=1
+    local root=
+
+    REPLY=
+    [[ -x ${MBX_BIN:-} ]] || return 1
+    [[ -n $cwd ]] || return 1
+    _mbx_deadline_after "${MBX_SEARCH_TIMEOUT:-${MBX_HISTORY_TIMEOUT:-0.10}}" || \
+        return 1
+    deadline=$REPLY
+    _MBX_SEARCH_SAVED_MONITOR=0
+    _MBX_SEARCH_SAVED_NOTIFY=0
+    [[ $- == *m* ]] && _MBX_SEARCH_SAVED_MONITOR=1
+    [[ $- == *b* ]] && _MBX_SEARCH_SAVED_NOTIFY=1
+    set +m
+    set +b
+    exec {output_fd}< <(exec "$MBX_BIN" repo root --cwd "$cwd" 2>/dev/null)
+    child_pid=$!
+    if _mbx_search_read_line "$output_fd" "$deadline"; then
+        if [[ -n $REPLY ]] && ! _mbx_text_has_c0_or_del "$REPLY"; then
+            root=$REPLY
+            child_status=0
+        fi
+    fi
+    exec {output_fd}<&-
+    if ! _mbx_wait_child_until "$child_pid" "$deadline"; then
+        _mbx_terminate_child "$child_pid"
+    else
+        child_status=$REPLY
+    fi
+    _mbx_search_restore_jobs
+    REPLY=$root
+    [[ -n $REPLY ]]
+}
+
 _mbx_search_query() {
     local query=$1
     local limit
@@ -133,6 +171,16 @@ _mbx_search_query() {
             _mbx_search_helper "$limit" history search failed --limit "$limit" || true
             if ((${#_MBX_SEARCH_MATCHES[@]} > 0)); then
                 return 0
+            fi
+        fi
+        if [[ ${MBX_SEARCH_REPO:-0} == 1 && -n $cwd ]]; then
+            if _mbx_search_repo_root "$cwd"; then
+                local repo_root=$REPLY
+                _mbx_search_helper "$limit" history search repo "$repo_root" \
+                    --limit "$limit" || true
+                if ((${#_MBX_SEARCH_MATCHES[@]} > 0)); then
+                    return 0
+                fi
             fi
         fi
         if [[ ${MBX_SEARCH_CWD:-1} == 1 && -n $cwd ]]; then

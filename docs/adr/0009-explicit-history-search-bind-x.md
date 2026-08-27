@@ -35,7 +35,10 @@ user presses a dedicated chord does not.
    snapshot entry. An empty line prefers cwd-scoped rows (`history search cwd
    "$PWD"`) and falls back to newest sidecar rows (`history search recent`).
    When `MBX_SEARCH_FAILED=1`, an empty line prefers `history search failed`
-   first and falls through to cwd/recent when that query is empty. A
+   first and falls through to cwd/recent when that query is empty. When
+   `MBX_SEARCH_REPO=1`, an empty line prefers `history search repo ROOT` after
+   `mbx repo root --cwd "$PWD"` (ADR 0007) and falls through when root or
+   matches are absent. A
    non-empty line prefers prefix then fuzzy with `--cwd "$PWD"`, then the same
    queries globally. Results are
    bounded (`MBX_SEARCH_LIMIT`, default 8, max 16). The selected command text
@@ -67,7 +70,8 @@ latency stays `deferred`. Signal and terminal-state PTY around the insert
 and restore chords is recorded (`docs/srch-003-signal-plan.md`). Empty-line
 and typed-prefix search prefer cwd (HIST-008) before global rows. Opt-in
 empty-line failed insert is `MBX_SEARCH_FAILED=1`
-(`docs/srch-003-failed-filter-plan.md`). Command
+(`docs/srch-003-failed-filter-plan.md`). Opt-in empty-line repo insert is
+`MBX_SEARCH_REPO=1` (`docs/srch-003-repo-filter-plan.md`). Command
 text stays out of traces (`M-023`).
 
 Later status (2026-08-25): ADR 0010 landed opt-in suffix ghost as Strategy A

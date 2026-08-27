@@ -774,3 +774,107 @@ fn empty_line_failed_falls_back_when_no_failed_rows() {
     wait_all(&mut session, &["\nMBX_SRCH:failed_fallback", "> "]);
     exit_and_wait(&mut session);
 }
+
+fn which_git() -> std::path::PathBuf {
+    let mut name = std::ffi::OsString::from("git");
+    name.push(std::env::consts::EXE_SUFFIX);
+    let search =
+        std::env::var_os("PATH").unwrap_or_else(|| std::ffi::OsString::from("/usr/bin:/bin"));
+    for directory in std::env::split_paths(&search) {
+        if directory.as_os_str().is_empty() || !directory.is_absolute() {
+            continue;
+        }
+        let candidate = directory.join(&name);
+        if candidate.is_file() {
+            return candidate;
+        }
+    }
+    panic!("git was not found on PATH");
+}
+
+fn git_show_toplevel(git: &std::path::Path, cwd: &std::path::Path) -> String {
+    let output = std::process::Command::new(git)
+        .args(["rev-parse", "--show-toplevel"])
+        .current_dir(cwd)
+        .output()
+        .expect("git rev-parse --show-toplevel failed");
+    assert!(
+        output.status.success(),
+        "git rev-parse --show-toplevel failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stdout)
+        .expect("git toplevel was not UTF-8")
+        .trim()
+        .to_owned()
+}
+
+fn wait_for_repo_command(
+    bin: &std::path::Path,
+    data_home: &std::path::Path,
+    repo_root: &str,
+    expected: &str,
+) {
+    let deadline = Instant::now() + Duration::from_secs(8);
+    loop {
+        let by_repo = query(
+            bin,
+            &["history", "search", "repo", repo_root, "--limit", "8"],
+            data_home,
+        );
+        if by_repo.lines().any(|line| line == expected) {
+            return;
+        }
+        if Instant::now() >= deadline {
+            panic!("repo search never contained {expected:?}; root={repo_root:?} got {by_repo:?}");
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+#[test]
+fn empty_line_inserts_repo_when_opt_in() {
+    let home = TempHome::new("srch-r1");
+    let git = which_git();
+    assert!(
+        std::process::Command::new(&git)
+            .args(["init", "--quiet"])
+            .current_dir(home.path())
+            .status()
+            .unwrap()
+            .success()
+    );
+    let repo_root = git_show_toplevel(&git, home.path());
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let mut session = spawn_history_shell(
+        home.path(),
+        &enabled_env(
+            data_home_s,
+            histfile_s,
+            &[("MBX_SEARCH_REPO", "1"), ("MBX_DISABLE_GIT", "0")],
+        ),
+    );
+    wait_for(&mut session, "> ");
+    type_line(&mut session, "echo MBX_SRCH:repo-only");
+    wait_all(&mut session, &["\nMBX_SRCH:repo-only", "> "]);
+    wait_for_count(&mbx_bin(), &data_home, 1);
+    wait_for_repo_command(
+        &mbx_bin(),
+        &data_home,
+        &repo_root,
+        "echo MBX_SRCH:repo-only",
+    );
+
+    send_keyseq(&mut session, DEFAULT_KEYSEQ);
+    assert_no_marker(&mut session, "\nMBX_SRCH:repo-only");
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["\nMBX_SRCH:repo-only", "> "]);
+    session
+        .write_str("printf 'MBX_SRCH:repo_inserted\\n'\n", deadline(2))
+        .expect("sentinel");
+    wait_all(&mut session, &["\nMBX_SRCH:repo_inserted", "> "]);
+    exit_and_wait(&mut session);
+}

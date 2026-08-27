@@ -1374,6 +1374,44 @@ assert_eq 'cwd-hit' "$READLINE_LINE" \
 unset MBX_SEARCH_FAILED
 _mbx_search_clear
 
+cat >"$search_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+case " $* " in
+    *" repo root "*) printf '%s\n' "/trusted/repo" ;;
+    *" search repo /trusted/repo "*) printf '%s\n' "repo-hit" ;;
+    *" search cwd "*) printf '%s\n' "cwd-hit" ;;
+    *" search recent "*) printf '%s\n' "recent-hit" ;;
+    *) printf '%s\n' "other-hit" ;;
+esac
+EOF
+MBX_SEARCH_REPO=1
+PWD=/work/tree
+READLINE_LINE=
+READLINE_POINT=0
+_mbx_search_insert
+assert_eq 'repo-hit' "$READLINE_LINE" \
+    'MBX_SEARCH_REPO=1 empty-line search should prefer repo rows'
+_mbx_search_clear
+
+cat >"$search_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+case " $* " in
+    *" repo root "*) exit 0 ;;
+    *" search cwd "*) printf '%s\n' "cwd-hit" ;;
+    *" search recent "*) printf '%s\n' "recent-hit" ;;
+    *) printf '%s\n' "other-hit" ;;
+esac
+EOF
+MBX_SEARCH_REPO=1
+PWD=/work/tree
+READLINE_LINE=
+READLINE_POINT=0
+_mbx_search_insert
+assert_eq 'cwd-hit' "$READLINE_LINE" \
+    'MBX_SEARCH_REPO=1 with no repo root should fall through to cwd'
+unset MBX_SEARCH_REPO PWD
+_mbx_search_clear
+
 MBX_HISTORY=0
 READLINE_LINE='keep-me'
 READLINE_POINT=7
@@ -1394,7 +1432,7 @@ _mbx_search_insert
 assert_eq 'keep-me' "$READLINE_LINE" \
     'search must no-op when the helper is missing'
 rm -rf "$search_stub_dir"
-unset MBX_BIN MBX_HISTORY MBX_SEARCH_TIMEOUT MBX_SEARCH_FAILED READLINE_LINE READLINE_POINT \
+unset MBX_BIN MBX_HISTORY MBX_SEARCH_TIMEOUT MBX_SEARCH_FAILED MBX_SEARCH_REPO READLINE_LINE READLINE_POINT \
     _MBX_SEARCH_INSTALLED _MBX_SEARCH_MATCHES _MBX_SEARCH_INDEX \
     _MBX_SEARCH_ORIGINAL _MBX_SEARCH_ORIGINAL_POINT _MBX_SEARCH_HAS_ORIGINAL
 

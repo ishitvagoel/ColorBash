@@ -469,7 +469,9 @@ generation IDs is accepted in ADR 0011; ghost skips a delayed RESULT whose
 generation is not current (`GHST-001`). Explicit history search via `bind -x` is Strategy A (ADR 0009;
 `bash/search.bash`; default `\C-xh` insert and `\C-xl` restore; bounded
 cycling; empty-line and prefix/fuzzy cwd preference; opt-in empty-line
-`history search failed` when `MBX_SEARCH_FAILED=1`; Ctrl+C / Ctrl+Z / resize /
+`history search failed` when `MBX_SEARCH_FAILED=1`; opt-in repo empty-line
+insert uses `mbx repo root --cwd "$PWD"` then `history search repo ROOT` when
+`MBX_SEARCH_REPO=1`; Ctrl+C / Ctrl+Z / resize /
 `stty -g` PTY around `\C-xh` / `\C-xl`). `COMP-004` popup
 policy records no GUI overlay; ranked-accept `bind -x` evidence is complete
 (`docs/comp-004-ranked-accept-plan.md`). Ranked-cycle `bind -x` evidence is

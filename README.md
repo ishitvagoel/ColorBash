@@ -23,7 +23,7 @@ These slices have working code you can exercise in an interactive shell:
 | Failed history search | `MBX_HISTORY=1` then `mbx history search failed` | Rows with nonzero exit status |
 | Repository-context history | `MBX_HISTORY=1` in a Git worktree | Stores root/branch; `search repo ROOT` / `search branch NAME` |
 | History ghost suffix | `MBX_HISTORY=1` and `MBX_GHOST=1` | Suggestion after the cursor on ASCII printables in emacs and vi-insert; Enter runs the typed prefix; Right accepts all; Left / Home / Up / Down / Ctrl-Left dismiss; Alt-F / Ctrl-Right accept one word (emacs); Ctrl-Right in vi-insert; Ctrl-X Ctrl-N / Ctrl-P cycle matches |
-| History-search chord | `MBX_HISTORY=1` then `Ctrl-X` `h` | Replaces the line with a sidecar match; empty and typed queries prefer `$PWD`; `MBX_SEARCH_FAILED=1` prefers failed empty-line rows; repeat to cycle; `Ctrl-X` `l` restores; does not run it |
+| History-search chord | `MBX_HISTORY=1` then `Ctrl-X` `h` | Replaces the line with a sidecar match; empty and typed queries prefer `$PWD`; `MBX_SEARCH_FAILED=1` prefers failed empty-line rows; `MBX_SEARCH_REPO=1` prefers repo rows via `mbx repo root`; repeat to cycle; `Ctrl-X` `l` restores; does not run it |
 
 ## What remains
 
@@ -293,6 +293,7 @@ MBX_SEARCH_TIMEOUT=0.10         # helper budget for one search insert
 MBX_SEARCH_LIMIT=8              # bounded snapshot size for cycling (max 16)
 MBX_SEARCH_CWD=0                # empty-line search uses global recent only
 MBX_SEARCH_FAILED=1             # empty-line search prefers failed rows first
+MBX_SEARCH_REPO=1               # empty-line search prefers repo rows (trusted root)
 MBX_LOG=trace                   # helper timing/events; never logs command text
 ```
 
