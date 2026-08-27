@@ -37,7 +37,17 @@ _mbx_highlight_strip_line() {
                 index=$((index + 1))
             done
         else
-            plain+=$byte
+            local width=1
+            if ((code >= 0xF0)); then
+                width=4
+            elif ((code >= 0xE0)); then
+                width=3
+            elif ((code >= 0xC0)); then
+                width=2
+            fi
+            plain+=${line:index:width}
+            index=$((index + width))
+            continue
         fi
         index=$((index + 1))
     done

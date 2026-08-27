@@ -197,6 +197,10 @@ fn lex(input: &str) -> Vec<Token> {
                         break;
                     }
                 }
+                if index == start {
+                    let step = input[index..].chars().next().map_or(1, |ch| ch.len_utf8());
+                    index += step;
+                }
                 let word = &input[start..index];
                 tokens.push(Token {
                     kind: keyword_kind(word),
@@ -275,8 +279,8 @@ pub fn highlight_line(input: &str, plain_point: usize, color: bool) -> Option<(S
     Some(render(input, plain_point.min(input.len())))
 }
 
-#[allow(dead_code)]
-pub fn strip_to_plain(value: &str) -> String {
+#[cfg(test)]
+pub(crate) fn strip_to_plain(value: &str) -> String {
     let mut plain = String::with_capacity(value.len());
     let bytes = value.as_bytes();
     let mut index = 0;
@@ -303,9 +307,10 @@ pub fn strip_to_plain(value: &str) -> String {
                     index += 1;
                 }
             }
-            byte => {
-                plain.push(byte as char);
-                index += 1;
+            _ => {
+                let step = value[index..].chars().next().map_or(1, |ch| ch.len_utf8());
+                plain.push_str(&value[index..index + step]);
+                index += step;
             }
         }
     }
@@ -315,6 +320,65 @@ pub fn strip_to_plain(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{TokenKind, highlight_line, lex, strip_to_plain};
+
+    const HOSTILE_HIGHLIGHT_CORPUS: &[&str] = &[
+        "if echo \"$HOME\"; then true; fi # note",
+        "cmd `whoami` $(id) ${HOME}",
+        "printf '%s\\n' 'test$`\\'",
+        "echo \"unclosed",
+        "echo 'unclosed",
+        "git commit -m \"'; rm -rf /\"",
+        "100%_done",
+        "ls /tmp/中文/café",
+        "export PATH=/usr/bin:$PATH",
+        "# comment only",
+        "a=b c=d",
+    ];
+
+    #[test]
+    fn hostile_corpus_strip_round_trips_with_color() {
+        for input in HOSTILE_HIGHLIGHT_CORPUS {
+            let (styled, _) = highlight_line(input, 0, true).expect("highlight");
+            assert_eq!(
+                strip_to_plain(&styled),
+                *input,
+                "strip must recover exact bytes for {input:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn hostile_corpus_cursor_maps_at_start_middle_and_end() {
+        for input in HOSTILE_HIGHLIGHT_CORPUS {
+            let len = input.len();
+            let mid = input
+                .char_indices()
+                .map(|(index, _)| index)
+                .nth(input.chars().count() / 2)
+                .unwrap_or(0);
+            for point in [0, mid, len] {
+                let (styled, styled_point) = highlight_line(input, point, true).expect("highlight");
+                assert_eq!(strip_to_plain(&styled), *input);
+                let end = styled_point.min(styled.len());
+                let plain_prefix = strip_to_plain(&styled[..end]);
+                assert_eq!(
+                    plain_prefix.len(),
+                    point.min(len),
+                    "cursor drift at point {point} for {input:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn lexer_advances_past_utf8_bytes() {
+        let tokens = lex("ls /tmp/中文/café");
+        assert!(!tokens.is_empty());
+        assert_eq!(
+            tokens.last().map(|token| token.end),
+            Some("ls /tmp/中文/café".len())
+        );
+    }
 
     #[test]
     fn lexer_classifies_incomplete_double_quote() {

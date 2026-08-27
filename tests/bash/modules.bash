@@ -1514,6 +1514,40 @@ _mbx_highlight_install
 bind -u '"\C-m"' 2>/dev/null || true
 unset -f _mbx_user_hl_occupy 2>/dev/null || true
 
+# HLT-003 S-4: real helper corpus strip-round-trip in plain (non-tty) mode.
+highlight_hostile_corpus=(
+    'if echo "$HOME"; then true; fi # note'
+    'cmd `whoami` $(id) ${HOME}'
+    "printf '%s\\n' 'test\$'\\\`\\\\'"
+    'echo "unclosed'
+    "echo 'unclosed"
+    'git commit -m "'\''; rm -rf /"'
+    '100%_done'
+    'ls /tmp/中文/café'
+    'export PATH=/usr/bin:$PATH'
+    '# comment only'
+    'a=b c=d'
+)
+MBX_BIN=$MBX_TEST_BIN
+MBX_HIGHLIGHT=1
+for highlight_row in "${highlight_hostile_corpus[@]}"; do
+    _MBX_HIGHLIGHT_PLAIN=$highlight_row
+    _MBX_HIGHLIGHT_POINT=${#highlight_row}
+    _MBX_HIGHLIGHT_ACTIVE=0
+    _mbx_highlight_refresh || fail 'highlight refresh failed for hostile corpus row'
+    _mbx_highlight_strip_line "$READLINE_LINE"
+    assert_eq "$highlight_row" "$REPLY" \
+        'helper corpus strip must round-trip exact bytes'
+done
+
+# HLT-003 P-2: wrapped self-insert refuses C0 bytes.
+_MBX_HIGHLIGHT_PLAIN='echo keep'
+_MBX_HIGHLIGHT_POINT=9
+_MBX_HIGHLIGHT_ACTIVE=0
+_mbx_highlight_self_insert $'\x01'
+assert_eq 'echo keep' "$_MBX_HIGHLIGHT_PLAIN" \
+    'highlight self-insert must refuse C0 bytes'
+
 unset MBX_BIN MBX_HIGHLIGHT _MBX_HIGHLIGHT_PLAIN _MBX_HIGHLIGHT_POINT \
     _MBX_HIGHLIGHT_ACTIVE _MBX_HIGHLIGHT_INSTALLED _MBX_HIGHLIGHT_BOUND READLINE_LINE READLINE_POINT
 rm -rf "$highlight_stub_dir"

@@ -7,8 +7,8 @@
 
 - Last reviewed: 2026-08-27 UTC
 - Current milestone: Strategy A MVP is `complete` on Linux (`G5` 2026-08-27); Phase 9 `complete`; macOS `HRD-001` `deferred` (ADR 0012); `HRD-003` `deferred`; ADR 0013 overlay/highlighting in `validation`
-- Active workstream: ADR 0013 review close (`docs/hlt-comp-review-close-plan.md`); then G5 revisit macOS PTY; `HLT-003`; dim paint; percentile benches
-- Next decision gate: G5 revisit (macOS matrix, `HLT-003`, `HRD-003`, dim paint). Strategy A overlay and highlighting stay `validation` until H-1–H-6 / O-1–O-5; type-to-filter overlays stay deferred
+- Active workstream: `HLT-003` hostile corpus (`docs/hlt-003-hostile-gate-plan.md`); G5 revisit macOS PTY; dim paint; percentile benches `deferred`
+- Next decision gate: G5 revisit (macOS matrix, `HLT-003`, `HRD-003`, dim paint). ADR 0013 review-close (H-1–H-6, O-1–O-5, M-1) is recorded; hostile strip gates are in progress
 - Editor-facing work: opt-in ghost suffix is on main (ADR 0010). Async QUERY with stale-generation skip is recorded (ADR 0011). Explicit history-search insert (`\C-xh`), cycling, restore (`\C-xl`), cwd preference, and opt-in failed empty-line insert are recorded (ADR 0009). Opt-in syntax highlighting (`MBX_HIGHLIGHT=1`) and completion overlay (`MBX_COMP_OVERLAY=1`) are in `validation` (ADR 0013; `docs/hlt-comp-review-close-plan.md`). Dim paint and type-to-filter overlays are `deferred` from this MVP (G5 revisit)
 - Timing policy: unmet percentile targets are `deferred` and do not block
   product development (`docs/latency-budget-deferral.md`)
@@ -525,7 +525,7 @@ and strip back to the exact original bytes.
 | --- | --- | --- | --- |
 | `HLT-001` | Define token taxonomy and tolerant incomplete-input lexer | `validation` | `docs/hlt-001-lexer-plan.md`; `crates/cli/src/highlight.rs`; `cargo test -p mbx highlight::` |
 | `HLT-002` | Integrate terminal-safe styling without taking execution ownership | `validation` | `docs/hlt-002-integration-plan.md`; `bash/highlight.bash`; `tests/bash/modules.bash`; `crates/pty/tests/highlight.rs` |
-| `HLT-003` | Pass exact-byte stripping, hostile-input, PTY, and latency gates | `deferred` | `HLT-002`, `PTY-001`; G5 revisit |
+| `HLT-003` | Pass exact-byte stripping, hostile-input, PTY, and latency gates | `in-progress` | `docs/hlt-003-hostile-gate-plan.md`; slices 1–2 S-1–S-4 and P-1–P-2 recorded; p99 `deferred` |
 
 Exit condition: `HLT-003` if G5 keeps highlighting in scope; otherwise remain
 `deferred` with an ADR or roadmap note. Do not delete these IDs.
@@ -795,3 +795,5 @@ an accepted decoration/ownership ADR.
 | 2026-08-27 | Accepted ADR 0013 opt-in continuous decoration. Implemented `MBX_HIGHLIGHT=1` (`bash/highlight.bash`, `mbx highlight`) and `MBX_COMP_OVERLAY=1` (`bash/completion.bash`). `HLT-001`/`HLT-002` and `COMP-004` overlay slice move to `validation`; `HLT-003` hostile/latency gates stay `deferred`. |
 | 2026-08-27 | Review close plan for ADR 0013 (`docs/hlt-comp-review-close-plan.md`). Highlight wrap is a no-op until H-1–H-6; overlay leftover is O-1–O-5. Do not mark `HLT-002` or `COMP-004` complete. |
 | 2026-08-27 | Implemented ADR 0013 review-close slices 1–3 (`bash/highlight.bash`, `bash/completion.bash`, module + PTY asserts H-1–H-6, O-1–O-5, M-1). `HLT-002` and `COMP-004` overlay stay `validation`; `HLT-003` stays `deferred`. |
+| 2026-08-27 | Opened `HLT-003` hostile corpus slice (`docs/hlt-003-hostile-gate-plan.md`): UTF-8 lexer advance fix, Rust/Bash strip round-trip, PTY hostile execute-plain and C0 refusal. `HLT-003` moves to `in-progress`; p99 stays `deferred`. |
+| 2026-08-27 | Recorded `HLT-003` slices 1–2: hostile corpus strip round-trip (S-1–S-4), PTY hostile execute-plain (P-1), module C0 refusal (P-2). UTF-8-safe lexer/strip in `highlight.rs` and `bash/highlight.bash`. `HLT-003` stays `in-progress`; p99 `deferred`. |
