@@ -614,10 +614,24 @@ fn insert_restore_signal_and_resize_preserve_stty() {
         .expect("type prefix");
     wait_all(&mut session, &["printf 'MBX_SRCH:a"]);
     send_keyseq(&mut session, DEFAULT_KEYSEQ);
+    wait_all(&mut session, &["MBX_SRCH:alpha"]);
     send_keyseq(&mut session, DEFAULT_RESTORE_KEYSEQ);
-    wait_all(&mut session, &["printf 'MBX_SRCH:a"]);
+    match session.read_until(deadline(8), mbx_pty::DEFAULT_CAPTURE_LIMIT, |output| {
+        let text = mbx_pty::visible_text(output);
+        text.contains("MBX_SRCH:a") && !text.contains("MBX_SRCH:alpha")
+    }) {
+        Ok(_) => {}
+        Err(error) => panic!(
+            "waiting for restore failed: {error} output={:?}",
+            match &error {
+                mbx_pty::PtyError::Timeout(captured) => mbx_pty::visible_text(captured),
+                _ => error.to_string(),
+            }
+        ),
+    }
     session.write_all(&[CTRL_C], deadline(2)).expect("cancel");
     wait_prompt_after_ctrl_c(&mut session);
+    kill_line(&mut session);
     session
         .resize(WinSize { rows: 20, cols: 72 })
         .expect("resize");

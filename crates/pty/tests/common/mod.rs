@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use mbx_pty::{
-    CTRL_C, DEFAULT_CAPTURE_LIMIT, PtyError, PtySession, SpawnOptions, WinSize, visible_contains,
+    DEFAULT_CAPTURE_LIMIT, PtyError, PtySession, SpawnOptions, WinSize, visible_contains,
     visible_text,
 };
 use std::env;
@@ -180,29 +180,40 @@ pub fn wait_all(session: &mut PtySession, needles: &[&str]) -> Vec<u8> {
 }
 
 pub fn wait_prompt_after_ctrl_c(session: &mut PtySession) -> Vec<u8> {
-    let prompt_after_ctrl_c = |output: &[u8]| {
+    // The live editing line is `> typed-text`. Matching `> ` or `^C` on that
+    // line is not a new prompt. A completed interrupt redraws the context
+    // line (`exit 130`) and then a bare input anchor (`\n> `).
+    let new_prompt_after_interrupt = |output: &[u8]| {
         let text = visible_text(output);
-        if !text.contains("> ") {
-            return false;
+        if let Some(idx) = text.find("exit 130") {
+            return text[idx..].contains("\n> ");
         }
-        text.contains("^C") || text.contains("exit 130")
+        text.find("^C")
+            .is_some_and(|idx| text[idx..].contains("\n> "))
     };
-    match session.read_until(deadline(2), DEFAULT_CAPTURE_LIMIT, prompt_after_ctrl_c) {
+    match session.read_until(
+        deadline(2),
+        DEFAULT_CAPTURE_LIMIT,
+        new_prompt_after_interrupt,
+    ) {
         Ok(output) => output,
-        Err(PtyError::Timeout(captured)) if visible_text(&captured).contains("^C") => {
+        Err(PtyError::Timeout(captured)) => {
             session
-                .write_all(&[CTRL_C], deadline(2))
+                .write_all(&[0x03], deadline(2))
                 .expect("second ctrl-c");
-            match session.read_until(deadline(8), DEFAULT_CAPTURE_LIMIT, |output| {
-                visible_contains(output, "> ")
-            }) {
+            match session.read_until(
+                deadline(8),
+                DEFAULT_CAPTURE_LIMIT,
+                new_prompt_after_interrupt,
+            ) {
                 Ok(rest) => {
                     let mut all = captured;
                     all.extend(rest);
                     all
                 }
                 Err(error) => panic!(
-                    "waiting for prompt after second ^C failed: {error} output={:?}",
+                    "waiting for interrupt prompt failed: {error} first={:?} output={:?}",
+                    visible_text(&captured),
                     match &error {
                         PtyError::Timeout(more) => visible_text(more),
                         _ => error.to_string(),
@@ -211,13 +222,16 @@ pub fn wait_prompt_after_ctrl_c(session: &mut PtySession) -> Vec<u8> {
             }
         }
         Err(error) => panic!(
-            "waiting for ^C or exit 130 then prompt failed: {error} output={:?}",
-            match &error {
-                PtyError::Timeout(captured) => visible_text(captured),
-                _ => error.to_string(),
-            }
+            "waiting for interrupt prompt failed: {error} output={:?}",
+            error.to_string()
         ),
     }
+}
+
+pub fn kill_line(session: &mut PtySession) {
+    session
+        .write_all(&[0x15], deadline(2))
+        .expect("ctrl-u kill line");
 }
 
 pub fn type_line(session: &mut PtySession, line: &str) {
