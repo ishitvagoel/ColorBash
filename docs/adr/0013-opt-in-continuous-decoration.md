@@ -60,6 +60,8 @@ menus remain deferred. Latency percentiles stay deferred.
 ## Validation
 
 Plans: `docs/hlt-001-lexer-plan.md`, `docs/hlt-002-integration-plan.md`,
-`docs/comp-004-overlay-plan.md`. Module contracts in `tests/bash/modules.bash`;
+`docs/comp-004-overlay-plan.md`, review leftovers
+`docs/hlt-comp-review-close-plan.md`. Module contracts in `tests/bash/modules.bash`;
 PTY cases in `crates/pty/tests/highlight.rs` and
-`crates/pty/tests/completion_harness.rs` (overlay cases).
+`crates/pty/tests/completion_harness.rs` (overlay cases). Do not treat H-1–H-6
+as satisfied until `bind -X` lists highlight widgets.

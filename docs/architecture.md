@@ -1,8 +1,9 @@
 # Foundation architecture
 
 Status: implemented prototype with the foundation prompt slice, an opt-in
-history sidecar, Strategy A ghost, Strategy A history search, and opt-in
-highlighting/completion overlay (ADR 0013). Dim paint and type-to-filter overlays
+history sidecar, Strategy A ghost, and Strategy A history search. Opt-in
+highlighting and completion overlay are in `validation` (ADR 0013;
+`docs/hlt-comp-review-close-plan.md`). Dim paint and type-to-filter overlays
 remain `deferred`.
 
 ## Scope
@@ -18,9 +19,10 @@ the line buffer, cycle a bounded snapshot with the same chord, and restore the
 typed line with `\C-xl`. Ghost suffixes, search inserts, and editor tokens
 that contain C0 or DEL are refused so Readline redisplay cannot inject
 terminal controls (`HRD-002`). Strategy A history search and ghost are
-unblocked. Opt-in syntax highlighting and completion overlay are implemented
-(ADR 0013). Dim paint and type-to-filter overlays remain `deferred` from this
-MVP.
+unblocked. Opt-in syntax highlighting and completion overlay are in
+`validation` (ADR 0013; wrap/Enter/overlay leftovers in
+`docs/hlt-comp-review-close-plan.md`). Dim paint and type-to-filter overlays
+remain `deferred` from this MVP.
 
 ## System boundary
 
@@ -363,12 +365,12 @@ search remains for operator tools and for ghost when no coprocess is attached.
 `path`, `count`, `clear`, and `delete` are the privacy controls. Command text
 never enters traces.
 
-This slice does not enable a GUI overlay or live highlighting. Strategy A
+This slice does not enable dim paint or a type-to-filter overlay. Strategy A
 ghost is implemented (ADR 0010); Strategy A search insert, cycling, restore,
 cwd preference, and opt-in failed empty-line insert are recorded (ADR 0009).
 Opt-in syntax highlighting (`MBX_HIGHLIGHT=1`) and completion overlay
-(`MBX_COMP_OVERLAY=1`) are implemented (ADR 0013). Dim paint and type-to-filter
-overlays remain `deferred`. Invariance and admission-parity
+(`MBX_COMP_OVERLAY=1`) are in `validation` (ADR 0013;
+`docs/hlt-comp-review-close-plan.md`). Invariance and admission-parity
 PTY evidence is in `crates/pty/tests/history_invariance.rs`. 100k query p95 and
 hostile inertness evidence is in `docs/benchmarks/2026-08-16-history-queries.md`
 and `crates/cli/src/corpus.rs`. Prompt-boundary write-ack PTY and release

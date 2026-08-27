@@ -41,7 +41,8 @@ Canonical status lives in [`docs/roadmap.md`](docs/roadmap.md). Strategy A MVP
 on Linux is `complete` (`G5` 2026-08-27). `G0`–`G4` are complete. `HRD-002`
 hostile-input and `HRD-004` install/removal evidence are recorded. Explicit
 history-search insert is ADR 0009. Opt-in highlighting and completion overlay
-are ADR 0013 (`MBX_HIGHLIGHT=1`, `MBX_COMP_OVERLAY=1`). Dim paint, type-to-filter
+are ADR 0013 (`MBX_HIGHLIGHT=1`, `MBX_COMP_OVERLAY=1`) and remain `validation`
+until `docs/hlt-comp-review-close-plan.md` H-1–H-6 / O-1–O-5. Dim paint, type-to-filter
 overlays, and macOS matrix are **G5 revisit**.
 
 The helper bundles SQLite (`rusqlite` with the `bundled` feature) for the history

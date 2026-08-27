@@ -1,6 +1,7 @@
 # HLT-002: Bash highlight integration
 
-Status: `complete` (2026-08-27). ADR 0013.
+Status: `validation` (2026-08-27). ADR 0013. Wrap/Enter/C0 leftovers:
+`docs/hlt-comp-review-close-plan.md`. Do **not** mark `HLT-002` complete.
 
 ## Goal
 

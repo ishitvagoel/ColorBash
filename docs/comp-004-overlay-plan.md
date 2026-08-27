@@ -1,6 +1,8 @@
 # COMP-004 overlay slice
 
-Status: `complete` (2026-08-27). ADR 0013. Tab stays stock.
+Status: `validation` (2026-08-27). ADR 0013. Tab stays stock. Dismiss/cap/sanitize/draw
+leftovers: `docs/hlt-comp-review-close-plan.md` slice 2. Do **not** mark
+`COMP-004` complete.
 
 ## Goal
 

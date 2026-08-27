@@ -7,9 +7,9 @@
 
 - Last reviewed: 2026-08-27 UTC
 - Current milestone: Strategy A MVP is `complete` on Linux (`G5` 2026-08-27); Phase 9 `complete`; macOS `HRD-001` `deferred` (ADR 0012); `HRD-003` `deferred`; ADR 0013 overlay/highlighting in `validation`
-- Active workstream: G5 revisit — macOS PTY when a host is available; `HLT-003` hostile/latency gates; dim paint; percentile benches
-- Next decision gate: G5 revisit (macOS matrix, `HLT-003`, `HRD-003`, dim paint). Strategy A overlay and highlighting are implemented (ADR 0013); type-to-filter overlays stay deferred
-- Editor-facing work: opt-in ghost suffix is on main (ADR 0010). Async QUERY with stale-generation skip is recorded (ADR 0011). Explicit history-search insert (`\C-xh`), cycling, restore (`\C-xl`), cwd preference, and opt-in failed empty-line insert are recorded (ADR 0009). Opt-in syntax highlighting (`MBX_HIGHLIGHT=1`) and completion overlay (`MBX_COMP_OVERLAY=1`) are recorded (ADR 0013). Dim paint and type-to-filter overlays are `deferred` from this MVP (G5 revisit)
+- Active workstream: ADR 0013 review close (`docs/hlt-comp-review-close-plan.md`); then G5 revisit macOS PTY; `HLT-003`; dim paint; percentile benches
+- Next decision gate: G5 revisit (macOS matrix, `HLT-003`, `HRD-003`, dim paint). Strategy A overlay and highlighting stay `validation` until H-1–H-6 / O-1–O-5; type-to-filter overlays stay deferred
+- Editor-facing work: opt-in ghost suffix is on main (ADR 0010). Async QUERY with stale-generation skip is recorded (ADR 0011). Explicit history-search insert (`\C-xh`), cycling, restore (`\C-xl`), cwd preference, and opt-in failed empty-line insert are recorded (ADR 0009). Opt-in syntax highlighting (`MBX_HIGHLIGHT=1`) and completion overlay (`MBX_COMP_OVERLAY=1`) are in `validation` (ADR 0013; `docs/hlt-comp-review-close-plan.md`). Dim paint and type-to-filter overlays are `deferred` from this MVP (G5 revisit)
 - Timing policy: unmet percentile targets are `deferred` and do not block
   product development (`docs/latency-budget-deferral.md`)
 
@@ -606,9 +606,11 @@ block product slices (`docs/latency-budget-deferral.md`).
 
 1. **G5 revisit** when a macOS host is available: run the `HRD-001` pairwise
    matrix per ADR 0012. Do not fake it on Linux.
-2. **`HLT-003`** hostile-input and latency gates for highlighting; dim paint stays
-   `deferred`. Do not mark `COMP-004` or Phase 6 `complete` until exit evidence
-   exists.
+2. **ADR 0013 review close** (`docs/hlt-comp-review-close-plan.md`): highlight
+   wrap actually installs (H-1–H-6), then overlay dismiss/cap/sanitize/draw
+   (O-1–O-5). `HLT-003` hostile/latency gates stay later. Dim paint stays
+   `deferred`. Do not mark `COMP-004` or Phase 6 `complete` until those asserts
+   exist.
 3. `HRD-003` / `PRM-004` percentiles stay `deferred` unless an ADR ratifies new
    numbers or a functional prompt-path defect is proven.
 4. `GIT-005` provider SDK stays post-MVP `deferred`.
@@ -792,3 +794,4 @@ an accepted decoration/ownership ADR.
 | 2026-08-26 | Fixed engine coprocess SIGINT at the prompt (M-051). Ctrl+C no longer kills `mbx serve` or prints coproc job noise. |
 | 2026-08-27 | Accepted ADR 0012 macOS `HRD-001` deferral. Closed `G5` and Phase 9 for Strategy A MVP on Linux (`docs/g5-strategy-a-close-plan.md`). `HRD-001` Linux `complete`; macOS `deferred`. Overlay/highlighting/percentiles stay `deferred`. |
 | 2026-08-27 | Accepted ADR 0013 opt-in continuous decoration. Implemented `MBX_HIGHLIGHT=1` (`bash/highlight.bash`, `mbx highlight`) and `MBX_COMP_OVERLAY=1` (`bash/completion.bash`). `HLT-001`/`HLT-002` and `COMP-004` overlay slice move to `validation`; `HLT-003` hostile/latency gates stay `deferred`. |
+| 2026-08-27 | Review close plan for ADR 0013 (`docs/hlt-comp-review-close-plan.md`). Highlight wrap is a no-op until H-1–H-6; overlay leftover is O-1–O-5. Do not mark `HLT-002` or `COMP-004` complete. |
