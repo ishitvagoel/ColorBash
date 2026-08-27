@@ -1,120 +1,155 @@
 # MBX — Modern Bash Experience
 
-MBX is an experimental interaction layer for Bash. Bash still parses and runs
-every command; MBX only enriches the prompt and, when explicitly enabled, records
-admitted history in a local sidecar. Suggestions never execute automatically.
+MBX is an experimental interaction layer for **interactive Bash**. Bash still
+parses, expands, and runs every command. MBX only enriches the prompt and, when
+you opt in, records admitted history and offers insert-only suggestions.
 
-## What you can try now
+Suggestions and selections insert ordinary Bash text. They **never execute**
+until you press Enter.
 
-These slices have working code you can exercise in an interactive shell:
+## Requirements
 
-| Feature | How it is enabled | Notes |
-| --- | --- | --- |
-| Adaptive prompt | `source bash/init.bash` | Path, Git, failure, SSH, production |
-| Command duration | `MBX_ENABLE_DURATION_TIMING=1` | Opt-in; prompt shows elapsed time at ≥ 2 s |
-| History sidecar | `MBX_HISTORY=1` | Local SQLite; never rewrites `.bash_history` |
-| Insert token (`bind -x`) | Default chord `Ctrl-X Ctrl-Y` | Inserts text; does not run it |
-| Stock Tab completion | Always | File/`-F` insertion stays Bash; no popup yet |
-| Wrapped `-F` metadata | `_mbx_comp_wrap_existing_f NAME` | Additive kinds/scores; Tab bytes unchanged |
-| Ranked-accept chord | Default `Ctrl-X Ctrl-A` after wrapped Tab | Replaces current word with ranked candidate; Tab stays stock |
-| Ranked-cycle chords | Default `Ctrl-X` `n` / `Ctrl-X` `p` after wrapped Tab | Rotates ranked candidates; Tab stays stock |
-| Completion overlay | `MBX_COMP_OVERLAY=1` after wrapped Tab | `Ctrl-X Ctrl-O` toggles ranked list below prompt; `Ctrl-X` `n`/`p` move selection; `Ctrl-X Ctrl-A` accepts; `Ctrl-X` `j` dismisses (stock `Ctrl-G` `abort` stays) |
-| Syntax highlighting | `MBX_HIGHLIGHT=1` | Wraps `self-insert`; plain bytes execute on Enter; incompatible with `MBX_GHOST=1` |
-| Git completion kinds | Wrap `git` or `mbx_comp_git` fixture | Additive `ref`/`flag`/`file`; no Git subprocess |
-| Fuzzy history search | `MBX_HISTORY=1` then `mbx history search fuzzy TEXT` | Ranks a bounded recent pool |
-| Failed history search | `MBX_HISTORY=1` then `mbx history search failed` | Rows with nonzero exit status |
-| Repository-context history | `MBX_HISTORY=1` in a Git worktree | Stores root/branch; `search repo ROOT` / `search branch NAME` |
-| History ghost suffix | `MBX_HISTORY=1` and `MBX_GHOST=1` | Suggestion after the cursor on ASCII printables in emacs and vi-insert; Enter runs the typed prefix; Right accepts all; Left / Home / Up / Down / Ctrl-Left dismiss; Alt-F / Ctrl-Right accept one word (emacs); Ctrl-Right in vi-insert; Ctrl-X Ctrl-N / Ctrl-P cycle matches |
-| History-search chord | `MBX_HISTORY=1` then `Ctrl-X` `h` | Replaces the line with a sidecar match; empty and typed queries prefer `$PWD`; `MBX_SEARCH_FAILED=1` prefers failed empty-line rows; repeat to cycle; `Ctrl-X` `l` restores; does not run it |
+- Bash 5.x (interactive tty; a pipe is not a real session)
+- Rust **1.85** or newer (`edition = "2024"`; `cargo` 1.83 cannot load this
+  workspace)
+- Git, only if you want the optional Git prompt segment
 
-## What remains
+If several toolchains are installed:
 
-These MVP features are **not** implemented for interactive use:
+```bash
+rustup run 1.85.0 cargo --version
+export RUSTUP_TOOLCHAIN=1.85.0   # optional, for this shell
+```
 
-| Feature | Why it is waiting |
-| --- | --- |
-| Ghost dim / live paint | Opt-in suffix ghost exists (ADR 0010); dim after-every-key styling does not |
-| Type-to-filter Ctrl+R overlay | Explicit `\C-xh` insert exists (ADR 0009); redraw-on-key overlay does not |
-| macOS PTY matrix | `deferred` (ADR 0012); needs a macOS host. Linux nested/SSH/login/vim/tmux PTY is recorded |
+## Quick start
 
-Canonical status lives in [`docs/roadmap.md`](docs/roadmap.md). Strategy A MVP
-on Linux is `complete` (`G5` 2026-08-27). `G0`–`G4` are complete. `HRD-002`
-hostile-input and `HRD-004` install/removal evidence are recorded. Explicit
-history-search insert is ADR 0009. Opt-in highlighting and completion overlay
-are ADR 0013 (`MBX_HIGHLIGHT=1`, `MBX_COMP_OVERLAY=1`) and remain `validation`
-until `docs/hlt-comp-review-close-plan.md` H-1–H-6 / O-1–O-5. Dim paint, type-to-filter
-overlays, and macOS matrix are **G5 revisit**.
-
-The helper bundles SQLite (`rusqlite` with the `bundled` feature) for the history
-store. The protocol crate remains dependency-free. History capture stays off
-unless `MBX_HISTORY=1`.
-
-The helper separates CLI parsing, environment capture, application dispatch,
-request handling, rendering, providers, history policy/storage, transports, and
-telemetry. See [`docs/architecture.md`](docs/architecture.md) for dependency
-direction and the precise limits of the current prompt, history, editor, and
-completion implementations.
-
-## Try the prototype
-
-Requirements: Bash 5.x, Rust 1.85 or newer, and Git for the optional Git segment.
+Build the helper, then source the loader in a **real terminal**:
 
 ```bash
 cargo build --release --workspace
 source "$PWD/bash/init.bash"
 ```
 
-The setup script builds the helper and prints the source command without editing
-your shell configuration:
+`scripts/dev-setup.bash` does the same build and prints the `source` line. It
+does **not** edit `.bashrc`.
 
-```bash
-bash scripts/dev-setup.bash
-```
-
-After validation, add this near the end of `.bashrc` using the repository's
-absolute path:
+After you are happy with it, add this near the end of `.bashrc` using the
+repository's absolute path:
 
 ```bash
 source /absolute/path/to/ColorBash/bash/init.bash
 ```
 
-Disable without uninstalling by leaving the `source` line in place and setting
-`MBX_DISABLE_RENDERER=1` (Bash-only prompt) and/or omitting `MBX_HISTORY=1`
-(no sidecar). Remove MBX by deleting that `source` line and starting a new
-shell; the loader never writes `.bashrc` for you. The optional history file
-is local SQLite under `$XDG_DATA_HOME/mbx/` or `~/.local/share/mbx/` and can
-be deleted with `"$MBX_BIN" history clear` or by removing that directory.
+Disable without uninstalling by leaving that `source` line in place and setting
+`MBX_DISABLE_RENDERER=1` (Bash-only prompt) and/or omitting `MBX_HISTORY=1` (no
+sidecar). Remove MBX by deleting the `source` line and starting a new shell.
+The loader never writes `.bashrc` for you.
 
-Use a real terminal (not a pipe). A piped Bash process is not PTY evidence.
+The optional history file is local SQLite under `$XDG_DATA_HOME/mbx/` or
+`~/.local/share/mbx/`. Empty it with `"$MBX_BIN" history clear`, remove the
+files with `"$MBX_BIN" history delete`, or delete that directory.
 
-## Manual tests
+`MBX_BIN` is set automatically to `target/release/mbx` if present, otherwise
+`target/debug/mbx`. Override it if you keep the binary elsewhere.
 
-Run each scenario after the `source` line above. None of these execute a
-suggestion on your behalf.
+## What to expect in every session
 
-### 1. Prompt
+These rules hold whether a feature is on or off:
+
+1. **Bash owns execution.** Exit status, jobs, aliases, functions, traps,
+   history, completion, and quoting stay ordinary Bash.
+2. **The prompt is two lines.** A context line (path and optional Git, failure,
+   SSH, production, duration) plus a stable `>` input line.
+3. **Helper failure is not a broken shell.** Missing helper, timeout, or
+   malformed output falls back to a usable Bash prompt on that cycle.
+4. **Opt-in features stay off until set to `1`.** Unset `MBX_HISTORY`,
+   `MBX_GHOST`, `MBX_HIGHLIGHT`, and `MBX_COMP_OVERLAY` do nothing.
+5. **Occupied Readline chords are skipped.** MBX does not steal a key unless
+   you set the matching `*_OVERRIDE=1`.
+6. **Use a tty.** Piped `bash -i` is not PTY evidence and will skip
+   self-insert wrapping (ghost and highlight).
+
+## Feature map
+
+| Feature | Enable | Default keys | Executes text? |
+| --- | --- | --- | --- |
+| Adaptive prompt | `source bash/init.bash` | — | No (display only) |
+| Command duration | `MBX_ENABLE_DURATION_TIMING=1` | — | No |
+| History sidecar | `MBX_HISTORY=1` | — | No (records after admission) |
+| History-search insert | `MBX_HISTORY=1` | `Ctrl-X` `h` insert, `Ctrl-X` `l` restore | No until Enter |
+| Ghost suffix | `MBX_HISTORY=1` and `MBX_GHOST=1` | Right accept; Left dismiss; `Ctrl-X Ctrl-N`/`P` cycle | Enter runs **typed prefix only** |
+| Insert token | default on | `Ctrl-X Ctrl-Y` | No until Enter |
+| Stock Tab | always | Tab | No (stock Bash insert) |
+| Ranked accept / cycle | wrap a `-F` completer, then Tab | `Ctrl-X Ctrl-A`; `Ctrl-X` `n`/`p` | No until Enter |
+| Completion overlay | `MBX_COMP_OVERLAY=1` after wrapped Tab | `Ctrl-X Ctrl-O` toggle; `Ctrl-X` `j` dismiss | No until Enter |
+| Syntax highlighting | `MBX_HIGHLIGHT=1` | self-insert wrap | Enter runs **plain** bytes |
+
+Incompatible: **`MBX_GHOST=1` and `MBX_HIGHLIGHT=1` together.** Highlight
+install skips when ghost is enabled.
+
+Not in this MVP: dim after-every-key ghost paint, type-to-filter Ctrl+R
+overlay, macOS PTY matrix. Canonical status: [`docs/roadmap.md`](docs/roadmap.md).
+
+---
+
+## Using and testing each feature
+
+Run each scenario in a real terminal after `source bash/init.bash`. None of
+these execute a suggestion on your behalf.
+
+### 1. Adaptive prompt
+
+**Enable:** source the loader. No extra flag.
+
+**What you should see:**
+
+```text
+~/projects/api  git:main ~2 ?1  exit 1
+>
+```
+
+| Segment | When it appears | Meaning |
+| --- | --- | --- |
+| path | always | Compact cwd; `~` for `$HOME` |
+| `git:branch` | Git worktree, Git not disabled | Current branch or detached fallback |
+| `+N` | staged changes | Index count |
+| `~N` | unstaged changes | Worktree count |
+| `?N` | untracked files | Untracked count |
+| `exit N` | previous command failed | Exact status, never color-only |
+| `ssh:host` | SSH session, not production | Host label |
+| `! PROD · host · user` | `MBX_PRODUCTION_CONTEXT=1` | Replaces SSH; never color-only |
+| duration | opt-in timing, ≥ 2 s | Elapsed time of last command |
+
+**Try:**
 
 ```bash
 cd ~
 false
 ```
 
-Expect a two-line prompt: a context line (path; `exit 1` after `false`) and a
-stable `>` input line. In a Git checkout you should also see `git:branch` and
-optional `+N` / `~N` / `?N` counts.
+Expect `exit 1` on the next context line and a usable `>` prompt.
 
 ```bash
 MBX_PRODUCTION_CONTEXT=1 bash --noprofile --norc
 source /absolute/path/to/ColorBash/bash/init.bash
 ```
 
-Expect a prominent production marker (never color-only). `MBX_DISABLE_GIT=1`
-omits Git discovery. `MBX_DISABLE_RENDERER=1` uses the Bash-only fallback; the
-shell stays usable if the helper is missing.
+Expect a prominent `! PROD` marker. `MBX_DISABLE_GIT=1` omits Git discovery.
+`MBX_DISABLE_RENDERER=1` uses the Bash-only fallback. `MBX_COLOR=never`,
+`NO_COLOR`, and `TERM=dumb` render plain text.
 
-### 2. Duration (opt-in)
+**Check it is installed:**
 
-Only enable this when no `DEBUG` trap is already installed. Default install
+```bash
+[[ -n $MBX_BIN && -x $MBX_BIN ]] && echo "helper=$MBX_BIN"
+"$MBX_BIN" handshake
+```
+
+**Automated:** `bash tests/bash/modules.bash`, `cargo test -p mbx-pty --test foundation`.
+
+### 2. Command duration (opt-in)
+
+**Enable only when no `DEBUG` trap is already installed.** Default install
 never installs `DEBUG`.
 
 ```bash
@@ -123,8 +158,8 @@ source /absolute/path/to/ColorBash/bash/init.bash
 sleep 3
 ```
 
-Expect elapsed time on the next prompt (shown at ≥ 2 s). `trap -p DEBUG` after
-a default (timing-off) install must match the pre-source trap.
+**Expect:** elapsed time on the next prompt (shown at ≥ 2 s). After a default
+(timing-off) install, `trap -p DEBUG` must match the pre-source trap.
 
 ### 3. History sidecar (opt-in)
 
@@ -133,6 +168,7 @@ MBX_HISTORY=1 bash --noprofile --norc
 source /absolute/path/to/ColorBash/bash/init.bash
 echo hello-mbx
 "$MBX_BIN" history count
+"$MBX_BIN" history path
 "$MBX_BIN" history search recent --limit 5
 "$MBX_BIN" history search prefix echo --cwd "$PWD" --limit 5
 "$MBX_BIN" history search prefix echo --limit 5
@@ -141,108 +177,35 @@ echo hello-mbx
 "$MBX_BIN" history search failed --limit 5
 "$MBX_BIN" history search repo "$PWD" --limit 5
 "$MBX_BIN" history search branch "$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" --limit 5
-"$MBX_BIN" history path
 ```
 
-The first prompt after source is not recorded. Later admitted commands appear
-in search. `.bash_history` is not rewritten. `MBX_HISTORY_EXCLUDE='echo *'`
-drops matching commands. `history path|count|clear|delete` also work as
-`"$MBX_BIN" history …`. Stored command text is plaintext local data.
+**Expect:**
 
-### 4. Insert token (`bind -x`)
+- The first prompt after `source` is **not** recorded.
+- Later **admitted** commands appear in search (same rules as Bash history:
+  `ignorespace`, `ignoredups`, `HISTIGNORE`, `set +o history` still apply).
+- `.bash_history` is not rewritten.
+- `MBX_HISTORY_EXCLUDE='echo *'` drops matching commands (colon-separated globs).
+- In a Git worktree, rows store repository root and branch for `search repo` /
+  `search branch`.
+- Stored command text is plaintext **local** data. It never goes to telemetry.
 
-Default chord is `Ctrl-X` then `Ctrl-Y`. The default token is a test sentinel
-(`printf 'MBX_EDT:ok\n'`). For a safer try, insert a word instead:
+`"$MBX_BIN" history clear` empties rows; `"$MBX_BIN" history delete` removes
+the SQLite files (`-wal`/`-shm` included). `"$MBX_BIN" history path` prints the
+store location.
 
-```bash
-MBX_EDITOR_INSERT_TOKEN=hello bash --noprofile --norc
-source /absolute/path/to/ColorBash/bash/init.bash
-```
+**Automated:** `cargo test -p mbx-pty --test history_recording`,
+`--test history_invariance`, `--test history_admission`.
 
-Type `echo `, press `Ctrl-X Ctrl-Y`, then type more text. The token appears at
-the cursor and is **not** run until you press Enter. If that chord is already
-bound, MBX leaves it alone unless `MBX_EDITOR_OVERRIDE=1`.
+### 4. History-search chord (`Ctrl-X` `h`)
 
-### 5. Stock Tab completion
+Requires `MBX_HISTORY=1`. Stock `Ctrl-R` reverse-i-search and
+`Ctrl-X Ctrl-R` re-read-init-file stay unchanged.
 
-Default install does **not** wrap `ls` or `printf`. Create a unique file and
-Tab-complete it:
-
-```bash
-touch MBX_COMP_UNIQUE
-printf 'GOT:%s|\n' MBX_COMP_U
-```
-
-Press Tab, then Enter. Expect `GOT:MBX_COMP_UNIQUE|` (stock Bash quoting). There
-is no completion popup.
-
-### 6. Wrapped `-F` metadata (developer)
-
-This is an adapter harness, not a menu. Wrap one existing `-F` completer, Tab as
-usual, then inspect parallel arrays. Insertion bytes stay stock.
-
-```bash
-# After source bash/init.bash in an interactive shell:
-_mbx_comp_wrap_existing_f git   # skip if git has no -F spec
-git sta
-```
-
-Press Tab. The line should match stock Git completion. Then:
-
-```bash
-printf 'kinds=%s scores=%s order=%s\n' \
-  "${#_MBX_COMP_KINDS[@]}" "${#_MBX_COMP_SCORES[@]}" "${#_MBX_COMP_ORDER[@]}"
-```
-
-Do not set `MBX_COMP_FIXTURES=1` in a daily shell; that flag is for automated
-tests only.
-
-### 7. Ranked-accept and cycle chords (`bind -x`)
-
-After Tab on a wrapped `-F` completion, MBX records `_MBX_COMP_RANKED_REPLY`
-(top of `_MBX_COMP_ORDER`). Default chord is `Ctrl-X` then `Ctrl-A`. It replaces
-the current word with that candidate when the word is a prefix of it, and does
-not execute the text. Tab insertion bytes stay stock.
-
-```bash
-# After source bash/init.bash in an interactive shell:
-_mbx_comp_wrap_existing_f git   # skip if git has no -F spec
-git sta
-```
-
-Press Tab (stock insertion), then `Ctrl-X Ctrl-A` to replace the current word
-with the top-ranked candidate. `Ctrl-X` then `n` / `p` cycle next and previous
-ranked candidates once the current word equals that candidate.
-If a chord is already bound, MBX leaves it alone unless
-`MBX_COMP_ACCEPT_OVERRIDE=1` or `MBX_COMP_CYCLE_OVERRIDE=1`.
-
-### 8. History ghost suffix (opt-in)
-
-```bash
-MBX_HISTORY=1 MBX_GHOST=1 bash --noprofile --norc
-source /absolute/path/to/ColorBash/bash/init.bash
-echo unique-ghost-alpha
-```
-
-Type `echo unique-ghost-a` and pause. The rest of the previous command should
-appear after the cursor. Enter runs only what you typed. Right Arrow then Enter
-accepts the full suggestion. Left Arrow dismisses the suggestion and moves
-into the typed prefix. Home and Ctrl-P do the same before their stock motion.
-Ctrl-N after Ctrl-P restores the remembered typed prefix.
-Alt-F or Ctrl-Right accepts one word in emacs;
-Ctrl-Right does in vi-insert (`set -o vi`). Ctrl-X Ctrl-N
-and Ctrl-X Ctrl-P cycle other prefix matches. The suffix is ordinary command
-text, not dim paint.
-
-### 9. History-search chord (`bind -x`)
-
-Requires `MBX_HISTORY=1`. Default chord is `Ctrl-X` then `h` so stock
-`Ctrl-R` reverse-i-search and `Ctrl-X Ctrl-R` re-read-init-file stay
-unchanged. The chord replaces the whole line with a sidecar match (exact
-prefix, then fuzzy; empty and typed queries prefer `$PWD`, then newest
-rows) and does **not** run it until Enter. Press the chord again to cycle
-the bounded snapshot (default 8 matches). `Ctrl-X` then `l` restores the typed
-line without running the match. The snapshot clears at the next prompt.
+The chord **replaces the whole line** with a sidecar match (exact prefix, then
+fuzzy). Empty and typed queries prefer `$PWD`, then newest rows. It does **not**
+run the match. Press the chord again to cycle a bounded snapshot (default 8,
+max 16). `Ctrl-X` then `l` restores the typed line.
 
 ```bash
 MBX_HISTORY=1 bash --noprofile --norc
@@ -254,13 +217,221 @@ printf 'MBX_SRCH:beta\n'
 At the next prompt type `printf 'MBX_SRCH:a` and press `Ctrl-X` then `h`, then
 Enter. Expect `MBX_SRCH:alpha`. An empty line plus the same chord inserts the
 newest row from `$PWD` (or the global newest if this directory has no rows).
-Repeat the chord to cycle older matches. `Ctrl-X` then `l` puts the
-typed prefix back. If that chord is already bound, MBX leaves it alone unless
+`MBX_SEARCH_FAILED=1` prefers failed empty-line rows first.
+`MBX_SEARCH_CWD=0` uses global recent only on an empty line.
+
+If the chord is already bound, MBX leaves it alone unless
 `MBX_SEARCH_OVERRIDE=1` (insert) or `MBX_SEARCH_RESTORE_OVERRIDE=1` (restore).
+
+**Automated:** `cargo test -p mbx-pty --test history_search`.
+
+### 5. History ghost suffix (opt-in)
+
+Requires `MBX_HISTORY=1` **and** `MBX_GHOST=1`. Do not combine with
+`MBX_HIGHLIGHT=1`. Needs a tty.
+
+```bash
+MBX_HISTORY=1 MBX_GHOST=1 bash --noprofile --norc
+source /absolute/path/to/ColorBash/bash/init.bash
+echo unique-ghost-alpha
+```
+
+Type `echo unique-ghost-a` and pause. The rest of the previous command should
+appear **after the cursor** as ordinary command text (not dim paint).
+
+| Key | Effect |
+| --- | --- |
+| Enter | Runs **only what you typed** (suffix discarded) |
+| Right Arrow | Accepts the full suggestion into the line |
+| Left / Home / Ctrl-Left | Dismisses the suffix, then stock motion |
+| Up / Down / Ctrl-P | Dismiss, then stock history motion |
+| Ctrl-N after Ctrl-P | Restores the remembered typed prefix |
+| Alt-F / Ctrl-Right (emacs) | Accept one word |
+| Ctrl-Right (vi-insert) | Accept one word |
+| `Ctrl-X Ctrl-N` / `Ctrl-X Ctrl-P` | Cycle other prefix matches |
+
+**Check:** `_MBX_GHOST_BOUND` should be `1` after install.
+
+**Automated:** `cargo test -p mbx-pty --test ghost`.
+
+### 6. Insert token (`Ctrl-X Ctrl-Y`)
+
+Default token is a test sentinel (`printf 'MBX_EDT:ok\n'`). For a safer try:
+
+```bash
+MBX_EDITOR_INSERT_TOKEN=hello bash --noprofile --norc
+source /absolute/path/to/ColorBash/bash/init.bash
+```
+
+Type `echo `, press `Ctrl-X Ctrl-Y`, then type more text. The token appears at
+the cursor and is **not** run until Enter. Tokens with C0/DEL bytes are refused.
+If that chord is already bound, MBX leaves it alone unless
+`MBX_EDITOR_OVERRIDE=1`.
+
+**Automated:** `cargo test -p mbx-pty --test editor_bind_x`.
+
+### 7. Stock Tab completion
+
+Default install does **not** wrap `ls` or `printf`. Tab stays stock Bash.
+
+```bash
+touch MBX_COMP_UNIQUE
+printf 'GOT:%s|\n' MBX_COMP_U
+```
+
+Press Tab, then Enter. Expect `GOT:MBX_COMP_UNIQUE|` (stock Bash quoting). There
+is no popup unless you enable the overlay (section 9) **and** wrap a `-F`
+completer.
+
+**Automated:** `bash tests/bash/smoke.bash`, completion cases in
+`crates/pty/tests/completion_harness.rs`.
+
+### 8. Wrapped `-F` completion, ranked accept, and cycle
+
+This is an adapter around an existing Bash `-F` completer, not a replacement
+for Tab. Wrap one command, Tab as usual, then optionally accept or cycle the
+ranked candidate.
+
+```bash
+# After source bash/init.bash in an interactive shell:
+_mbx_comp_wrap_existing_f git   # skip if git has no -F spec
+git sta
+```
+
+Press Tab. Insertion bytes should match stock Git completion.
+
+Then:
+
+- `Ctrl-X Ctrl-A` replaces the **current word** with the top-ranked candidate
+  when that word is still a prefix of it (and still at the Tab snapshot
+  offset). It does not execute.
+- `Ctrl-X` then `n` / `p` rotate next / previous ranked candidates once the
+  current word equals the ranked reply.
+- The snapshot clears at the next prompt. A later unrelated word is left
+  unchanged.
+
+Inspect metadata after Tab (developer):
+
+```bash
+printf 'kinds=%s scores=%s order=%s ranked=%s\n' \
+  "${#_MBX_COMP_KINDS[@]}" "${#_MBX_COMP_SCORES[@]}" \
+  "${#_MBX_COMP_ORDER[@]}" "${_MBX_COMP_RANKED_REPLY-}"
+```
+
+Do **not** set `MBX_COMP_FIXTURES=1` in a daily shell; that flag defines test
+commands only.
+
+Occupied chords are skipped unless `MBX_COMP_ACCEPT_OVERRIDE=1` or
+`MBX_COMP_CYCLE_OVERRIDE=1`.
+
+**Automated:** `cargo test -p mbx-pty --test completion_harness`.
+
+### 9. Completion overlay (opt-in)
+
+Requires `MBX_COMP_OVERLAY=1` **and** a wrapped `-F` completer (section 8).
+Tab itself stays stock; the overlay is a metadata list below the prompt.
+
+```bash
+MBX_COMP_OVERLAY=1 bash --noprofile --norc
+source /absolute/path/to/ColorBash/bash/init.bash
+_mbx_comp_wrap_existing_f git
+git sta
+```
+
+Press Tab (stock insert), then `Ctrl-X Ctrl-O`.
+
+**Expect:** up to **eight** ranked rows drawn below the prompt. The selected
+row is bold with a `>` marker; optional kind/description appear in muted
+text. Display bytes are sanitized (no raw controls).
+
+| Key | Effect |
+| --- | --- |
+| `Ctrl-X Ctrl-O` | Toggle the list (show / hide) |
+| `Ctrl-X` `n` / `p` | Move selection while visible (does not steal ghost cycle keys) |
+| `Ctrl-X Ctrl-A` | Insert the **selected** candidate (ranked-accept) |
+| `Ctrl-X` `j` | Dismiss and clear |
+| `Ctrl-G` | Unchanged stock `abort` |
+
+**Check:** `_MBX_COMP_OVERLAY_BOUND` is `1` and `bind -X` lists
+`_mbx_comp_overlay_toggle`. `bind -p` still shows `"\C-g": abort`.
+
+**Automated:** `bash tests/bash/modules.bash` (O-1–O-5),
+`cargo test -p mbx-pty --test completion_harness overlay_lists ranked_accept_works_with_overlay_env`.
+
+### 10. Syntax highlighting (opt-in)
+
+Requires `MBX_HIGHLIGHT=1`. Needs a tty. **Skipped** when `MBX_GHOST=1`.
+
+```bash
+MBX_HIGHLIGHT=1 bash --noprofile --norc
+source /absolute/path/to/ColorBash/bash/init.bash
+```
+
+Type `if echo "$HOME"; then true; fi # note`. Keywords, quotes, variables,
+operators, numbers, and comments should take color; ordinary words stay
+default. Incomplete quotes are still classified (tolerant lexer). Lines over
+4 KiB or containing NUL stay unstyled.
+
+| Color (16-color SGR) | Token |
+| --- | --- |
+| bold blue | keywords (`if`, `then`, `export`, …) |
+| green | quoted / backtick strings |
+| yellow | `$var`, `${…}`, `$(…)` |
+| magenta | operators |
+| cyan | numbers |
+| gray | comments (`#` to end of line) |
+
+**Enter runs the plain command**, not the styled buffer. Motion (Left / Right /
+Home) dismisses styling, then moves the cursor on the plain bytes. Helper
+failure leaves the line unstyled and usable.
+
+**Check:**
+
+```bash
+printf 'bound=%s\n' "${_MBX_HIGHLIGHT_BOUND-}"
+bind -X | grep _mbx_highlight_self_insert
+```
+
+Both should succeed (`bound=1` and a widget listed). If wrap could not arm
+Enter, `_MBX_HIGHLIGHT_BOUND` stays `0` and highlighting is a no-op.
+
+C0 control bytes are not inserted. You can also exercise the helper without a
+shell:
+
+```bash
+"$MBX_BIN" highlight 'if true; then echo "$HOME"; fi # c' --point 0
+"$MBX_BIN" highlight 'ls /tmp/中文/café' --no-color
+```
+
+`--no-color` (or a non-tty) returns the exact input bytes.
+
+**Automated:** `cargo test -p mbx highlight::`,
+`cargo test -p mbx-pty --test highlight`, highlight contracts in
+`bash tests/bash/modules.bash`.
+
+---
+
+## Combining features
+
+| Combination | Result |
+| --- | --- |
+| Prompt + any opt-in | Supported |
+| `MBX_HISTORY=1` + search chord | Supported |
+| `MBX_HISTORY=1` + `MBX_GHOST=1` | Supported |
+| `MBX_HIGHLIGHT=1` + overlay | Supported (independent) |
+| Overlay + ranked accept/cycle | Overlay uses the same snapshot |
+| `MBX_GHOST=1` + `MBX_HIGHLIGHT=1` | **Unsupported**; highlight does not install |
+| Overlay + stock Tab without wrap | Overlay has nothing to show |
+
+Ghost cycle (`Ctrl-X Ctrl-N` / `Ctrl-X Ctrl-P`) and completion cycle
+(`Ctrl-X` `n` / `Ctrl-X` `p`) are different chords on purpose.
 
 ## Prototype controls
 
+Group by feature. Unset means off for opt-in flags that require `=1`.
+
 ```bash
+# Prompt
 MBX_COLOR=never                 # force plain text
 MBX_ICONS=never                 # text fallbacks (default auto is also font-safe)
 MBX_ICONS=nerd                  # opt in to Nerd Font glyphs
@@ -270,48 +441,125 @@ MBX_IPC_MODE=coprocess          # auto | coprocess | per-call | off
 MBX_RENDER_TIMEOUT=0.10         # total native/fallback attempt budget in seconds
 MBX_PRODUCTION_CONTEXT=1        # show the prominent production state
 MBX_ENABLE_DURATION_TIMING=1    # opt in only when no DEBUG trap is already used
+
+# History sidecar
 MBX_HISTORY=1                   # opt in to the local history sidecar
 MBX_HISTORY_EXCLUDE='git *'     # colon-separated glob exclusions
-MBX_GHOST=1                     # opt-in history suffix after the cursor (needs MBX_HISTORY=1)
+
+# Ghost suffix (needs MBX_HISTORY=1; incompatible with MBX_HIGHLIGHT=1)
+MBX_GHOST=1
 MBX_GHOST_OVERRIDE=1            # overwrite occupied ghost self-insert keys
 MBX_GHOST_LIMIT=8               # max prefix matches collected for cycling (1-8)
 MBX_GHOST_DELETE_KEYSEQ='\C-x\C-d' # delete-char helper used by Enter while a suffix is shown
 MBX_GHOST_ACCEPT_KEYSEQ='\C-x\C-m' # accept-line helper used by that Enter macro
 MBX_GHOST_NEXT_KEYSEQ='\C-x\C-n'   # cycle to the next prefix match
 MBX_GHOST_PREV_KEYSEQ='\C-x\C-p'   # cycle to the previous prefix match
-MBX_EDITOR_INSERT_TOKEN=hello   # text inserted by Ctrl-X Ctrl-Y
-MBX_EDITOR_INSERT_KEYSEQ='\C-x\C-y'
-MBX_EDITOR_OVERRIDE=1           # overwrite an occupied insert chord
-MBX_COMP_ACCEPT_KEYSEQ='\C-x\C-a'  # ranked-accept chord (default)
-MBX_COMP_ACCEPT_OVERRIDE=1      # overwrite an occupied ranked-accept chord
-MBX_COMP_CYCLE_NEXT_KEYSEQ='\C-xn'  # ranked-cycle next (not ghost Ctrl-X Ctrl-N)
-MBX_COMP_CYCLE_PREV_KEYSEQ='\C-xp'  # ranked-cycle previous (not ghost Ctrl-X Ctrl-P)
-MBX_COMP_CYCLE_OVERRIDE=1       # overwrite occupied ranked-cycle chords
-MBX_SEARCH_KEYSEQ='\C-xh'       # history-search chord (default; does not steal Ctrl-R)
-MBX_SEARCH_OVERRIDE=1           # overwrite an occupied search chord
-MBX_SEARCH_RESTORE_KEYSEQ='\C-xl'  # restore typed line (default)
-MBX_SEARCH_RESTORE_OVERRIDE=1   # overwrite an occupied restore chord
-MBX_SEARCH_TIMEOUT=0.10         # helper budget for one search insert
-MBX_SEARCH_LIMIT=8              # bounded snapshot size for cycling (max 16)
+
+# History-search chord
+MBX_SEARCH_KEYSEQ='\C-xh'
+MBX_SEARCH_OVERRIDE=1
+MBX_SEARCH_RESTORE_KEYSEQ='\C-xl'
+MBX_SEARCH_RESTORE_OVERRIDE=1
+MBX_SEARCH_TIMEOUT=0.10
+MBX_SEARCH_LIMIT=8              # bounded snapshot size (max 16)
 MBX_SEARCH_CWD=0                # empty-line search uses global recent only
 MBX_SEARCH_FAILED=1             # empty-line search prefers failed rows first
-MBX_LOG=trace                   # helper timing/events; never logs command text
+
+# Editor insert token
+MBX_EDITOR_INSERT_TOKEN=hello
+MBX_EDITOR_INSERT_KEYSEQ='\C-x\C-y'
+MBX_EDITOR_OVERRIDE=1
+
+# Ranked completion
+MBX_COMP_ACCEPT_KEYSEQ='\C-x\C-a'
+MBX_COMP_ACCEPT_OVERRIDE=1
+MBX_COMP_CYCLE_NEXT_KEYSEQ='\C-xn'
+MBX_COMP_CYCLE_PREV_KEYSEQ='\C-xp'
+MBX_COMP_CYCLE_OVERRIDE=1
+
+# Completion overlay (needs a wrapped -F completer)
+MBX_COMP_OVERLAY=1
+MBX_COMP_OVERLAY_KEYSEQ='\C-x\C-o'
+MBX_COMP_OVERLAY_OVERRIDE=1
+MBX_COMP_OVERLAY_DISMISS_KEYSEQ='\C-xj'
+
+# Syntax highlighting (incompatible with MBX_GHOST=1)
+MBX_HIGHLIGHT=1
+MBX_HIGHLIGHT_OVERRIDE=1
+MBX_HIGHLIGHT_TIMEOUT=0.05
+MBX_HIGHLIGHT_ACCEPT_KEYSEQ='\C-x\C-m'
+
+# Diagnostics (never logs command text)
+MBX_LOG=trace
 ```
 
 `NO_COLOR` and `TERM=dumb` are respected. If the helper is missing or exits, the
 shell continues with a Bash-only prompt.
 
-## Verify
+## Automated tests
+
+Canonical suite (format, build, unit tests, Clippy with warnings denied, Bash
+syntax, module contracts, protocol integration, compatibility smoke):
 
 ```bash
+# Required on hosts whose default cargo is older than 1.85:
+export RUSTUP_TOOLCHAIN=1.85.0
 bash tests/run.bash
+```
+
+Focused checks while developing a feature:
+
+```bash
+bash tests/bash/modules.bash
+bash tests/integration/protocol.bash target/debug/mbx
+bash tests/bash/smoke.bash target/debug/mbx
+
+cargo test -p mbx highlight::
+cargo test -p mbx-pty --test foundation
+cargo test -p mbx-pty --test highlight
+cargo test -p mbx-pty --test ghost
+cargo test -p mbx-pty --test completion_harness
+cargo test -p mbx-pty --test history_search
+cargo test -p mbx-pty --test history_recording
+cargo test -p mbx-pty --test editor_bind_x
+```
+
+A piped interactive Bash process is **not** PTY evidence. Terminal interaction
+claims require the PTY harness under `crates/pty/tests/`.
+
+Optional latency (release helper; percentiles are `deferred` and do not gate
+product work):
+
+```bash
+cargo build --release --workspace
 MBX_BENCH_ITERATIONS=1000 bash scripts/benchmark-prompt.bash target/release/mbx
 MBX_BENCH_ITERATIONS=1000 bash scripts/benchmark-ipc.bash target/release/mbx
 ```
 
-The IPC benchmark needs permission to create a local Unix-domain socket. See
-[`docs/architecture.md`](docs/architecture.md) for the current recommendation and
-the reassessment gate.
+The IPC benchmark needs permission to create a local Unix-domain socket.
+
+## What remains
+
+These MVP leftovers are **not** available for interactive use:
+
+| Feature | Why it is waiting |
+| --- | --- |
+| Ghost dim / live paint | Opt-in suffix ghost exists (ADR 0010); dim after-every-key styling does not |
+| Type-to-filter Ctrl+R overlay | Explicit `\C-xh` insert exists (ADR 0009); redraw-on-key overlay does not |
+| macOS PTY matrix | `deferred` (ADR 0012); needs a macOS host. Linux nested/SSH/login/vim/tmux PTY is recorded |
+
+Strategy A MVP on Linux is `complete` (`G5` 2026-08-27). Opt-in highlighting and
+completion overlay are ADR 0013 and remain `validation` until remaining
+`HLT-003` latency leftovers are settled. Dim paint, type-to-filter overlays,
+and macOS matrix are **G5 revisit**.
+
+The helper bundles SQLite (`rusqlite` with the `bundled` feature) for the
+history store. The protocol crate remains dependency-free. History capture
+stays off unless `MBX_HISTORY=1`.
+
+See [`docs/architecture.md`](docs/architecture.md) for dependency direction and
+the limits of the current prompt, history, editor, and completion
+implementations.
 
 ## Documentation
 
@@ -320,16 +568,15 @@ cumulative [`MISTAKES.md`](MISTAKES.md) before planning or editing.
 
 - [`docs/roadmap.md`](docs/roadmap.md) — canonical delivery status, gates, and
   next work
-- [`docs/solid-hardening-checklist.md`](docs/solid-hardening-checklist.md) —
-  completed bounded SOLID findings and validation evidence
+- [`docs/ux-spec.md`](docs/ux-spec.md) — prompt hierarchy and interaction
+  principles
 - [`docs/architecture.md`](docs/architecture.md)
-- [`docs/ux-spec.md`](docs/ux-spec.md)
 - [`docs/bash-compatibility.md`](docs/bash-compatibility.md)
-- [`docs/protocol.md`](docs/protocol.md)
-- [`docs/protocol-mbx2.md`](docs/protocol-mbx2.md)
-- [`docs/history-phase3a-contract.md`](docs/history-phase3a-contract.md)
-- [`docs/research/bash-readline-investigation.md`](docs/research/bash-readline-investigation.md)
-- [`docs/benchmarks/`](docs/benchmarks/)
-- [`docs/adr/`](docs/adr/)
+- [`docs/protocol.md`](docs/protocol.md) / [`docs/protocol-mbx2.md`](docs/protocol-mbx2.md)
+- [`docs/hlt-002-integration-plan.md`](docs/hlt-002-integration-plan.md) /
+  [`docs/hlt-003-hostile-gate-plan.md`](docs/hlt-003-hostile-gate-plan.md) /
+  [`docs/comp-004-overlay-plan.md`](docs/comp-004-overlay-plan.md)
+- [`docs/adr/`](docs/adr/) — especially ADR 0009 (search), 0010 (ghost), 0013
+  (highlight + overlay)
 - [`CODEX_MODERN_BASH_ARCHITECTURE.md`](CODEX_MODERN_BASH_ARCHITECTURE.md) —
   originating product brief and long-term intent
