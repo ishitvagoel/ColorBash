@@ -33,7 +33,7 @@ const KEYWORDS: &[&str] = &[
 ];
 
 fn keyword_kind(word: &str) -> TokenKind {
-    if KEYWORDS.iter().any(|keyword| *keyword == word) {
+    if KEYWORDS.contains(&word) {
         TokenKind::Keyword
     } else {
         TokenKind::Word

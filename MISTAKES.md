@@ -485,12 +485,16 @@ to prevent recurrence, not to assign blame.
   Linux and macOS without a cast, the history assertion uses slice `contains()`
   directly, completed provider output is assembled through `Option`
   combinators, and the executable probe assertion uses `slice::from_ref`.
+  Recurrence (2026-08-27, Clippy 1.98 `manual_contains`): highlight keyword
+  membership used `KEYWORDS.iter().any(|keyword| *keyword == word)` and failed
+  CI `-D warnings`; it now uses `KEYWORDS.contains(&word)`.
 - Prevention: keep CI on stable Clippy, fix new lints without blanket allows,
   and model platform-dependent FFI widths explicitly rather than casting tests
   to the current host type.
 - Evidence: `crates/pty/tests/driver.rs`,
-  `crates/pty/tests/history_admission.rs`, `crates/cli/src/provider.rs`, and the
-  warnings-denied Clippy gate.
+  `crates/pty/tests/history_admission.rs`, `crates/cli/src/provider.rs`,
+  `keyword_kind` in `crates/cli/src/highlight.rs`, and the warnings-denied
+  Clippy gate.
 
 ## M-026 — Greedy `history 1` stripping dropped a leading space
 
