@@ -351,7 +351,11 @@ to prevent recurrence, not to assign blame.
   lost the final expected row during helper teardown. It recurred again in the
   HIST-007 write-ack W-5 harness, which ran `true` and waited only for `> `, so
   a leftover prompt could satisfy the wait before ACK samples were written
-  (first release run collected 0 samples).
+  (first release run collected 0 samples). Recurrence (2026-08-27, GitHub
+  Actions): `next_prompt_usable_after_insert_and_ctrl_c` waited only for `^C`
+  then typed `printf`; under CI load the next prompt was not ready, so the
+  first byte was lost (`rintf`) and the follow-up never printed
+  `MBX_EDT:after_cancel`.
 - Correction: waits that must observe a full output-plus-prompt sequence use one
   predicate requiring every needle in one read (`wait_all`). History content is
   read from the `HISTFILE` on disk after a sourced dump script prints a marker
@@ -359,7 +363,9 @@ to prevent recurrence, not to assign blame.
   readline echo or prompt timing. History-recording tests likewise wait for
   output plus the next prompt, then poll for the asynchronous commit while the
   helper remains alive before exiting the shell. Write-ack W-5 now types
-  `echo bench-{n}` and `wait_all`s for the echoed marker plus `> `.
+  `echo bench-{n}` and `wait_all`s for the echoed marker plus `> `. The editor
+  Ctrl+C follow-up waits until `> ` appears after `^C` in the same capture
+  before typing.
 - Prevention: when a test needs both a command's output and the following
   prompt, wait for both in a single read; never re-wait after a match that may
   have consumed the trailing prompt. Synchronize on asynchronous artifacts
@@ -368,7 +374,8 @@ to prevent recurrence, not to assign blame.
 - Evidence: `crates/pty/tests/history_admission.rs`,
   `crates/pty/tests/history_recording.rs`,
   `crates/pty/tests/multiline_width.rs`,
-  `crates/pty/tests/history_write_ack.rs`, and
+  `crates/pty/tests/history_write_ack.rs`,
+  `crates/pty/tests/editor_bind_x.rs`, and
   `docs/research/bash-history-admission.md`.
 
 ## M-020 — History-off `HISTCMD` behavior was asserted without evidence

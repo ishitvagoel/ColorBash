@@ -50,6 +50,23 @@ fn wait_prompt(session: &mut PtySession) {
     wait_all(session, &["> "]);
 }
 
+fn wait_prompt_after_ctrl_c(session: &mut PtySession) -> Vec<u8> {
+    match session.read_until(deadline(8), mbx_pty::DEFAULT_CAPTURE_LIMIT, |output| {
+        let text = visible_text(output);
+        text.find("^C")
+            .is_some_and(|idx| text[idx..].contains("> "))
+    }) {
+        Ok(output) => output,
+        Err(error) => panic!(
+            "waiting for ^C then prompt failed: {error} output={:?}",
+            match &error {
+                mbx_pty::PtyError::Timeout(captured) => visible_text(captured),
+                _ => error.to_string(),
+            }
+        ),
+    }
+}
+
 fn send_keyseq(session: &mut PtySession, keyseq: &[u8]) {
     session
         .write_all(keyseq, deadline(2))
@@ -180,10 +197,15 @@ fn next_prompt_usable_after_insert_and_ctrl_c() {
     wait_prompt(&mut session);
     send_keyseq(&mut session, DEFAULT_KEYSEQ);
     session.write_all(&[CTRL_C], deadline(2)).expect("cancel");
-    // The initial prompt already contains "> ", so wait for Bash's Ctrl+C
-    // echo before typing the follow-up. Otherwise printf can land on the
-    // same line as ^C while the coprocess Interrupt notice eats a byte.
-    wait_all(&mut session, &["^C"]);
+    // Wait until the next prompt appears after ^C. Waiting for ^C alone can
+    // return before Readline is ready, so the follow-up's first byte is lost
+    // (`rintf`) under CI load (M-019).
+    let after_cancel = wait_prompt_after_ctrl_c(&mut session);
+    assert!(
+        !visible_text(&after_cancel).contains("coproc _MBX_ENGINE_COPROC"),
+        "Ctrl+C must not SIGINT the engine coprocess: {}",
+        visible_text(&after_cancel)
+    );
     session
         .write_str("printf 'MBX_EDT:after_cancel\\n'\n", deadline(2))
         .expect("follow-up");
