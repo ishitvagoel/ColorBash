@@ -665,7 +665,10 @@ to prevent recurrence, not to assign blame.
   in one idle batch, wait for the true total (not an intermediate count that
   the poll can skip). Recurrence (2026-08-27, GitHub Actions):
   `insert_restore_signal_and_resize_preserve_stty` ran `STTY1` then `alpha`
-  and waited for `1`; CI committed both rows at once (`last=2`).
+  and waited for `1`; CI committed both rows at once (`last=2`). A later run
+  waited for `> ` after Ctrl+C and typed STTY2 onto the unrestored search
+  line (`rintf`). That case now waits for restore, then `^C` plus a new
+  prompt, before the follow-up.
 - Evidence: `writer_loop`, V-1–V-2 in `crates/cli/src/storage.rs`, V-3 in
   `crates/pty/tests/history_invariance.rs`,
   `insert_restore_signal_and_resize_preserve_stty` in

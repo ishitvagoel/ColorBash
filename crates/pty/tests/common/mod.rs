@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use mbx_pty::{
-    DEFAULT_CAPTURE_LIMIT, PtyError, PtySession, SpawnOptions, WinSize, visible_contains,
+    CTRL_C, DEFAULT_CAPTURE_LIMIT, PtyError, PtySession, SpawnOptions, WinSize, visible_contains,
     visible_text,
 };
 use std::env;
@@ -171,6 +171,47 @@ pub fn wait_all(session: &mut PtySession, needles: &[&str]) -> Vec<u8> {
         Ok(output) => output,
         Err(error) => panic!(
             "waiting for {needles:?} failed: {error} output={:?}",
+            match &error {
+                PtyError::Timeout(captured) => visible_text(captured),
+                _ => error.to_string(),
+            }
+        ),
+    }
+}
+
+pub fn wait_prompt_after_ctrl_c(session: &mut PtySession) -> Vec<u8> {
+    let prompt_after_ctrl_c = |output: &[u8]| {
+        let text = visible_text(output);
+        if !text.contains("> ") {
+            return false;
+        }
+        text.contains("^C") || text.contains("exit 130")
+    };
+    match session.read_until(deadline(2), DEFAULT_CAPTURE_LIMIT, prompt_after_ctrl_c) {
+        Ok(output) => output,
+        Err(PtyError::Timeout(captured)) if visible_text(&captured).contains("^C") => {
+            session
+                .write_all(&[CTRL_C], deadline(2))
+                .expect("second ctrl-c");
+            match session.read_until(deadline(8), DEFAULT_CAPTURE_LIMIT, |output| {
+                visible_contains(output, "> ")
+            }) {
+                Ok(rest) => {
+                    let mut all = captured;
+                    all.extend(rest);
+                    all
+                }
+                Err(error) => panic!(
+                    "waiting for prompt after second ^C failed: {error} output={:?}",
+                    match &error {
+                        PtyError::Timeout(more) => visible_text(more),
+                        _ => error.to_string(),
+                    }
+                ),
+            }
+        }
+        Err(error) => panic!(
+            "waiting for ^C or exit 130 then prompt failed: {error} output={:?}",
             match &error {
                 PtyError::Timeout(captured) => visible_text(captured),
                 _ => error.to_string(),

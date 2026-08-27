@@ -577,7 +577,7 @@ fn ctrl_c_after_insert_leaves_a_usable_prompt() {
     send_keyseq(&mut session, DEFAULT_KEYSEQ);
     assert_no_marker(&mut session, "\nMBX_SRCH:alpha");
     session.write_all(&[CTRL_C], deadline(2)).expect("cancel");
-    let after_cancel = wait_for(&mut session, "> ");
+    let after_cancel = wait_prompt_after_ctrl_c(&mut session);
     assert!(
         !visible_contains(&after_cancel, "\nMBX_SRCH:alpha"),
         "search insert executed on Ctrl+C: {:?}",
@@ -615,8 +615,9 @@ fn insert_restore_signal_and_resize_preserve_stty() {
     wait_all(&mut session, &["printf 'MBX_SRCH:a"]);
     send_keyseq(&mut session, DEFAULT_KEYSEQ);
     send_keyseq(&mut session, DEFAULT_RESTORE_KEYSEQ);
+    wait_all(&mut session, &["printf 'MBX_SRCH:a"]);
     session.write_all(&[CTRL_C], deadline(2)).expect("cancel");
-    wait_for(&mut session, "> ");
+    wait_prompt_after_ctrl_c(&mut session);
     session
         .resize(WinSize { rows: 20, cols: 72 })
         .expect("resize");
