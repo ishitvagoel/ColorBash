@@ -30,15 +30,20 @@ when all of the following hold:
    Bash calls `mbx highlight PLAIN --point N`. The helper returns two lines:
    styled `READLINE_LINE` (markers + SGR) and the styled cursor index. Helper
    failure leaves the plain bytes visible with no styling.
-3. Accept-line (`\C-m` / `\C-j`) is wrapped while highlighting is active. The
-   wrapper restores `READLINE_LINE` and `READLINE_POINT` from the plain buffers,
-   then invokes stock `accept-line`. Executed bytes never contain styling.
+3. Accept-line (`\C-m` / `\C-j`) while styled output is active uses a
+   Readline-only restore macro (M-041): `\C-u`, the plain bytes, then the
+   reserved accept helper (default `\C-x\C-m` bound to stock `accept-line`).
+   Do not use `bind -x` on `\C-m`. When the helper returns unstyled plain text,
+   stock `accept-line` is used. Executed bytes never contain styling.
 4. Opt-in completion overlay (`MBX_COMP_OVERLAY=1`) is Strategy A metadata
    display, not Tab replacement. After a wrapped completion populates
    `_MBX_COMP_RANKED_LIST`, `\C-x\C-o` toggles a bounded terminal overlay drawn
-   below the prompt with `\e7`/`\e8` (DECSC/DECRC). `\C-xn` / `\C-xp` move the
-   selection; `\C-x\C-a` inserts the selected candidate (existing ranked-accept);
-   `\C-g` dismisses. Tab stays stock Bash insertion.
+   below the prompt with `\e7`/`\e8` (DECSC/DECRC); hide clears with `\e[J`
+   from the saved prompt cursor. `\C-xn` / `\C-xp` move the selection;
+   `\C-x\C-a` inserts the selected candidate (existing ranked-accept);
+   `\C-xj` dismisses (stock `\C-g` `abort` stays untouched). Tab stays stock
+   Bash insertion. Overlay snapshots cap at eight ranked rows; displayed
+   candidate bytes are sanitized before tty write.
 5. `MBX_HIGHLIGHT=1` and `MBX_GHOST=1` together are unsupported in this slice;
    highlight install skips when ghost is enabled.
 6. Dim ghost paint (ANSI after redisplay) remains out of scope. This ADR covers

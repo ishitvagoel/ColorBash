@@ -13,13 +13,14 @@ _mbx_comp_snapshot() {
     _MBX_COMP_SNAPPED=1
 }
 
-_mbx_comp_sanitize_desc() {
+_mbx_comp_sanitize_display() {
     local value=${1-}
     local sanitized= byte
     local code index
+    local max=${2:-64}
     local LC_ALL=C
 
-    for ((index = 0; index < ${#value} && index < 64; index++)); do
+    for ((index = 0; index < ${#value} && index < max; index++)); do
         byte=${value:index:1}
         printf -v code '%d' "'$byte"
         if ((code < 32 || code == 127)) || [[ $byte == '$' || $byte == \` || $byte == \\ ]]; then
@@ -29,6 +30,10 @@ _mbx_comp_sanitize_desc() {
         fi
     done
     REPLY=$sanitized
+}
+
+_mbx_comp_sanitize_desc() {
+    _mbx_comp_sanitize_display "$1" 64
 }
 
 _mbx_comp_kind_for_reply() {
@@ -217,10 +222,11 @@ _mbx_comp_wrap_backend() {
 _mbx_comp_overlay_snapshot() {
     [[ ${MBX_COMP_OVERLAY:-} == 1 ]] || return 0
     local i idx
-    _MBX_COMP_OVERLAY_CANDIDATES=("${_MBX_COMP_RANKED_LIST[@]}")
+    _MBX_COMP_OVERLAY_CANDIDATES=()
     _MBX_COMP_OVERLAY_KINDS=()
     _MBX_COMP_OVERLAY_DESCS=()
     for ((i = 0; i < ${#_MBX_COMP_RANKED_LIST[@]} && i < 8; i++)); do
+        _MBX_COMP_OVERLAY_CANDIDATES+=("${_MBX_COMP_RANKED_LIST[i]}")
         idx=${_MBX_COMP_ORDER[i]:-0}
         _MBX_COMP_OVERLAY_KINDS+=("${_MBX_COMP_KINDS[idx]:-}")
         _MBX_COMP_OVERLAY_DESCS+=("${_MBX_COMP_DESCS[idx]:-}")
@@ -327,6 +333,7 @@ _MBX_COMP_ACCEPT_DEFAULT_KEYSEQ='\C-x\C-a'
 _MBX_COMP_CYCLE_NEXT_DEFAULT_KEYSEQ='\C-xn'
 _MBX_COMP_CYCLE_PREV_DEFAULT_KEYSEQ='\C-xp'
 _MBX_COMP_OVERLAY_DEFAULT_KEYSEQ='\C-x\C-o'
+_MBX_COMP_OVERLAY_DISMISS_DEFAULT_KEYSEQ='\C-xj'
 _MBX_COMP_OVERLAY_VISIBLE=0
 _MBX_COMP_OVERLAY_LINES=0
 _MBX_COMP_OVERLAY_INDEX=0
@@ -416,20 +423,17 @@ _mbx_comp_cycle_prev() {
 }
 
 _mbx_comp_overlay_have_tty() {
-    [[ -t 1 ]]
+    [[ -t 1 ]] && [[ -w /dev/tty ]]
 }
 
 _mbx_comp_overlay_clear() {
     local lines=${_MBX_COMP_OVERLAY_LINES:-0}
-    local i
     [[ $lines -gt 0 ]] || {
         _MBX_COMP_OVERLAY_VISIBLE=0
         return 0
     }
     if _mbx_comp_overlay_have_tty; then
-        for ((i = 0; i < lines; i++)); do
-            printf '\033[A\033[2K' >/dev/tty 2>/dev/null || true
-        done
+        printf '\e[J' >/dev/tty 2>/dev/null || true
     fi
     _MBX_COMP_OVERLAY_LINES=0
     _MBX_COMP_OVERLAY_VISIBLE=0
@@ -438,7 +442,7 @@ _mbx_comp_overlay_clear() {
 _mbx_comp_overlay_refresh() {
     local i n=${#_MBX_COMP_OVERLAY_CANDIDATES[@]}
     local idx=${_MBX_COMP_OVERLAY_INDEX:-0}
-    local kind desc
+    local kind desc candidate
     [[ ${MBX_COMP_OVERLAY:-} == 1 ]] || return 0
     ((n > 0)) || {
         _mbx_comp_overlay_clear
@@ -448,13 +452,16 @@ _mbx_comp_overlay_refresh() {
     ((idx >= n)) && idx=$((n - 1))
     _MBX_COMP_OVERLAY_INDEX=$idx
     if _mbx_comp_overlay_have_tty; then
+        printf '\e7' >/dev/tty 2>/dev/null || true
         for ((i = 0; i < n && i < 8; i++)); do
             kind=${_MBX_COMP_OVERLAY_KINDS[i]:-}
             desc=${_MBX_COMP_OVERLAY_DESCS[i]:-}
+            _mbx_comp_sanitize_display "${_MBX_COMP_OVERLAY_CANDIDATES[i]}"
+            candidate=$REPLY
             if ((i == idx)); then
-                printf '>\033[1m %s\033[0m' "${_MBX_COMP_OVERLAY_CANDIDATES[i]}" >/dev/tty 2>/dev/null || true
+                printf '\n>\033[1m %s\033[0m' "$candidate" >/dev/tty 2>/dev/null || true
             else
-                printf '  %s' "${_MBX_COMP_OVERLAY_CANDIDATES[i]}" >/dev/tty 2>/dev/null || true
+                printf '\n  %s' "$candidate" >/dev/tty 2>/dev/null || true
             fi
             if [[ -n $kind || -n $desc ]]; then
                 if [[ -n $kind && -n $desc ]]; then
@@ -465,9 +472,9 @@ _mbx_comp_overlay_refresh() {
                     printf ' \033[90m(%s)\033[0m' "$desc" >/dev/tty 2>/dev/null || true
                 fi
             fi
-            printf '\n' >/dev/tty 2>/dev/null || true
             _MBX_COMP_OVERLAY_LINES=$((_MBX_COMP_OVERLAY_LINES + 1))
         done
+        printf '\e8' >/dev/tty 2>/dev/null || true
     fi
     _MBX_COMP_OVERLAY_VISIBLE=1
 }
@@ -501,14 +508,21 @@ _mbx_comp_install_overlay() {
     _MBX_COMP_OVERLAY_BOUND=0
     _MBX_COMP_OVERLAY_VI_INSERT_BOUND=0
     _MBX_COMP_OVERLAY_KEYSEQ_ACTIVE=$keyseq
+    local dismiss_keyseq=${MBX_COMP_OVERLAY_DISMISS_KEYSEQ:-$_MBX_COMP_OVERLAY_DISMISS_DEFAULT_KEYSEQ}
+    _MBX_COMP_OVERLAY_DISMISS_KEYSEQ_ACTIVE=$dismiss_keyseq
     if _mbx_comp_install_bind_keymap emacs "$keyseq" _mbx_comp_overlay_toggle "$override"; then
         _MBX_COMP_OVERLAY_BOUND=1
     fi
     if _mbx_comp_install_bind_keymap vi-insert "$keyseq" _mbx_comp_overlay_toggle "$override"; then
         _MBX_COMP_OVERLAY_VI_INSERT_BOUND=1
     fi
-    if _mbx_comp_install_bind_keymap emacs '\C-g' _mbx_comp_overlay_dismiss "$override"; then
-        :
+    if _mbx_comp_install_bind_keymap emacs "$dismiss_keyseq" _mbx_comp_overlay_dismiss \
+        "$override"; then
+        _MBX_COMP_OVERLAY_DISMISS_BOUND=1
+    fi
+    if _mbx_comp_install_bind_keymap vi-insert "$dismiss_keyseq" _mbx_comp_overlay_dismiss \
+        "$override"; then
+        _MBX_COMP_OVERLAY_DISMISS_VI_INSERT_BOUND=1
     fi
     _MBX_COMP_OVERLAY_INSTALLED=1
 }

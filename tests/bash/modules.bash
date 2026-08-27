@@ -903,6 +903,22 @@ assert_eq 1 "${_MBX_COMP_OVERLAY_INDEX:-0}" \
     'overlay cycle-next should advance the selection index'
 _mbx_comp_overlay_dismiss
 (( _MBX_COMP_OVERLAY_VISIBLE == 0 )) || fail 'overlay dismiss should hide the list'
+
+MBX_COMP_OVERLAY=1
+_mbx_comp_wrap_backend _mbx_comp_r3_backend
+assert_eq 8 ${#_MBX_COMP_OVERLAY_CANDIDATES[@]} \
+    'overlay snapshot should cap ranked rows at eight'
+assert_eq mbx_comp_reply_0 "${_MBX_COMP_OVERLAY_CANDIDATES[0]:-}" \
+    'overlay snapshot head should match the ranked list'
+assert_eq mbx_comp_reply_7 "${_MBX_COMP_OVERLAY_CANDIDATES[7]:-}" \
+    'overlay snapshot should keep the eighth ranked row'
+_MBX_COMP_OVERLAY_VISIBLE=1
+_MBX_COMP_OVERLAY_LINES=8
+_MBX_COMP_OVERLAY_INDEX=0
+_mbx_comp_cycle_next
+(( _MBX_COMP_OVERLAY_INDEX < 8 )) || fail 'overlay cycle must stay within the eight-row window'
+_mbx_comp_sanitize_display $'aa\033flag'
+assert_eq 'aa?flag' "$REPLY" 'overlay display sanitize should replace ESC bytes'
 unset MBX_COMP_OVERLAY
 
 # History module contract: MBX2 record encoding, ACK decoding, exclusions,
@@ -1443,8 +1459,8 @@ if [ "$1" = highlight ]; then
             *) plain="$plain${plain:+ }$1"; shift ;;
         esac
     done
-    printf '%s\n' "styled-${plain}-line"
-    printf '%s\n' "$((point + 6))"
+    printf '%s\n' "$(printf '\001\033[31m\002%s\001\033[0m\002' "$plain")"
+    printf '%s\n' "$((point + 7))"
 fi
 EOF
 chmod +x "$highlight_stub_dir/mbx"
@@ -1454,11 +1470,52 @@ _MBX_HIGHLIGHT_PLAIN='echo hi'
 _MBX_HIGHLIGHT_POINT=7
 _MBX_HIGHLIGHT_ACTIVE=0
 _mbx_highlight_refresh
-assert_eq 'styled-echo hi-line' "$READLINE_LINE" \
+assert_eq $'\001\033[31m\002echo hi\001\033[0m\002' "$READLINE_LINE" \
     'highlight refresh should install the styled helper line'
-assert_eq 13 "$READLINE_POINT" 'highlight refresh should map the styled cursor'
+assert_eq 14 "$READLINE_POINT" 'highlight refresh should map the styled cursor'
+
+# H-2: strip-then-compare accepts markers only when the stripped bytes match plain.
+_MBX_HIGHLIGHT_PLAIN='echo hi'
+styled_ok=$'\001\033[31m\002echo hi'
+_mbx_highlight_validate_styled "$styled_ok" || \
+    fail 'styled stub with markers should pass strip-then-compare'
+styled_bad=$'\001\033[31m\002echo hiX'
+_mbx_highlight_validate_styled "$styled_bad" && \
+    fail 'styled stub with extra escape should be rejected'
+_MBX_HIGHLIGHT_PLAIN='echo hi'
+_MBX_HIGHLIGHT_POINT=7
+_MBX_HIGHLIGHT_ACTIVE=0
+set -m
+_mbx_highlight_refresh || fail 'highlight refresh should succeed with the stub helper'
+[[ $- == *m* ]] || fail 'highlight helper must restore monitor mode after a lookup (H-5)'
+set +m
+(( _MBX_HIGHLIGHT_ACTIVE == 1 )) || fail 'highlight refresh should activate styled mode'
+_mbx_highlight_disarm_enter || true
+_MBX_HIGHLIGHT_ACTIVE=0
+
+# H-6: occupied bindings refuse overwrite unless override is set.
+_mbx_user_hl_occupy() { :; }
+bind -x '"z": _mbx_user_hl_occupy' 2>/dev/null || true
+_MBX_HIGHLIGHT_INSTALLED=0
+_MBX_HIGHLIGHT_BOUND=0
+MBX_HIGHLIGHT=1
+_mbx_highlight_install
+bind -X 2>/dev/null | grep -Fq '_mbx_user_hl_occupy' || \
+    fail 'occupied printable must not be overwritten without override'
+bind -X 2>/dev/null | grep -Fq "_mbx_highlight_self_insert z" && \
+    fail 'highlight must not steal an occupied printable binding'
+bind -u z 2>/dev/null || true
+bind -x '"\C-m": _mbx_user_hl_occupy' 2>/dev/null || true
+_MBX_HIGHLIGHT_INSTALLED=0
+_MBX_HIGHLIGHT_BOUND=0
+_mbx_highlight_install
+(( _MBX_HIGHLIGHT_BOUND == 0 )) || \
+    fail 'occupied Enter should refuse highlight install when Enter cannot arm'
+bind -u '"\C-m"' 2>/dev/null || true
+unset -f _mbx_user_hl_occupy 2>/dev/null || true
+
 unset MBX_BIN MBX_HIGHLIGHT _MBX_HIGHLIGHT_PLAIN _MBX_HIGHLIGHT_POINT \
-    _MBX_HIGHLIGHT_ACTIVE READLINE_LINE READLINE_POINT
+    _MBX_HIGHLIGHT_ACTIVE _MBX_HIGHLIGHT_INSTALLED _MBX_HIGHLIGHT_BOUND READLINE_LINE READLINE_POINT
 rm -rf "$highlight_stub_dir"
 
 source "$ROOT/bash/editor.bash"

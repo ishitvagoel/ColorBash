@@ -1,7 +1,9 @@
 # ADR 0013 review close (highlight wrap + overlay leftovers)
 
-Status: `ready` (2026-08-27). Review of PR #49 / `cursor/hlt-comp-overlay-741c`.
-Do **not** mark `HLT-002`, `HLT-003`, `COMP-004`, or Phase 6 `complete`.
+Status: `complete` (2026-08-27). Slices 1–3 implemented on
+`cursor/hlt-comp-overlay-741c`. H-1–H-6, O-1–O-5, and M-1 have module/PTY
+evidence. Do **not** mark `HLT-002`, `HLT-003`, `COMP-004`, or Phase 6
+`complete`.
 
 Existing files (`bash/highlight.bash`, `bash/completion.bash`, `mbx highlight`)
 are a first cut. They are not exit evidence. A PTY session with `MBX_HIGHLIGHT=1`

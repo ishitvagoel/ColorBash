@@ -18,7 +18,7 @@ These slices have working code you can exercise in an interactive shell:
 | Wrapped `-F` metadata | `_mbx_comp_wrap_existing_f NAME` | Additive kinds/scores; Tab bytes unchanged |
 | Ranked-accept chord | Default `Ctrl-X Ctrl-A` after wrapped Tab | Replaces current word with ranked candidate; Tab stays stock |
 | Ranked-cycle chords | Default `Ctrl-X` `n` / `Ctrl-X` `p` after wrapped Tab | Rotates ranked candidates; Tab stays stock |
-| Completion overlay | `MBX_COMP_OVERLAY=1` after wrapped Tab | `Ctrl-X Ctrl-O` toggles ranked list below prompt; `Ctrl-X` `n`/`p` move selection; `Ctrl-X Ctrl-A` accepts; `Ctrl-G` dismisses |
+| Completion overlay | `MBX_COMP_OVERLAY=1` after wrapped Tab | `Ctrl-X Ctrl-O` toggles ranked list below prompt; `Ctrl-X` `n`/`p` move selection; `Ctrl-X Ctrl-A` accepts; `Ctrl-X` `j` dismisses (stock `Ctrl-G` `abort` stays) |
 | Syntax highlighting | `MBX_HIGHLIGHT=1` | Wraps `self-insert`; plain bytes execute on Enter; incompatible with `MBX_GHOST=1` |
 | Git completion kinds | Wrap `git` or `mbx_comp_git` fixture | Additive `ref`/`flag`/`file`; no Git subprocess |
 | Fuzzy history search | `MBX_HISTORY=1` then `mbx history search fuzzy TEXT` | Ranks a bounded recent pool |

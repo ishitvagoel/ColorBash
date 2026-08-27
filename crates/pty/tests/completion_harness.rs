@@ -847,6 +847,28 @@ fn ranked_accept_works_with_overlay_env() {
 }
 
 const OVERLAY_KEYSEQ: &[u8] = &[CTRL_X, 0x0f];
+const OVERLAY_DISMISS_KEYSEQ: &[u8] = &[CTRL_X, b'j'];
+
+#[test]
+fn overlay_install_keeps_stock_abort_and_binds_toggle() {
+    let home = TempHome::new("comp-ov0");
+    let mut session = spawn_mbx_shell(
+        home.path(),
+        &[("MBX_COMP_FIXTURES", "1"), ("MBX_COMP_OVERLAY", "1")],
+        "",
+    );
+    wait_prompt(&mut session);
+    session
+        .write_str(
+            "bind -p | grep -Fq '\"\\C-g\": abort' && \
+             [[ ${_MBX_COMP_OVERLAY_BOUND:-missing} == 1 ]] && \
+             bind -X | grep -Fq '_mbx_comp_overlay_toggle' && \
+             printf 'MBX_COMP:overlay-bound\\n'\n",
+            deadline(2),
+        )
+        .expect("status");
+    wait_all(&mut session, &["MBX_COMP:overlay-bound\n", "> "]);
+}
 
 #[test]
 fn overlay_lists_ranked_candidates_after_tab() {
@@ -864,5 +886,32 @@ fn overlay_lists_ranked_candidates_after_tab() {
     session
         .write_all(OVERLAY_KEYSEQ, deadline(2))
         .expect("overlay chord");
-    wait_all(&mut session, &["aaflag", "> "]);
+    wait_all(&mut session, &["> aaflag", "mbx_comp_rank aa"]);
+    session
+        .write_all(OVERLAY_KEYSEQ, deadline(2))
+        .expect("overlay hide");
+    wait_all(&mut session, &["> ", "mbx_comp_rank aa"]);
+}
+
+#[test]
+fn overlay_dismiss_chord_hides_list() {
+    let home = TempHome::new("comp-ov2");
+    let mut session = spawn_mbx_shell(
+        home.path(),
+        &[("MBX_COMP_FIXTURES", "1"), ("MBX_COMP_OVERLAY", "1")],
+        "",
+    );
+    wait_prompt(&mut session);
+    session
+        .write_str("mbx_comp_rank aa", deadline(2))
+        .expect("type rank prefix");
+    send_tab(&mut session);
+    session
+        .write_all(OVERLAY_KEYSEQ, deadline(2))
+        .expect("overlay chord");
+    wait_all(&mut session, &["> aaflag", "mbx_comp_rank aa"]);
+    session
+        .write_all(OVERLAY_DISMISS_KEYSEQ, deadline(2))
+        .expect("overlay dismiss");
+    wait_all(&mut session, &["> "]);
 }

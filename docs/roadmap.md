@@ -606,11 +606,10 @@ block product slices (`docs/latency-budget-deferral.md`).
 
 1. **G5 revisit** when a macOS host is available: run the `HRD-001` pairwise
    matrix per ADR 0012. Do not fake it on Linux.
-2. **ADR 0013 review close** (`docs/hlt-comp-review-close-plan.md`): highlight
-   wrap actually installs (H-1–H-6), then overlay dismiss/cap/sanitize/draw
-   (O-1–O-5). `HLT-003` hostile/latency gates stay later. Dim paint stays
-   `deferred`. Do not mark `COMP-004` or Phase 6 `complete` until those asserts
-   exist.
+2. **`HLT-003`** hostile corpus and highlight p99 on Linux (`docs/latency-budget-deferral.md`
+   defers percentiles; do not block on them). ADR 0013 review-close slices 1–3
+   (H-1–H-6, O-1–O-5, M-1) are implemented; do not mark `HLT-002`, `COMP-004`,
+   or Phase 6 `complete` without gate evidence beyond the review asserts.
 3. `HRD-003` / `PRM-004` percentiles stay `deferred` unless an ADR ratifies new
    numbers or a functional prompt-path defect is proven.
 4. `GIT-005` provider SDK stays post-MVP `deferred`.
@@ -795,3 +794,4 @@ an accepted decoration/ownership ADR.
 | 2026-08-27 | Accepted ADR 0012 macOS `HRD-001` deferral. Closed `G5` and Phase 9 for Strategy A MVP on Linux (`docs/g5-strategy-a-close-plan.md`). `HRD-001` Linux `complete`; macOS `deferred`. Overlay/highlighting/percentiles stay `deferred`. |
 | 2026-08-27 | Accepted ADR 0013 opt-in continuous decoration. Implemented `MBX_HIGHLIGHT=1` (`bash/highlight.bash`, `mbx highlight`) and `MBX_COMP_OVERLAY=1` (`bash/completion.bash`). `HLT-001`/`HLT-002` and `COMP-004` overlay slice move to `validation`; `HLT-003` hostile/latency gates stay `deferred`. |
 | 2026-08-27 | Review close plan for ADR 0013 (`docs/hlt-comp-review-close-plan.md`). Highlight wrap is a no-op until H-1–H-6; overlay leftover is O-1–O-5. Do not mark `HLT-002` or `COMP-004` complete. |
+| 2026-08-27 | Implemented ADR 0013 review-close slices 1–3 (`bash/highlight.bash`, `bash/completion.bash`, module + PTY asserts H-1–H-6, O-1–O-5, M-1). `HLT-002` and `COMP-004` overlay stay `validation`; `HLT-003` stays `deferred`. |

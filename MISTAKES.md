@@ -999,3 +999,62 @@ to prevent recurrence, not to assign blame.
   `tests/bash/modules.bash`; `next_prompt_usable_after_insert_and_ctrl_c` in
   `crates/pty/tests/editor_bind_x.rs`.
 
+## M-052 — Highlight install reported bound with no widgets
+
+- Discovered: 2026-08-27
+- Status: Fixed
+- Failed assumption: `_mbx_highlight_bind_x` could treat stock `bind -p`
+  occupancy as a hard skip, so `self-insert` blocked every printable wrap while
+  `_MBX_HIGHLIGHT_BOUND=1` (M-040 recurrence).
+- Impact: `MBX_HIGHLIGHT=1` appeared installed but `bind -X` listed no
+  `_mbx_highlight_*` widgets; highlighting was a no-op.
+- Correction: wrap occupancy now matches `_mbx_ghost_can_wrap`; `_MBX_HIGHLIGHT_BOUND=1`
+  only when `bind -X` lists `_mbx_highlight_self_insert` and Enter can arm.
+- Prevention: PTY H-1 must assert both `_MBX_HIGHLIGHT_BOUND=1` and a highlight
+  widget in `bind -X`.
+- Evidence: `bash/highlight.bash`; `highlight_install_sets_bound_flag_and_wraps_self_insert`
+  in `crates/pty/tests/highlight.rs`; H-1 in `docs/hlt-comp-review-close-plan.md`.
+
+## M-053 — Highlight gate rejected every styled line for C0
+
+- Discovered: 2026-08-27
+- Status: Fixed
+- Failed assumption: `_mbx_text_has_c0_or_del` on the full styled helper output
+  was a safe gate before assigning `READLINE_LINE`.
+- Impact: SOH/STX/SGR markers in styled output failed the gate; refresh always
+  fell back to plain text and highlighting never activated.
+- Correction: validate helper output with strip-then-compare against
+  `_MBX_HIGHLIGHT_PLAIN`; reject only unexpected C0 in the stripped remainder.
+- Prevention: module H-2 and refresh tests must accept marker stubs only when
+  strip equals plain.
+- Evidence: `_mbx_highlight_validate_styled` in `bash/highlight.bash`;
+  `tests/bash/modules.bash`.
+
+## M-054 — Highlight strip index used string concatenation
+
+- Discovered: 2026-08-27
+- Status: Fixed
+- Failed assumption: `index+=2` in a sourced Bash module increments an integer
+  by two.
+- Impact: Bash treated `index` as a string (`5` + `2` → `52`), breaking SGR
+  skipping in `_mbx_highlight_strip_line`.
+- Correction: use `index=$((index + n))` for numeric advances.
+- Prevention: never use `+=` with numeric counters in sourced Bash modules unless
+  both sides are guaranteed arithmetic context.
+- Evidence: `_mbx_highlight_strip_line` in `bash/highlight.bash`.
+
+## M-055 — Highlight refresh clobbered helper payload in REPLY
+
+- Discovered: 2026-08-27
+- Status: Fixed
+- Failed assumption: `_mbx_wait_child_until` could run before the styled payload
+  was copied out of `REPLY`.
+- Impact: styled helper output was lost after the child wait, matching the
+  search-root failure mode.
+- Correction: save styled line and point to locals before
+  `_mbx_wait_child_until`; suspend monitor/notify around the helper (M-049).
+- Prevention: every highlight/search helper read must copy `REPLY` before waiting
+  on `$!` and must restore `$-` job flags.
+- Evidence: `_mbx_highlight_refresh` in `bash/highlight.bash`; H-5 in
+  `tests/bash/modules.bash`.
+

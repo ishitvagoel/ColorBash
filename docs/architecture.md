@@ -20,7 +20,7 @@ typed line with `\C-xl`. Ghost suffixes, search inserts, and editor tokens
 that contain C0 or DEL are refused so Readline redisplay cannot inject
 terminal controls (`HRD-002`). Strategy A history search and ghost are
 unblocked. Opt-in syntax highlighting and completion overlay are in
-`validation` (ADR 0013; wrap/Enter/overlay leftovers in
+`validation` (ADR 0013; H-1–H-6, O-1–O-5, M-1 evidence in
 `docs/hlt-comp-review-close-plan.md`). Dim paint and type-to-filter overlays
 remain `deferred` from this MVP.
 
