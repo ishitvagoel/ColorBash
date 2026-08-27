@@ -8,7 +8,7 @@
 - Last reviewed: 2026-08-27 UTC
 - Current milestone: Strategy A MVP is `complete` on Linux (`G5` 2026-08-27); Phase 9 `complete`; macOS `HRD-001` `deferred` (ADR 0012); `HRD-003` `deferred`; ADR 0013 overlay/highlighting in `validation`
 - Active workstream: `HLT-003` hostile corpus (`docs/hlt-003-hostile-gate-plan.md`); G5 revisit macOS PTY; dim paint; percentile benches `deferred`
-- Next decision gate: G5 revisit (macOS matrix, `HLT-003`, `HRD-003`, dim paint). ADR 0013 review-close (H-1–H-6, O-1–O-5, M-1) is recorded; hostile strip gates are in progress
+- Next decision gate: G5 revisit (macOS matrix, `HLT-003` p99, `HRD-003`, dim paint). ADR 0013 review-close (H-1–H-6, O-1–O-5, M-1) is recorded; `HLT-003` hostile corpus slices 1–2 recorded
 - Editor-facing work: opt-in ghost suffix is on main (ADR 0010). Async QUERY with stale-generation skip is recorded (ADR 0011). Explicit history-search insert (`\C-xh`), cycling, restore (`\C-xl`), cwd preference, and opt-in failed empty-line insert are recorded (ADR 0009). Opt-in syntax highlighting (`MBX_HIGHLIGHT=1`) and completion overlay (`MBX_COMP_OVERLAY=1`) are in `validation` (ADR 0013; `docs/hlt-comp-review-close-plan.md`). Dim paint and type-to-filter overlays are `deferred` from this MVP (G5 revisit)
 - Timing policy: unmet percentile targets are `deferred` and do not block
   product development (`docs/latency-budget-deferral.md`)
@@ -337,7 +337,7 @@ targets stay `deferred` and are not a pass/fail requirement for this close.
 | 3 | History | `complete` | Phase 3A / `G2` complete; `HIST-009` and `HIST-010` complete; write-ack percentiles `deferred` |
 | 4 | Ghost suggestions | `complete` | ADR 0010 suffix; ADR 0011 QUERY + generation skip + overlapping delayed-RESULT PTY; `GHST-004` functional PTY recorded; dim paint `deferred`; latency percentiles `deferred` |
 | 5 | Completion | `complete` | Strategy A insert/fallthrough (`COMP-005`); `G4` / `COMP-001`–`COMP-003` / `GIT-004` complete; ranked-cycle `\C-xn` / `\C-xp`; `COMP-004` overlay slice `validation` (ADR 0013) |
-| 6 | Syntax highlighting | `validation` | ADR 0013; `HLT-001`/`HLT-002` implemented; `HLT-003` hostile/latency gates `deferred` |
+| 6 | Syntax highlighting | `validation` | ADR 0013; `HLT-001`/`HLT-002` implemented; `HLT-003` hostile gates `in-progress` (slices 1–2); p99 `deferred` |
 | 7 | Git/provider expansion | `complete` | MVP exits `GIT-002` / `GIT-004` (`docs/git-phase7-mvp-close-plan.md`); `GIT-005` SDK `deferred`; upstream/remotes/tags unauthorized |
 | 8 | Enhanced Ctrl+R | `complete` | `SRCH-001`–`SRCH-003` complete (ADR 0009); cwd/signal/opt-in failed insert recorded; 100k interactive leftover `deferred`; overlay `deferred`; interactive repo insert unauthorized |
 | 9 | Release hardening | `complete` | `HRD-002` and `HRD-004` complete; Linux `HRD-001` L-1–L-5 recorded; macOS `HRD-001` `deferred` (ADR 0012); `HRD-003` `deferred`; `G5` closed (`docs/g5-strategy-a-close-plan.md`) |
