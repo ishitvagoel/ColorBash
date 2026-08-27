@@ -355,7 +355,9 @@ to prevent recurrence, not to assign blame.
   Actions): `next_prompt_usable_after_insert_and_ctrl_c` waited only for `^C`
   then typed `printf`; under CI load the next prompt was not ready, so the
   first byte was lost (`rintf`) and the follow-up never printed
-  `MBX_EDT:after_cancel`.
+  `MBX_EDT:after_cancel`. A later run waited for `> ` after `^C` but sent
+  Ctrl+C before the bind -x insert finished, so the capture stayed `^C` with
+  no prompt.
 - Correction: waits that must observe a full output-plus-prompt sequence use one
   predicate requiring every needle in one read (`wait_all`). History content is
   read from the `HISTFILE` on disk after a sourced dump script prints a marker

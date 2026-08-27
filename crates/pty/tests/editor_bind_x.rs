@@ -51,12 +51,38 @@ fn wait_prompt(session: &mut PtySession) {
 }
 
 fn wait_prompt_after_ctrl_c(session: &mut PtySession) -> Vec<u8> {
-    match session.read_until(deadline(8), mbx_pty::DEFAULT_CAPTURE_LIMIT, |output| {
+    let prompt_after_ctrl_c = |output: &[u8]| {
         let text = visible_text(output);
         text.find("^C")
             .is_some_and(|idx| text[idx..].contains("> "))
-    }) {
+    };
+    match session.read_until(
+        deadline(2),
+        mbx_pty::DEFAULT_CAPTURE_LIMIT,
+        prompt_after_ctrl_c,
+    ) {
         Ok(output) => output,
+        Err(mbx_pty::PtyError::Timeout(captured)) if visible_text(&captured).contains("^C") => {
+            session
+                .write_all(&[CTRL_C], deadline(2))
+                .expect("second ctrl-c");
+            match session.read_until(deadline(8), mbx_pty::DEFAULT_CAPTURE_LIMIT, |output| {
+                visible_contains(output, "> ")
+            }) {
+                Ok(rest) => {
+                    let mut all = captured;
+                    all.extend(rest);
+                    all
+                }
+                Err(error) => panic!(
+                    "waiting for prompt after second ^C failed: {error} output={:?}",
+                    match &error {
+                        mbx_pty::PtyError::Timeout(more) => visible_text(more),
+                        _ => error.to_string(),
+                    }
+                ),
+            }
+        }
         Err(error) => panic!(
             "waiting for ^C then prompt failed: {error} output={:?}",
             match &error {
@@ -196,10 +222,12 @@ fn next_prompt_usable_after_insert_and_ctrl_c() {
     let mut session = spawn_mbx_editor(home.path(), &[], "");
     wait_prompt(&mut session);
     send_keyseq(&mut session, DEFAULT_KEYSEQ);
+    wait_all(&mut session, &["printf 'MBX_EDT:ok"]);
     session.write_all(&[CTRL_C], deadline(2)).expect("cancel");
     // Wait until the next prompt appears after ^C. Waiting for ^C alone can
     // return before Readline is ready, so the follow-up's first byte is lost
-    // (`rintf`) under CI load (M-019).
+    // (`rintf`) under CI load (M-019). Sending Ctrl+C before the bind -x insert
+    // finishes can also leave only `^C` and no prompt.
     let after_cancel = wait_prompt_after_ctrl_c(&mut session);
     assert!(
         !visible_text(&after_cancel).contains("coproc _MBX_ENGINE_COPROC"),
