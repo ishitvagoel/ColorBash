@@ -605,7 +605,9 @@ fn insert_restore_signal_and_resize_preserve_stty() {
     let first = wait_all(&mut session, &["\nSTTY1:", ":END"]);
     let before = extract_marked(&first, "STTY1:", ":END");
     record_printf(&mut session, "alpha");
-    wait_for_count(&mbx_bin(), &data_home, 1);
+    // STTY1 is also admitted. Waiting for count==1 races the writer batch:
+    // both rows can commit together (0→2) and never equal 1 (M-034).
+    wait_for_count(&mbx_bin(), &data_home, 2);
 
     session
         .write_str("printf 'MBX_SRCH:a", deadline(2))

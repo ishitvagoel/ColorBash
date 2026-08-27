@@ -661,8 +661,16 @@ to prevent recurrence, not to assign blame.
 - Prevention: any path that lets live readers query while the writer is alive
   needs storage tests that keep the writer open (V-1–V-2) and PTY invariance
   (V-3). Do not weaken `wait_for_count` or change ACK meaning to hide the gap.
+  `wait_for_count` requires exact equality: if two admitted commands can land
+  in one idle batch, wait for the true total (not an intermediate count that
+  the poll can skip). Recurrence (2026-08-27, GitHub Actions):
+  `insert_restore_signal_and_resize_preserve_stty` ran `STTY1` then `alpha`
+  and waited for `1`; CI committed both rows at once (`last=2`).
 - Evidence: `writer_loop`, V-1–V-2 in `crates/cli/src/storage.rs`, V-3 in
-  `crates/pty/tests/history_invariance.rs`, and `docs/history-g2-idle-commit-plan.md`.
+  `crates/pty/tests/history_invariance.rs`,
+  `insert_restore_signal_and_resize_preserve_stty` in
+  `crates/pty/tests/history_search.rs`, and
+  `docs/history-g2-idle-commit-plan.md`.
 
 ## M-035 — Concurrent store open and writer begin still dropped rows under WAL load
 
