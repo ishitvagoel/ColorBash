@@ -18,6 +18,8 @@ These slices have working code you can exercise in an interactive shell:
 | Wrapped `-F` metadata | `_mbx_comp_wrap_existing_f NAME` | Additive kinds/scores; Tab bytes unchanged |
 | Ranked-accept chord | Default `Ctrl-X Ctrl-A` after wrapped Tab | Replaces current word with ranked candidate; Tab stays stock |
 | Ranked-cycle chords | Default `Ctrl-X` `n` / `Ctrl-X` `p` after wrapped Tab | Rotates ranked candidates; Tab stays stock |
+| Completion overlay | `MBX_COMP_OVERLAY=1` after wrapped Tab | `Ctrl-X Ctrl-O` toggles ranked list below prompt; `Ctrl-X` `n`/`p` move selection; `Ctrl-X Ctrl-A` accepts; `Ctrl-G` dismisses |
+| Syntax highlighting | `MBX_HIGHLIGHT=1` | Wraps `self-insert`; plain bytes execute on Enter; incompatible with `MBX_GHOST=1` |
 | Git completion kinds | Wrap `git` or `mbx_comp_git` fixture | Additive `ref`/`flag`/`file`; no Git subprocess |
 | Fuzzy history search | `MBX_HISTORY=1` then `mbx history search fuzzy TEXT` | Ranks a bounded recent pool |
 | Failed history search | `MBX_HISTORY=1` then `mbx history search failed` | Rows with nonzero exit status |
@@ -32,16 +34,15 @@ These MVP features are **not** implemented for interactive use:
 | Feature | Why it is waiting |
 | --- | --- |
 | Ghost dim / live paint | Opt-in suffix ghost exists (ADR 0010); dim after-every-key styling does not |
-| Completion popup | Overlay unproven; ranked-accept and cycle chords exist |
-| Syntax highlighting | Same continuous-decoration leftover |
-| Enhanced Ctrl+R overlay | Type-to-filter list still needs a leftover; `\C-xh` insert, cycling, `\C-xl` restore, cwd preference, opt-in failed insert, and signal PTY exist |
+| Type-to-filter Ctrl+R overlay | Explicit `\C-xh` insert exists (ADR 0009); redraw-on-key overlay does not |
 | macOS PTY matrix | `deferred` (ADR 0012); needs a macOS host. Linux nested/SSH/login/vim/tmux PTY is recorded |
 
 Canonical status lives in [`docs/roadmap.md`](docs/roadmap.md). Strategy A MVP
 on Linux is `complete` (`G5` 2026-08-27). `G0`–`G4` are complete. `HRD-002`
 hostile-input and `HRD-004` install/removal evidence are recorded. Explicit
-history-search insert is ADR 0009. Continuous decoration stays unproven (ADR
-0003). Overlay, highlighting, and macOS matrix are **G5 revisit**.
+history-search insert is ADR 0009. Opt-in highlighting and completion overlay
+are ADR 0013 (`MBX_HIGHLIGHT=1`, `MBX_COMP_OVERLAY=1`). Dim paint, type-to-filter
+overlays, and macOS matrix are **G5 revisit**.
 
 The helper bundles SQLite (`rusqlite` with the `bundled` feature) for the history
 store. The protocol crate remains dependency-free. History capture stays off

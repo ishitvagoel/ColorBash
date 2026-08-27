@@ -71,6 +71,10 @@ pub fn git_discovery_disabled() -> bool {
     env::var("MBX_DISABLE_GIT").is_ok_and(|value| value == "1")
 }
 
+pub fn color_disabled_for_stdout() -> bool {
+    color_disabled(io::stdout().is_terminal())
+}
+
 fn prompt_flags(stdout_is_terminal: bool) -> PromptFlags {
     let mut flags = PromptFlags::empty();
     if color_disabled(stdout_is_terminal) {

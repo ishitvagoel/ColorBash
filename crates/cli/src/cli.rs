@@ -55,6 +55,15 @@ pub enum HistoryCommand {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum HighlightCommand {
+    Line {
+        text: String,
+        point: usize,
+        no_color: bool,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CliCommand {
     Handshake,
     Prompt(PromptContext),
@@ -65,6 +74,7 @@ pub enum CliCommand {
         iterations: NonZeroU64,
     },
     History(HistoryCommand),
+    Highlight(HighlightCommand),
     Version,
     Help,
 }
@@ -82,6 +92,7 @@ pub fn parse(
         Some("socket-ping") => parse_socket_path(&args[1..]).map(CliCommand::SocketPing),
         Some("benchmark-client") => parse_benchmark(&args[1..]),
         Some("history") => parse_history(&args[1..]).map(CliCommand::History),
+        Some("highlight") => parse_highlight(&args[1..]).map(CliCommand::Highlight),
         Some("--version" | "-V") => Ok(CliCommand::Version),
         Some("--help" | "-h") | None => Ok(CliCommand::Help),
         Some(command) => Err(format!("unknown command: {command}")),
@@ -102,7 +113,8 @@ pub fn help_text(version: &str) -> String {
          mbx history search repo ROOT [--limit N]\n  \
          mbx history search branch NAME [--limit N]\n  \
          mbx history search fuzzy TEXT [--cwd PATH] [--limit N]\n  \
-         mbx history search failed [--limit N]\n\n\
+         mbx history search failed [--limit N]\n  \
+         mbx highlight TEXT [--point N] [--no-color]\n\n\
          PROMPT OPTIONS:\n  --cwd PATH  --status N  --duration-ms N  --flags BITS\n  \
          --no-color  --ascii  --nerd-font  --ssh  --production  --disable-git"
     )
@@ -172,6 +184,33 @@ fn parse_socket_path(args: &[String]) -> Result<PathBuf, String> {
         [option, socket] if option == "--socket" => Ok(PathBuf::from(socket)),
         _ => Err("--socket PATH is required".to_owned()),
     }
+}
+
+fn parse_highlight(args: &[String]) -> Result<HighlightCommand, String> {
+    let text = args.first().cloned().ok_or("highlight requires TEXT")?;
+    let mut point = text.len();
+    let mut no_color = false;
+    let mut index = 1;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--point" => {
+                index += 1;
+                point = args
+                    .get(index)
+                    .ok_or("--point requires a value")?
+                    .parse::<usize>()
+                    .map_err(|_| "--point must be an unsigned integer")?;
+            }
+            "--no-color" => no_color = true,
+            unknown => return Err(format!("unknown highlight option: {unknown}")),
+        }
+        index += 1;
+    }
+    Ok(HighlightCommand::Line {
+        text,
+        point,
+        no_color,
+    })
 }
 
 fn parse_history(args: &[String]) -> Result<HistoryCommand, String> {

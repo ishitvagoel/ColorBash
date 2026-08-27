@@ -881,6 +881,30 @@ assert_eq file "${_MBX_COMP_KINDS[3]:-}" 'src/lib.rs should be kind file'
 assert_eq aaref "${_MBX_COMP_RANKED_REPLY:-}" \
     'prefix aa should rank aaref over stock zzref'
 
+# COMP-004 overlay: snapshot ranked rows and toggle visibility (OV-1).
+MBX_COMP_OVERLAY=1
+_mbx_comp_wrap_backend _mbx_comp_r2_backend
+assert_eq 2 ${#_MBX_COMP_OVERLAY_CANDIDATES[@]} \
+    'overlay snapshot should copy ranked candidates'
+assert_eq aaflag "${_MBX_COMP_OVERLAY_CANDIDATES[0]:-}" \
+    'overlay snapshot head should match ranked list'
+assert_eq zzflag "${_MBX_COMP_OVERLAY_CANDIDATES[1]:-}" \
+    'overlay snapshot should keep the second ranked row'
+_MBX_COMP_OVERLAY_VISIBLE=0
+_mbx_comp_overlay_toggle
+(( _MBX_COMP_OVERLAY_VISIBLE == 1 )) || fail 'overlay toggle should show the list'
+_mbx_comp_overlay_toggle
+(( _MBX_COMP_OVERLAY_VISIBLE == 0 )) || fail 'overlay toggle should hide the list'
+_mbx_comp_wrap_backend _mbx_comp_r2_backend
+_MBX_COMP_OVERLAY_VISIBLE=1
+_MBX_COMP_OVERLAY_LINES=2
+_mbx_comp_cycle_next
+assert_eq 1 "${_MBX_COMP_OVERLAY_INDEX:-0}" \
+    'overlay cycle-next should advance the selection index'
+_mbx_comp_overlay_dismiss
+(( _MBX_COMP_OVERLAY_VISIBLE == 0 )) || fail 'overlay dismiss should hide the list'
+unset MBX_COMP_OVERLAY
+
 # History module contract: MBX2 record encoding, ACK decoding, exclusions,
 # and the fork-free epoch-to-ISO conversion.
 source "$ROOT/bash/history.bash"
@@ -1397,6 +1421,45 @@ rm -rf "$search_stub_dir"
 unset MBX_BIN MBX_HISTORY MBX_SEARCH_TIMEOUT MBX_SEARCH_FAILED READLINE_LINE READLINE_POINT \
     _MBX_SEARCH_INSTALLED _MBX_SEARCH_MATCHES _MBX_SEARCH_INDEX \
     _MBX_SEARCH_ORIGINAL _MBX_SEARCH_ORIGINAL_POINT _MBX_SEARCH_HAS_ORIGINAL
+
+source "$ROOT/bash/highlight.bash"
+[[ $(<"$ROOT/bash/highlight.bash") != *set\ -euo\ pipefail* ]] || \
+    fail 'highlight.bash must not enable errexit/nounset/pipefail in the sourced module'
+_mbx_highlight_strip_line $'echo \033[31mhi\033[0m'
+assert_eq 'echo hi' "$REPLY" 'highlight strip should remove markers and SGR'
+_mbx_highlight_strip_line $'\001\033[32m\002ok\001\033[0m\002'
+assert_eq 'ok' "$REPLY" 'highlight strip should keep plain bytes between markers'
+
+highlight_stub_dir=$(mktemp -d)
+cat >"$highlight_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+if [ "$1" = highlight ]; then
+    shift
+    plain=
+    point=0
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --point) point=$2; shift 2 ;;
+            *) plain="$plain${plain:+ }$1"; shift ;;
+        esac
+    done
+    printf '%s\n' "styled-${plain}-line"
+    printf '%s\n' "$((point + 6))"
+fi
+EOF
+chmod +x "$highlight_stub_dir/mbx"
+MBX_BIN=$highlight_stub_dir/mbx
+MBX_HIGHLIGHT=1
+_MBX_HIGHLIGHT_PLAIN='echo hi'
+_MBX_HIGHLIGHT_POINT=7
+_MBX_HIGHLIGHT_ACTIVE=0
+_mbx_highlight_refresh
+assert_eq 'styled-echo hi-line' "$READLINE_LINE" \
+    'highlight refresh should install the styled helper line'
+assert_eq 13 "$READLINE_POINT" 'highlight refresh should map the styled cursor'
+unset MBX_BIN MBX_HIGHLIGHT _MBX_HIGHLIGHT_PLAIN _MBX_HIGHLIGHT_POINT \
+    _MBX_HIGHLIGHT_ACTIVE READLINE_LINE READLINE_POINT
+rm -rf "$highlight_stub_dir"
 
 source "$ROOT/bash/editor.bash"
 READLINE_LINE='keep-me'

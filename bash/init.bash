@@ -20,6 +20,7 @@ source "$_MBX_ROOT/bash/prompt.bash" || return 0
 source "$_MBX_ROOT/bash/hooks.bash" || return 0
 source "$_MBX_ROOT/bash/editor.bash" || return 0
 source "$_MBX_ROOT/bash/completion.bash" || return 0
+source "$_MBX_ROOT/bash/highlight.bash" || return 0
 source "$_MBX_ROOT/bash/history.bash" || return 0
 source "$_MBX_ROOT/bash/search.bash" || return 0
 source "$_MBX_ROOT/bash/ghost.bash" || return 0
@@ -36,6 +37,7 @@ _mbx_engine_start || true
 _mbx_install_hooks
 _mbx_editor_install || true
 _mbx_completion_install || true
+_mbx_highlight_install || true
 _mbx_search_install || true
 _mbx_history_install_hooks
 _mbx_ghost_install || true

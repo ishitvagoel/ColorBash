@@ -7,6 +7,7 @@
 mod app;
 mod cli;
 mod environment;
+mod highlight;
 mod history;
 mod history_service;
 mod policy;

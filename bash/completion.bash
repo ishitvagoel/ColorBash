@@ -211,6 +211,21 @@ _mbx_comp_wrap_backend() {
     _mbx_comp_fill_metadata
     _mbx_comp_fill_ranking
     _mbx_comp_fill_ranked_list
+    _mbx_comp_overlay_snapshot
+}
+
+_mbx_comp_overlay_snapshot() {
+    [[ ${MBX_COMP_OVERLAY:-} == 1 ]] || return 0
+    local i idx
+    _MBX_COMP_OVERLAY_CANDIDATES=("${_MBX_COMP_RANKED_LIST[@]}")
+    _MBX_COMP_OVERLAY_KINDS=()
+    _MBX_COMP_OVERLAY_DESCS=()
+    for ((i = 0; i < ${#_MBX_COMP_RANKED_LIST[@]} && i < 8; i++)); do
+        idx=${_MBX_COMP_ORDER[i]:-0}
+        _MBX_COMP_OVERLAY_KINDS+=("${_MBX_COMP_KINDS[idx]:-}")
+        _MBX_COMP_OVERLAY_DESCS+=("${_MBX_COMP_DESCS[idx]:-}")
+    done
+    _MBX_COMP_OVERLAY_INDEX=0
 }
 
 _mbx_comp_identifier_ok() {
@@ -311,6 +326,11 @@ _mbx_comp_flag_nospace_adapter() {
 _MBX_COMP_ACCEPT_DEFAULT_KEYSEQ='\C-x\C-a'
 _MBX_COMP_CYCLE_NEXT_DEFAULT_KEYSEQ='\C-xn'
 _MBX_COMP_CYCLE_PREV_DEFAULT_KEYSEQ='\C-xp'
+_MBX_COMP_OVERLAY_DEFAULT_KEYSEQ='\C-x\C-o'
+_MBX_COMP_OVERLAY_VISIBLE=0
+_MBX_COMP_OVERLAY_LINES=0
+_MBX_COMP_OVERLAY_INDEX=0
+_MBX_COMP_OVERLAY_CANDIDATES=()
 
 _mbx_comp_readline_word() {
     local point=${READLINE_POINT:-0}
@@ -343,6 +363,10 @@ _mbx_comp_apply_word_token() {
 _mbx_comp_accept_ranked() {
     local token=${_MBX_COMP_RANKED_REPLY-}
     local current
+    if [[ ${_MBX_COMP_OVERLAY_VISIBLE:-0} == 1 ]]; then
+        token=${_MBX_COMP_OVERLAY_CANDIDATES[_MBX_COMP_OVERLAY_INDEX]:-}
+        _mbx_comp_overlay_dismiss
+    fi
     [[ -n $token ]] || return 0
     _mbx_comp_readline_word
     current=$REPLY
@@ -380,12 +404,124 @@ _mbx_comp_cycle_ranked() {
     _mbx_comp_apply_word_token "$token"
 }
 
-_mbx_comp_cycle_next() {
-    _mbx_comp_cycle_ranked next
+_mbx_comp_cycle_prev() {
+    if [[ ${_MBX_COMP_OVERLAY_VISIBLE:-0} == 1 ]]; then
+        local n=${#_MBX_COMP_OVERLAY_CANDIDATES[@]}
+        ((n > 0)) || return 0
+        _MBX_COMP_OVERLAY_INDEX=$(( (_MBX_COMP_OVERLAY_INDEX + n - 1) % n ))
+        _mbx_comp_overlay_refresh
+        return
+    fi
+    _mbx_comp_cycle_ranked prev
 }
 
-_mbx_comp_cycle_prev() {
-    _mbx_comp_cycle_ranked prev
+_mbx_comp_overlay_have_tty() {
+    [[ -t 1 ]]
+}
+
+_mbx_comp_overlay_clear() {
+    local lines=${_MBX_COMP_OVERLAY_LINES:-0}
+    local i
+    [[ $lines -gt 0 ]] || {
+        _MBX_COMP_OVERLAY_VISIBLE=0
+        return 0
+    }
+    if _mbx_comp_overlay_have_tty; then
+        for ((i = 0; i < lines; i++)); do
+            printf '\033[A\033[2K' >/dev/tty 2>/dev/null || true
+        done
+    fi
+    _MBX_COMP_OVERLAY_LINES=0
+    _MBX_COMP_OVERLAY_VISIBLE=0
+}
+
+_mbx_comp_overlay_refresh() {
+    local i n=${#_MBX_COMP_OVERLAY_CANDIDATES[@]}
+    local idx=${_MBX_COMP_OVERLAY_INDEX:-0}
+    local kind desc
+    [[ ${MBX_COMP_OVERLAY:-} == 1 ]] || return 0
+    ((n > 0)) || {
+        _mbx_comp_overlay_clear
+        return 0
+    }
+    _mbx_comp_overlay_clear
+    ((idx >= n)) && idx=$((n - 1))
+    _MBX_COMP_OVERLAY_INDEX=$idx
+    if _mbx_comp_overlay_have_tty; then
+        for ((i = 0; i < n && i < 8; i++)); do
+            kind=${_MBX_COMP_OVERLAY_KINDS[i]:-}
+            desc=${_MBX_COMP_OVERLAY_DESCS[i]:-}
+            if ((i == idx)); then
+                printf '>\033[1m %s\033[0m' "${_MBX_COMP_OVERLAY_CANDIDATES[i]}" >/dev/tty 2>/dev/null || true
+            else
+                printf '  %s' "${_MBX_COMP_OVERLAY_CANDIDATES[i]}" >/dev/tty 2>/dev/null || true
+            fi
+            if [[ -n $kind || -n $desc ]]; then
+                if [[ -n $kind && -n $desc ]]; then
+                    printf ' \033[90m(%s: %s)\033[0m' "$kind" "$desc" >/dev/tty 2>/dev/null || true
+                elif [[ -n $kind ]]; then
+                    printf ' \033[90m(%s)\033[0m' "$kind" >/dev/tty 2>/dev/null || true
+                else
+                    printf ' \033[90m(%s)\033[0m' "$desc" >/dev/tty 2>/dev/null || true
+                fi
+            fi
+            printf '\n' >/dev/tty 2>/dev/null || true
+            _MBX_COMP_OVERLAY_LINES=$((_MBX_COMP_OVERLAY_LINES + 1))
+        done
+    fi
+    _MBX_COMP_OVERLAY_VISIBLE=1
+}
+
+_mbx_comp_overlay_toggle() {
+    [[ ${MBX_COMP_OVERLAY:-} == 1 ]] || return 0
+    ((${#_MBX_COMP_OVERLAY_CANDIDATES[@]} > 0)) || return 0
+    if [[ ${_MBX_COMP_OVERLAY_VISIBLE:-0} == 1 ]]; then
+        _mbx_comp_overlay_clear
+        return 0
+    fi
+    _mbx_comp_overlay_refresh
+}
+
+_mbx_comp_overlay_dismiss() {
+    _mbx_comp_overlay_clear
+}
+
+_mbx_comp_install_overlay() {
+    [[ ${_MBX_COMP_OVERLAY_INSTALLED:-0} != 1 ]] || return 0
+    if [[ $- != *i* ]]; then
+        _MBX_COMP_OVERLAY_INSTALLED=1
+        return 0
+    fi
+    [[ ${MBX_COMP_OVERLAY:-} == 1 ]] || {
+        _MBX_COMP_OVERLAY_INSTALLED=1
+        return 0
+    }
+    local keyseq=${MBX_COMP_OVERLAY_KEYSEQ:-$_MBX_COMP_OVERLAY_DEFAULT_KEYSEQ}
+    local override=${MBX_COMP_OVERLAY_OVERRIDE:-0}
+    _MBX_COMP_OVERLAY_BOUND=0
+    _MBX_COMP_OVERLAY_VI_INSERT_BOUND=0
+    _MBX_COMP_OVERLAY_KEYSEQ_ACTIVE=$keyseq
+    if _mbx_comp_install_bind_keymap emacs "$keyseq" _mbx_comp_overlay_toggle "$override"; then
+        _MBX_COMP_OVERLAY_BOUND=1
+    fi
+    if _mbx_comp_install_bind_keymap vi-insert "$keyseq" _mbx_comp_overlay_toggle "$override"; then
+        _MBX_COMP_OVERLAY_VI_INSERT_BOUND=1
+    fi
+    if _mbx_comp_install_bind_keymap emacs '\C-g' _mbx_comp_overlay_dismiss "$override"; then
+        :
+    fi
+    _MBX_COMP_OVERLAY_INSTALLED=1
+}
+
+_mbx_comp_cycle_next() {
+    if [[ ${_MBX_COMP_OVERLAY_VISIBLE:-0} == 1 ]]; then
+        local n=${#_MBX_COMP_OVERLAY_CANDIDATES[@]}
+        ((n > 0)) || return 0
+        _MBX_COMP_OVERLAY_INDEX=$(( (_MBX_COMP_OVERLAY_INDEX + 1) % n ))
+        _mbx_comp_overlay_refresh
+        return
+    fi
+    _mbx_comp_cycle_ranked next
 }
 
 _mbx_comp_keyseq_occupied() {
@@ -538,6 +674,7 @@ _mbx_completion_install() {
     [[ ${_MBX_COMPLETION_INSTALLED:-0} != 1 ]] || return 0
     _mbx_comp_install_accept
     _mbx_comp_install_cycle
+    _mbx_comp_install_overlay
     if [[ ${MBX_COMP_FIXTURES:-0} == 1 ]]; then
         _mbx_comp_install_probe
         _mbx_comp_install_flag

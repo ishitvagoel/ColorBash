@@ -827,3 +827,42 @@ fn git_kinds_ranked_accept_replaces_ref() {
     session.write_str("\n", deadline(2)).expect("submit");
     wait_all(&mut session, &["\nGOT:aaref|", "> "]);
 }
+
+#[test]
+fn ranked_accept_works_with_overlay_env() {
+    let home = TempHome::new("comp-ov0");
+    let mut session = spawn_mbx_shell(
+        home.path(),
+        &[("MBX_COMP_FIXTURES", "1"), ("MBX_COMP_OVERLAY", "1")],
+        "",
+    );
+    wait_prompt(&mut session);
+    session
+        .write_str("mbx_comp_rank aa", deadline(2))
+        .expect("type rank prefix");
+    send_tab(&mut session);
+    send_accept_ranked(&mut session);
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["\nGOT:aaflag|", "> "]);
+}
+
+const OVERLAY_KEYSEQ: &[u8] = &[CTRL_X, 0x0f];
+
+#[test]
+fn overlay_lists_ranked_candidates_after_tab() {
+    let home = TempHome::new("comp-ov1");
+    let mut session = spawn_mbx_shell(
+        home.path(),
+        &[("MBX_COMP_FIXTURES", "1"), ("MBX_COMP_OVERLAY", "1")],
+        "",
+    );
+    wait_prompt(&mut session);
+    session
+        .write_str("mbx_comp_rank aa", deadline(2))
+        .expect("type rank prefix");
+    send_tab(&mut session);
+    session
+        .write_all(OVERLAY_KEYSEQ, deadline(2))
+        .expect("overlay chord");
+    wait_all(&mut session, &["aaflag", "> "]);
+}

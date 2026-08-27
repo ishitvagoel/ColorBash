@@ -6,10 +6,10 @@
 > intended program and are not a status tracker.
 
 - Last reviewed: 2026-08-27 UTC
-- Current milestone: Strategy A MVP is `complete` on Linux (`G5` 2026-08-27); Phase 9 `complete`; macOS `HRD-001` `deferred` (ADR 0012); `HRD-003` `deferred`; overlay `deferred`
-- Active workstream: G5 revisit — macOS PTY when a host is available; overlay/highlighting/dim paint; percentile benches
-- Next decision gate: G5 revisit (macOS matrix, `COMP-004` overlay, `HLT-*`, `HRD-003`). Continuous decoration **defers** highlighting and GUI overlay only
-- Editor-facing work: opt-in ghost suffix is on main (ADR 0010). Async QUERY with stale-generation skip is recorded (ADR 0011). Explicit history-search insert (`\C-xh`), cycling, restore (`\C-xl`), cwd preference, and opt-in failed empty-line insert are recorded (ADR 0009). Highlighting, dim paint, and GUI overlays are `deferred` from this MVP (G5 revisit)
+- Current milestone: Strategy A MVP is `complete` on Linux (`G5` 2026-08-27); Phase 9 `complete`; macOS `HRD-001` `deferred` (ADR 0012); `HRD-003` `deferred`; ADR 0013 overlay/highlighting in `validation`
+- Active workstream: G5 revisit — macOS PTY when a host is available; `HLT-003` hostile/latency gates; dim paint; percentile benches
+- Next decision gate: G5 revisit (macOS matrix, `HLT-003`, `HRD-003`, dim paint). Strategy A overlay and highlighting are implemented (ADR 0013); type-to-filter overlays stay deferred
+- Editor-facing work: opt-in ghost suffix is on main (ADR 0010). Async QUERY with stale-generation skip is recorded (ADR 0011). Explicit history-search insert (`\C-xh`), cycling, restore (`\C-xl`), cwd preference, and opt-in failed empty-line insert are recorded (ADR 0009). Opt-in syntax highlighting (`MBX_HIGHLIGHT=1`) and completion overlay (`MBX_COMP_OVERLAY=1`) are recorded (ADR 0013). Dim paint and type-to-filter overlays are `deferred` from this MVP (G5 revisit)
 - Timing policy: unmet percentile targets are `deferred` and do not block
   product development (`docs/latency-budget-deferral.md`)
 
@@ -129,9 +129,8 @@ recorded a green run on `origin/main` at commit
 
 Not implemented:
 
-- live highlighting, dim after-every-key paint, or a GUI completion / Ctrl+R
-  overlay (`COMP-004` stays `discovery`; overlay `deferred` from this Strategy A
-  MVP; G5 revisit);
+- dim after-every-key paint or a type-to-filter Ctrl+R overlay (G5 revisit);
+- `HLT-003` hostile-input and latency exit gates for highlighting;
 - the release platform matrix (`HRD-001` macOS `deferred` per ADR 0012; Linux
   nested/SSH/login/vim/tmux PTY recorded), or remaining G5 pairwise combinations
   on macOS; or
@@ -337,8 +336,8 @@ targets stay `deferred` and are not a pass/fail requirement for this close.
 | 2 | Prompt | `complete` | `PRM-001`/`PRM-009` complete; capability/width/wrap recorded; `PRM-004` percentiles `deferred` |
 | 3 | History | `complete` | Phase 3A / `G2` complete; `HIST-009` and `HIST-010` complete; write-ack percentiles `deferred` |
 | 4 | Ghost suggestions | `complete` | ADR 0010 suffix; ADR 0011 QUERY + generation skip + overlapping delayed-RESULT PTY; `GHST-004` functional PTY recorded; dim paint `deferred`; latency percentiles `deferred` |
-| 5 | Completion | `complete` | Strategy A insert/fallthrough (`COMP-005`); `G4` / `COMP-001`–`COMP-003` / `GIT-004` complete; ranked-cycle `\C-xn` / `\C-xp`; `COMP-004` overlay leftover `discovery`; overlay `deferred` |
-| 6 | Syntax highlighting | `deferred` | no after-every-key paint hook (ADR 0003); G5 revisit; IDs kept |
+| 5 | Completion | `complete` | Strategy A insert/fallthrough (`COMP-005`); `G4` / `COMP-001`–`COMP-003` / `GIT-004` complete; ranked-cycle `\C-xn` / `\C-xp`; `COMP-004` overlay slice `validation` (ADR 0013) |
+| 6 | Syntax highlighting | `validation` | ADR 0013; `HLT-001`/`HLT-002` implemented; `HLT-003` hostile/latency gates `deferred` |
 | 7 | Git/provider expansion | `complete` | MVP exits `GIT-002` / `GIT-004` (`docs/git-phase7-mvp-close-plan.md`); `GIT-005` SDK `deferred`; upstream/remotes/tags unauthorized |
 | 8 | Enhanced Ctrl+R | `complete` | `SRCH-001`–`SRCH-003` complete (ADR 0009); cwd/signal/opt-in failed insert recorded; 100k interactive leftover `deferred`; overlay `deferred`; interactive repo insert unauthorized |
 | 9 | Release hardening | `complete` | `HRD-002` and `HRD-004` complete; Linux `HRD-001` L-1–L-5 recorded; macOS `HRD-001` `deferred` (ADR 0012); `HRD-003` `deferred`; `G5` closed (`docs/g5-strategy-a-close-plan.md`) |
@@ -486,8 +485,9 @@ percentiles are `deferred` and do not block that exit.
 ### Phase 5 — Completion
 
 Status: `complete` for Strategy A insert/fallthrough (`COMP-005`, 2026-08-25).
-Popup policy stays in `discovery` (`COMP-004`). GUI overlay is `deferred` from
-this MVP. Ranked-accept is on main. Ranked-cycle defaults to `\C-xn` / `\C-xp`
+Popup policy is `complete` (`docs/comp-004-popup-plan.md` P-1–P-4). Strategy A
+overlay slice is `validation` (ADR 0013; `docs/comp-004-overlay-plan.md`). Tab
+stays stock. Ranked-accept is on main. Ranked-cycle defaults to `\C-xn` / `\C-xp`
 so ghost `\C-x\C-n` / `\C-x\C-p` stay free.
 `COMP-001` / `COMP-002` / `COMP-003` / `GIT-004` / `COMP-005` are complete.
 
@@ -502,18 +502,19 @@ live-state and `compopt` parity are demonstrated. Do not start a GUI overlay.
 | `COMP-001` | Build a non-popup stock-completion adapter harness | `complete` | `docs/comp-001-harness-plan.md`; H-1–H-4; `G4` complete; 5 ms leftover `deferred` |
 | `COMP-002` | Prove file and one `-F` function's exact insertion parity | `complete` | `docs/comp-002-parity-plan.md`; P-1–P-4, F-1–F-4, L-1–L-4, N-1–N-2, S-1–S-4; `docs/g4-gate-close-plan.md`; 5 ms leftover `deferred` |
 | `COMP-003` | Add typed candidate metadata and bounded ranking | `complete` | `docs/comp-003-metadata-plan.md` K-1–K-4; `docs/comp-003-ranking-plan.md` R-1–R-4 in `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs` |
-| `COMP-004` | Add popup navigation and terminal-safe rendering | `discovery` | `docs/comp-004-popup-plan.md` P-1–P-4; ranked-accept A-1–A-5 on main (`docs/comp-004-ranked-accept-plan.md`); ranked-cycle C-1–C-6 (`docs/comp-004-ranked-cycle-plan.md`; default `\C-xn` / `\C-xp`, not ghost `\C-x\C-n` / `\C-x\C-p`); GUI overlay `deferred` |
+| `COMP-004` | Add popup navigation and terminal-safe rendering | `validation` | Popup policy P-1–P-4 (`docs/comp-004-popup-plan.md`); ranked-accept A-1–A-6; ranked-cycle C-1–C-6; overlay slice OV-1 + PTY (`docs/comp-004-overlay-plan.md`, ADR 0013); type-to-filter GUI menu `deferred` |
 | `COMP-005` | Insert/fall through exactly and pass the parity/PTY matrix | `complete` | `docs/comp-005-strategy-a-close-plan.md`; G4/COMP-002 P-1–P-4, L-1–L-4, N-1–N-2, S-1–S-4; ranked-accept A-1–A-6; ranked-cycle C-1–C-6 (`\C-xn` / `\C-xp`); `GIT-004` kinds; overlay `deferred`; 5 ms leftover `deferred` |
 
 Exit condition: `G4` for the adapter slice; `COMP-005` for the Strategy A
-completion feature. Overlay leftover stays `COMP-004` `discovery`. Do not mark
-`COMP-004` complete.
+completion feature. Overlay slice awaits `HLT-003`-class hostile/latency evidence
+before `COMP-004` moves to `complete`. Type-to-filter GUI menus remain
+`deferred`.
 
 ### Phase 6 — Syntax highlighting
 
-Status: `deferred` from this Strategy A MVP (owner **G5 revisit**). Unproven
-continuous decoration (ADR 0003); intentionally last among editor experiments.
-IDs are kept. Do not idle product development on this phase.
+Status: `validation` (ADR 0013; owner **G5 revisit**). Strategy A highlighting
+is implemented; hostile-input and latency exit gates remain open.
+IDs are kept. Do not idle product development on percentile leftovers.
 
 Define a tolerant token taxonomy only after Readline redraw feasibility is known.
 The highlighter must accept incomplete Bash, never execute or expand input, bound
@@ -522,8 +523,8 @@ and strip back to the exact original bytes.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `HLT-001` | Define token taxonomy and tolerant incomplete-input lexer | `deferred` | unproven continuous decoration and ADR 0003; G5 revisit |
-| `HLT-002` | Integrate terminal-safe styling without taking execution ownership | `deferred` | `HLT-001`, accepted redraw strategy; G5 revisit |
+| `HLT-001` | Define token taxonomy and tolerant incomplete-input lexer | `validation` | `docs/hlt-001-lexer-plan.md`; `crates/cli/src/highlight.rs`; `cargo test -p mbx highlight::` |
+| `HLT-002` | Integrate terminal-safe styling without taking execution ownership | `validation` | `docs/hlt-002-integration-plan.md`; `bash/highlight.bash`; `tests/bash/modules.bash`; `crates/pty/tests/highlight.rs` |
 | `HLT-003` | Pass exact-byte stripping, hostile-input, PTY, and latency gates | `deferred` | `HLT-002`, `PTY-001`; G5 revisit |
 
 Exit condition: `HLT-003` if G5 keeps highlighting in scope; otherwise remain
@@ -605,12 +606,14 @@ block product slices (`docs/latency-budget-deferral.md`).
 
 1. **G5 revisit** when a macOS host is available: run the `HRD-001` pairwise
    matrix per ADR 0012. Do not fake it on Linux.
-2. Overlay (`COMP-004` `discovery`), highlighting (`HLT-*`), and dim paint stay
-   `deferred` (ADR 0003). Do not mark `COMP-004` complete without an overlay ADR.
+2. **`HLT-003`** hostile-input and latency gates for highlighting; dim paint stays
+   `deferred`. Do not mark `COMP-004` or Phase 6 `complete` until exit evidence
+   exists.
 3. `HRD-003` / `PRM-004` percentiles stay `deferred` unless an ADR ratifies new
    numbers or a functional prompt-path defect is proven.
 4. `GIT-005` provider SDK stays post-MVP `deferred`.
-5. Do not enable capture by default. Do not start highlighting or dim paint.
+5. Do not enable capture by default. Do not combine `MBX_GHOST=1` with
+   `MBX_HIGHLIGHT=1`.
 
 ## Provisional performance and safety budgets
 
@@ -635,10 +638,11 @@ they become `G5` release promises.
 ## Cross-cutting risks requiring evidence
 
 - Standard Readline exposes `READLINE_LINE` during `bind -x` but no supported
-  after-every-key decoration hook. That leftover **defers** highlighting and GUI
-  overlays. Rebinding printables to fake an overlay is a stop/reassess
-  condition. Strategy A explicit `bind -x` and suffix-in-buffer features are
-  not blocked by it.
+  after-every-key decoration hook. Strategy A self-insert wrapping (ADR 0010,
+  ADR 0013) is the accepted workaround for ghost suffix and opt-in highlighting.
+  Type-to-filter overlays and dim paint remain `deferred`. Rebinding printables to
+  fake an overlay is a stop/reassess condition. Strategy A explicit `bind -x` and
+  suffix-in-buffer features are not blocked by it.
 - Completion functions depend on live shell state and `compopt`; asynchronous or
   subprocess execution can change semantics.
 - MBX1 is sequential and prompt-oriented. History RECORD uses MBX2 on the same
@@ -787,3 +791,4 @@ an accepted decoration/ownership ADR.
 | 2026-08-26 | Recorded `HRD-001` Linux pairwise PTY L-1–L-5 (`docs/hrd-001-linux-pairwise-plan.md`; nested, SSH prompt, login, vim restore, `/usr/bin/tmux`). macOS matrix stays host-blocked. Do not mark `HRD-001` or `G5` complete. |
 | 2026-08-26 | Fixed engine coprocess SIGINT at the prompt (M-051). Ctrl+C no longer kills `mbx serve` or prints coproc job noise. |
 | 2026-08-27 | Accepted ADR 0012 macOS `HRD-001` deferral. Closed `G5` and Phase 9 for Strategy A MVP on Linux (`docs/g5-strategy-a-close-plan.md`). `HRD-001` Linux `complete`; macOS `deferred`. Overlay/highlighting/percentiles stay `deferred`. |
+| 2026-08-27 | Accepted ADR 0013 opt-in continuous decoration. Implemented `MBX_HIGHLIGHT=1` (`bash/highlight.bash`, `mbx highlight`) and `MBX_COMP_OVERLAY=1` (`bash/completion.bash`). `HLT-001`/`HLT-002` and `COMP-004` overlay slice move to `validation`; `HLT-003` hostile/latency gates stay `deferred`. |

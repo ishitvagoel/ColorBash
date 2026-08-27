@@ -1,5 +1,5 @@
 use crate::VERSION;
-use crate::cli::{self, CliCommand, HistoryCommand, ServeTarget};
+use crate::cli::{self, CliCommand, HighlightCommand, HistoryCommand, ServeTarget};
 use crate::environment;
 use crate::history::{HistoryControl, HistoryError, HistoryPolicy, HistorySearch};
 use crate::prompt::PromptRendering;
@@ -54,6 +54,7 @@ pub fn execute(command: CliCommand, renderer: &dyn PromptRendering) -> Result<()
         CliCommand::SocketPing(path) => socket_ping(&path),
         CliCommand::BenchmarkClient { socket, iterations } => benchmark_client(&socket, iterations),
         CliCommand::History(history) => execute_history(history),
+        CliCommand::Highlight(highlight) => execute_highlight(highlight),
         CliCommand::Version => {
             println!("mbx {VERSION}");
             Ok(())
@@ -151,6 +152,23 @@ fn execute_history(command: HistoryCommand) -> Result<(), String> {
         HistoryCommand::SearchFailed { limit } => {
             let store = open_history_store()?;
             print_entries(store.failed(limit).map_err(|error| error.to_string())?)
+        }
+    }
+}
+
+fn execute_highlight(command: HighlightCommand) -> Result<(), String> {
+    match command {
+        HighlightCommand::Line {
+            text,
+            point,
+            no_color,
+        } => {
+            let color = !no_color && !environment::color_disabled_for_stdout();
+            let rendered = crate::highlight::highlight_line(&text, point, color)
+                .ok_or_else(|| "highlight input was rejected".to_owned())?;
+            println!("{}", rendered.0);
+            println!("{}", rendered.1);
+            Ok(())
         }
     }
 }
