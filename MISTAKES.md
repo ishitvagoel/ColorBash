@@ -1115,3 +1115,41 @@ to prevent recurrence, not to assign blame.
 - Evidence: `iso` in `tests/bash/smoke.bash`; CI run
   https://github.com/ishitvagoel/ColorBash/actions/runs/33132959261
 
+## M-058 — Configure menu did not round-trip the saved file
+
+- Discovered: 2026-08-28
+- Status: Fixed
+- Failed assumption: opening choice “keep current answers” preserved in-memory
+  defaults, so re-running the menu or `mbx_configure --answers` did not need
+  to parse `~/.config/mbx/config.bash`.
+- Impact: a second interactive run started from empty/preset values and wiped
+  customizations; `mbx_configure --answers KEY=value` reset every other flag.
+- Correction: `load_existing_config` sources the file in a subprocess and
+  maps `MBX_*` into answers keys. Interactive runs auto-load when the file
+  exists. `mbx_configure` prepends `--from-config`.
+- Prevention: any tool that writes a user config must load that file as the
+  default starting state on re-entry; assert a piped `4` then `w` after a
+  comfort write keeps ghost, and `--from-config --answers` overlays wrap.
+- Evidence: `load_existing_config` in `scripts/configure.bash`;
+  `mbx_configure` in `bash/config.bash`; smoke cases in
+  `tests/bash/smoke.bash`.
+
+## M-059 — Configure `--build` was parsed and ignored
+
+- Discovered: 2026-08-28
+- Status: Fixed
+- Failed assumption: documenting `--build` / `--no-build` on
+  `scripts/configure.bash` was enough because `install.bash --interactive`
+  already compiled the helper.
+- Impact: `bash scripts/configure.bash --build` never invoked cargo, so a
+  user who skipped `install.bash` could save options against a missing
+  helper with no build attempt.
+- Correction: `maybe_build` runs `cargo build --release --workspace` from
+  the repo root when `NO_BUILD=0`. Default for this script stays
+  `--no-build`.
+- Prevention: a parsed CLI flag that names a subprocess must have a
+  production call plus a test that the missing executable fails before
+  writing output.
+- Evidence: `maybe_build` in `scripts/configure.bash`; smoke
+  `--build` without cargo.
+

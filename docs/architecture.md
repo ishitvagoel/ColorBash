@@ -231,8 +231,10 @@ does not write `~/.bashrc`; `scripts/install.bash --bashrc` is an explicit
 opt-in writer of a managed block. `scripts/configure.bash` (also
 `install.bash --interactive` and `mbx_configure`) is an interactive option
 menu that writes the same config file; it does not write `~/.bashrc` unless
-persist is enabled. `--bashrc` follows a symlink only when the target is a
-regular file under `$HOME`. `init.bash` preserves existing
+persist is enabled. Re-running the menu loads the existing file (opening
+choice 4, or `--from-config`); `mbx_configure` passes `--from-config` so
+`--answers` overlays instead of wiping. `--bashrc` follows a symlink only when
+the target is a regular file under `$HOME`. `init.bash` preserves existing
 `PROMPT_COMMAND` entries by converting them to an array and placing two MBX
 callbacks around them:
 

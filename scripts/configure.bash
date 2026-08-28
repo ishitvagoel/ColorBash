@@ -9,6 +9,7 @@ ANSWERS_FILE=
 PRESET=
 WRITE_BASHRC=0
 NO_BUILD=1
+FROM_CONFIG=0
 
 usage() {
     cat <<'EOF'
@@ -17,13 +18,15 @@ Configure MBX options interactively, or from an answers file.
 Usage:
   bash scripts/configure.bash
   bash scripts/configure.bash --preset comfort|highlight|prompt
-  bash scripts/configure.bash --answers FILE
+  bash scripts/configure.bash --from-config --answers FILE
   mbx_configure                  # after source bash/init.bash
 
 --answers FILE   Non-interactive KEY=value lines (tests / scripting)
---preset NAME    Start from a named profile (menu still opens unless --answers)
+--from-config    Load the existing config file first (mbx_configure default)
+--preset NAME    Apply a named profile after any --from-config load
 --bashrc         Default persist-in-bashrc to yes (still confirmed in the menu)
---no-build       Unused; kept so install.bash can forward flags
+--build          cargo build --release --workspace before writing
+--no-build       Skip cargo build (default for this script)
 
 Answers keys (bools are 0 or 1). Unknown keys are rejected.
   preset history ghost highlight overlay wrap color icons disable_git
@@ -194,10 +197,61 @@ is_known() {
     [[ " $KNOWN " == *" $1 "* ]]
 }
 
+canonicalize_key() {
+    case $1 in
+        MBX_HISTORY) REPLY=history ;;
+        MBX_GHOST) REPLY=ghost ;;
+        MBX_HIGHLIGHT) REPLY=highlight ;;
+        MBX_COMP_OVERLAY) REPLY=overlay ;;
+        MBX_COMP_WRAP) REPLY=wrap ;;
+        MBX_COLOR) REPLY=color ;;
+        MBX_ICONS) REPLY=icons ;;
+        MBX_DISABLE_GIT) REPLY=disable_git ;;
+        MBX_PRODUCTION_CONTEXT) REPLY=production ;;
+        MBX_ENABLE_DURATION_TIMING) REPLY=duration ;;
+        MBX_SEARCH_CWD) REPLY=search_cwd ;;
+        MBX_SEARCH_FAILED) REPLY=search_failed ;;
+        MBX_HISTORY_EXCLUDE) REPLY=exclude ;;
+        MBX_IPC_MODE) REPLY=ipc ;;
+        MBX_DISABLE_RENDERER) REPLY=renderer ;;
+        MBX_RENDER_TIMEOUT) REPLY=render_timeout ;;
+        MBX_SEARCH_TIMEOUT) REPLY=search_timeout ;;
+        MBX_HIGHLIGHT_TIMEOUT) REPLY=highlight_timeout ;;
+        MBX_GHOST_LIMIT) REPLY=ghost_limit ;;
+        MBX_SEARCH_LIMIT) REPLY=search_limit ;;
+        MBX_LOG) REPLY=log ;;
+        MBX_EDITOR_INSERT_TOKEN) REPLY=editor_token ;;
+        MBX_GHOST_OVERRIDE) REPLY=ghost_override ;;
+        MBX_SEARCH_OVERRIDE) REPLY=search_override ;;
+        MBX_SEARCH_RESTORE_OVERRIDE) REPLY=search_restore_override ;;
+        MBX_EDITOR_OVERRIDE) REPLY=editor_override ;;
+        MBX_COMP_ACCEPT_OVERRIDE) REPLY=comp_accept_override ;;
+        MBX_COMP_CYCLE_OVERRIDE) REPLY=comp_cycle_override ;;
+        MBX_COMP_OVERLAY_OVERRIDE) REPLY=overlay_override ;;
+        MBX_HIGHLIGHT_OVERRIDE) REPLY=highlight_override ;;
+        MBX_GHOST_DELETE_KEYSEQ) REPLY=ghost_delete_keyseq ;;
+        MBX_GHOST_ACCEPT_KEYSEQ) REPLY=ghost_accept_keyseq ;;
+        MBX_GHOST_NEXT_KEYSEQ) REPLY=ghost_next_keyseq ;;
+        MBX_GHOST_PREV_KEYSEQ) REPLY=ghost_prev_keyseq ;;
+        MBX_SEARCH_KEYSEQ) REPLY=search_keyseq ;;
+        MBX_SEARCH_RESTORE_KEYSEQ) REPLY=search_restore_keyseq ;;
+        MBX_EDITOR_INSERT_KEYSEQ) REPLY=editor_keyseq ;;
+        MBX_COMP_ACCEPT_KEYSEQ) REPLY=comp_accept_keyseq ;;
+        MBX_COMP_CYCLE_NEXT_KEYSEQ) REPLY=comp_cycle_next_keyseq ;;
+        MBX_COMP_CYCLE_PREV_KEYSEQ) REPLY=comp_cycle_prev_keyseq ;;
+        MBX_COMP_OVERLAY_KEYSEQ) REPLY=overlay_keyseq ;;
+        MBX_COMP_OVERLAY_DISMISS_KEYSEQ) REPLY=overlay_dismiss_keyseq ;;
+        MBX_HIGHLIGHT_ACCEPT_KEYSEQ) REPLY=highlight_accept_keyseq ;;
+        *) REPLY=$1 ;;
+    esac
+}
+
 apply_answer() {
     local key=$1 val=$2
+    canonicalize_key "$key"
+    key=$REPLY
     is_known "$key" || {
-        printf 'unknown answers key: %s\n' "$key" >&2
+        printf 'unknown answers key: %s\n' "$1" >&2
         return 2
     }
     case $key in
@@ -290,6 +344,82 @@ load_answers() {
         val=${line#*=}
         apply_answer "$key" "$val"
     done <"$file"
+}
+
+detect_bashrc_persist() {
+    local bashrc=${HOME:-}/.bashrc
+    if [[ -n ${HOME:-} && -f $bashrc ]] && grep -Fq '# >>> mbx begin' "$bashrc"; then
+        V[bashrc]=1
+    fi
+}
+
+load_existing_config() {
+    local path dump line key val
+    path=$(config_path)
+    [[ $path == /* && -f $path && -r $path ]] || return 0
+    dump=$(bash --noprofile --norc -c '
+        # shellcheck disable=SC1090
+        source "$1" >/dev/null || exit 1
+        for n in \
+            MBX_HISTORY MBX_GHOST MBX_HIGHLIGHT MBX_COMP_OVERLAY MBX_COMP_WRAP \
+            MBX_COLOR MBX_ICONS MBX_DISABLE_GIT MBX_PRODUCTION_CONTEXT \
+            MBX_ENABLE_DURATION_TIMING MBX_SEARCH_CWD MBX_SEARCH_FAILED \
+            MBX_HISTORY_EXCLUDE MBX_IPC_MODE MBX_DISABLE_RENDERER \
+            MBX_RENDER_TIMEOUT MBX_SEARCH_TIMEOUT MBX_HIGHLIGHT_TIMEOUT \
+            MBX_GHOST_LIMIT MBX_SEARCH_LIMIT MBX_LOG MBX_EDITOR_INSERT_TOKEN \
+            MBX_GHOST_OVERRIDE MBX_SEARCH_OVERRIDE MBX_SEARCH_RESTORE_OVERRIDE \
+            MBX_EDITOR_OVERRIDE MBX_COMP_ACCEPT_OVERRIDE MBX_COMP_CYCLE_OVERRIDE \
+            MBX_COMP_OVERLAY_OVERRIDE MBX_HIGHLIGHT_OVERRIDE \
+            MBX_GHOST_DELETE_KEYSEQ MBX_GHOST_ACCEPT_KEYSEQ \
+            MBX_GHOST_NEXT_KEYSEQ MBX_GHOST_PREV_KEYSEQ \
+            MBX_SEARCH_KEYSEQ MBX_SEARCH_RESTORE_KEYSEQ MBX_EDITOR_INSERT_KEYSEQ \
+            MBX_COMP_ACCEPT_KEYSEQ MBX_COMP_CYCLE_NEXT_KEYSEQ \
+            MBX_COMP_CYCLE_PREV_KEYSEQ MBX_COMP_OVERLAY_KEYSEQ \
+            MBX_COMP_OVERLAY_DISMISS_KEYSEQ MBX_HIGHLIGHT_ACCEPT_KEYSEQ
+        do
+            if [[ ${!n+x} ]]; then
+                printf "%s=%s\n" "$n" "${!n}"
+            fi
+        done
+    ' _ "$path") || {
+        printf 'warning: could not read existing config %s\n' "$path" >&2
+        return 0
+    }
+    while IFS= read -r line || [[ -n $line ]]; do
+        [[ -z $line || $line != *=* ]] && continue
+        key=${line%%=*}
+        val=${line#*=}
+        apply_answer "$key" "$val" || true
+    done <<<"$dump"
+    detect_bashrc_persist
+}
+
+maybe_build() {
+    ((NO_BUILD == 0)) || return 0
+    command -v cargo >/dev/null 2>&1 || {
+        printf 'mbx configure: Rust/Cargo is required (https://rustup.rs).\n' >&2
+        return 2
+    }
+    (
+        cd "$ROOT"
+        cargo build --release --workspace
+    )
+}
+
+warn_missing_helper() {
+    if [[ -x $ROOT/target/release/mbx || -x $ROOT/target/debug/mbx ]]; then
+        return 0
+    fi
+    printf 'Note: helper binary is not built yet. From the repo:\n' >&2
+    printf '  bash %q\n' "$ROOT/scripts/install.bash" >&2
+}
+
+print_written_summary() {
+    printf '\nSaved:\n'
+    printf '  history=%s ghost=%s highlight=%s overlay=%s wrap=%s\n' \
+        "${V[history]}" "${V[ghost]}" "${V[highlight]}" "${V[overlay]}" "$(show "${V[wrap]}")"
+    printf '  persist-bashrc=%s color=%s icons=%s ipc=%s\n' \
+        "${V[bashrc]}" "${V[color]}" "${V[icons]}" "${V[ipc]}"
 }
 
 emit_assign() {
@@ -603,24 +733,39 @@ advanced_loop() {
 }
 
 opening_choice() {
+    local default=1 have_config=0
+    local path
+    path=$(config_path)
+    if [[ -f $path ]]; then
+        have_config=1
+        default=4
+    fi
     cat <<EOF
 MBX interactive setup
-  Config will be written to $(config_path)
+  Config will be written to $path
   This does not edit ~/.bashrc unless you turn on persist (option 15).
 
 Start from:
   1) Comfort (recommended) — history, ghost, overlay, wrap git
   2) Highlight — history, syntax color, overlay, wrap git
   3) Prompt only
-  4) Empty / keep current answers
+  4) Current config$(if ((have_config == 1)); then printf ' (detected)'; fi)
+  5) Empty defaults
 
 EOF
-    ask 'Choice [1]: ' || return 1
-    case ${REPLY:-1} in
-        '' | 1) apply_preset comfort ;;
+    ask "Choice [$default]: " || return 1
+    case ${REPLY:-$default} in
+        1) apply_preset comfort ;;
         2) apply_preset highlight ;;
         3) apply_preset prompt ;;
-        4) ;;
+        '' | 4)
+            if ((have_config == 1)); then
+                :
+            else
+                apply_preset comfort
+            fi
+            ;;
+        5) reset_defaults ;;
         *)
             printf 'Unknown start choice; using comfort.\n'
             apply_preset comfort
@@ -650,15 +795,17 @@ finish() {
     path=$(config_path)
     write_config "$path"
     printf 'Wrote %s\n' "$path"
+    print_written_summary
+    warn_missing_helper
     if [[ ${V[bashrc]} == 1 ]]; then
         persist_bashrc
-        printf 'Updated %s/.bashrc with a managed MBX block\n' "$HOME"
     else
         printf 'Did not edit ~/.bashrc. For this shell:\n\n  source %q\n\n' \
             "$ROOT/bash/init.bash"
     fi
     printf 'Reload with exec bash, then run mbx_status.\n'
-    printf 'Re-run this tool anytime: bash %q\n' "$ROOT/scripts/configure.bash"
+    printf 'Re-run this tool anytime: bash %q   or: mbx_configure\n' \
+        "$ROOT/scripts/configure.bash"
 }
 
 while (($#)); do
@@ -679,6 +826,10 @@ while (($#)); do
             WRITE_BASHRC=1
             shift
             ;;
+        --from-config)
+            FROM_CONFIG=1
+            shift
+            ;;
         --no-build)
             NO_BUILD=1
             shift
@@ -696,6 +847,9 @@ while (($#)); do
 done
 
 reset_defaults
+if ((FROM_CONFIG == 1)) || [[ -z $PRESET && -z $ANSWERS_FILE && -f "$(config_path)" ]]; then
+    load_existing_config
+fi
 if [[ -n $PRESET ]]; then
     apply_preset "$PRESET"
 fi
@@ -703,16 +857,19 @@ if ((WRITE_BASHRC == 1)); then
     V[bashrc]=1
 fi
 
+maybe_build
+
 if [[ -n $ANSWERS_FILE ]]; then
     load_answers "$ANSWERS_FILE"
     finish
     exit 0
 fi
 
-if [[ -n $PRESET ]]; then
-    :
-else
+if [[ -z $PRESET ]]; then
     opening_choice
+fi
+if ((WRITE_BASHRC == 1)); then
+    V[bashrc]=1
 fi
 menu_loop
 finish
