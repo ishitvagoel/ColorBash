@@ -653,7 +653,13 @@ _mbx_load_user_config
 status_out=$(mbx_status)
 [[ $status_out == *'config: relative/mbx/config.bash'* ]] || \
     fail "mbx_status should print the configured path: $status_out"
-unset MBX_CONFIG MBX_HISTORY MBX_GHOST
+[[ $status_out == *mbx_configure* ]] || \
+    fail 'mbx_status should mention mbx_configure'
+declare -F mbx_configure >/dev/null 2>&1 || fail 'mbx_configure should be defined'
+_MBX_ROOT=
+mbx_configure --help >/dev/null 2>&1 && \
+    fail 'mbx_configure without _MBX_ROOT should fail'
+unset _MBX_ROOT MBX_CONFIG MBX_HISTORY MBX_GHOST
 _MBX_USER_CONFIG_LOADED=1
 rm -f "$mbx_cfg_dir/config.bash"
 rmdir "$mbx_cfg_dir"

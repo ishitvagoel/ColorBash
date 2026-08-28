@@ -91,7 +91,7 @@ crates/cli/src/
 
 crates/pty/          genuine POSIX PTY test driver; not a product path
 docs/                research, UX/compatibility contracts, and ADRs
-scripts/             install profiles, development setup, and prompt/IPC/history benchmarks
+scripts/             install profiles, interactive configure, development setup, and prompt/IPC/history benchmarks
 tests/bash/           module contracts, semantic corpus, and integration smoke
 ```
 
@@ -228,7 +228,10 @@ it loads an optional user config (`$MBX_CONFIG`, or
 absolute readable file, then sources the modules in their dependency order.
 Already-set environment variables win over that file. `source init.bash` still
 does not write `~/.bashrc`; `scripts/install.bash --bashrc` is an explicit
-opt-in writer of a managed block. It preserves existing
+opt-in writer of a managed block. `scripts/configure.bash` (also
+`install.bash --interactive` and `mbx_configure`) is an interactive option
+menu that writes the same config file; it does not write `~/.bashrc` unless
+persist is enabled. `init.bash` preserves existing
 `PROMPT_COMMAND` entries by converting them to an array and placing two MBX
 callbacks around them:
 

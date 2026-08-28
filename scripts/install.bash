@@ -6,6 +6,7 @@ set -euo pipefail
 
 ROOT=$(cd -- "${BASH_SOURCE[0]%/*}/.." && pwd -P)
 PROFILE=comfort
+PROFILE_SET=0
 WRITE_BASHRC=0
 NO_BUILD=0
 ACTION=install
@@ -16,8 +17,11 @@ Install MBX and enable a feature profile.
 
 Usage:
   bash scripts/install.bash [--profile comfort|highlight|prompt] [--bashrc] [--no-build]
+  bash scripts/install.bash --interactive [--profile NAME] [--bashrc] [--no-build]
   bash scripts/install.bash --status
   bash scripts/install.bash --uninstall-bashrc
+  bash scripts/configure.bash          # interactive option menu
+  mbx_configure                        # same, after the loader is sourced
 
 Profiles:
   comfort    Highest QoL: history, ghost suggestions, overlay, wrap git
@@ -26,6 +30,7 @@ Profiles:
   prompt     Prompt only; all opt-in features stay off
 
 --bashrc     Append a managed block to ~/.bashrc (idempotent)
+--interactive  Open the option menu (scripts/configure.bash)
 --no-build   Skip cargo build (tests / already built)
 
 Environment variables already set in your shell always win over the config file.
@@ -185,6 +190,7 @@ Reload a new shell, then type mbx_status.
   disable
     edit the config file, or: export MBX_HISTORY=0
     remove bashrc block: bash $ROOT/scripts/install.bash --uninstall-bashrc
+    reconfigure: bash $ROOT/scripts/configure.bash
 EOF
 }
 
@@ -196,6 +202,7 @@ while (($#)); do
             ;;
         --profile)
             PROFILE=${2:?--profile needs comfort, highlight, or prompt}
+            PROFILE_SET=1
             shift 2
             ;;
         --bashrc)
@@ -204,6 +211,14 @@ while (($#)); do
             ;;
         --no-build)
             NO_BUILD=1
+            shift
+            ;;
+        --interactive)
+            ACTION=configure
+            shift
+            ;;
+        --bashrc-only)
+            ACTION=bashrc_only
             shift
             ;;
         --status)
@@ -239,6 +254,27 @@ case $ACTION in
         uninstall_bashrc
         printf 'Removed the managed MBX block from %s/.bashrc\n' "$HOME"
         exit 0
+        ;;
+    bashrc_only)
+        write_bashrc
+        printf 'Updated %s/.bashrc with a managed MBX block\n' "$HOME"
+        exit 0
+        ;;
+    configure)
+        if ((NO_BUILD == 0)); then
+            command -v cargo >/dev/null 2>&1 || {
+                printf 'mbx install: Rust/Cargo is required (https://rustup.rs).\n' >&2
+                exit 2
+            }
+            (
+                cd "$ROOT"
+                cargo build --release --workspace
+            )
+        fi
+        extra=(--no-build)
+        ((WRITE_BASHRC == 1)) && extra+=(--bashrc)
+        ((PROFILE_SET == 1)) && extra+=(--preset "$PROFILE")
+        exec bash "$ROOT/scripts/configure.bash" "${extra[@]}"
         ;;
 esac
 

@@ -1082,3 +1082,19 @@ to prevent recurrence, not to assign blame.
 - Evidence: `_mbx_highlight_refresh` in `bash/highlight.bash`; H-5 in
   `tests/bash/modules.bash`.
 
+## M-056 — `[[ ]]` glob `*` is not a Kleene star on a character class
+
+- Discovered: 2026-08-28
+- Status: Fixed
+- Failed assumption: `[[ $name == [A-Za-z_][A-Za-z0-9_]* ]]` checked that every
+  remaining character was alphanumeric or underscore.
+- Impact: a wrap answer of `git;rm` matched the glob (`*` consumes `;rm`) and
+  would have been written into `config.bash`.
+- Correction: `scripts/configure.bash` validates wrap names with
+  `=~ ^[A-Za-z_][A-Za-z0-9_-]*$`.
+- Prevention: user-supplied identifiers and command names must use anchored
+  `=~` regexes, not `[[ == ]]` globs, when `*` would otherwise match leftover
+  bytes.
+- Evidence: `sanitize_wrap` in `scripts/configure.bash`; smoke wrap-token
+  reject in `tests/bash/smoke.bash`.
+

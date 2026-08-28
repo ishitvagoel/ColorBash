@@ -57,6 +57,16 @@ mbx_status() {
     printf 'wrap: %s\n' "${MBX_COMP_WRAP:-off}"
     printf 'search: Ctrl-X h  restore: Ctrl-X l  ghost cycle: Ctrl-X Ctrl-N/P\n'
     printf 'overlay: Ctrl-X Ctrl-O  accept: Ctrl-X Ctrl-A  dismiss: Ctrl-X j\n'
+    printf 'configure: mbx_configure   or: bash scripts/configure.bash\n'
+}
+
+mbx_configure() {
+    if [[ -n ${_MBX_ROOT:-} && -f "$_MBX_ROOT/scripts/configure.bash" ]]; then
+        bash "$_MBX_ROOT/scripts/configure.bash" "$@"
+        return
+    fi
+    printf 'mbx_configure: run bash scripts/configure.bash from the ColorBash tree\n' >&2
+    return 1
 }
 
 _mbx_prompt_flags() {

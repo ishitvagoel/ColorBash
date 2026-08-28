@@ -166,6 +166,76 @@ env HOME="$highlight_home" bash "$ROOT/scripts/install.bash" \
 rm -rf "$highlight_home"
 rm -rf "$install_home"
 
+if grep -Eq '^[[:space:]]*eval[[:space:]]' "$ROOT/scripts/configure.bash"; then
+    fail 'configure.bash must not eval user answers'
+fi
+cfg_home=$(mktemp -d "${TMPDIR:-/tmp}/mbx-configure.XXXXXXXX")
+cfg_answers=$(mktemp "${TMPDIR:-/tmp}/mbx-answers.XXXXXXXX")
+cat >"$cfg_answers" <<'EOF'
+preset=comfort
+highlight=1
+wrap=git;rm
+exclude=git *
+bashrc=0
+EOF
+cfg_out=$(env HOME="$cfg_home" bash "$ROOT/scripts/configure.bash" \
+    --answers "$cfg_answers" --no-build 2>&1) || \
+    fail "configure --answers comfort should succeed: $cfg_out"
+[[ $cfg_out == *'highlight left off'* ]] || \
+    fail "ghost+highlight answers must force highlight off: $cfg_out"
+[[ -f $cfg_home/.config/mbx/config.bash ]] || \
+    fail 'configure --answers must write ~/.config/mbx/config.bash'
+[[ $(<"$cfg_home/.config/mbx/config.bash") == *'export MBX_HISTORY=1'* ]] || \
+    fail 'configure comfort answers must enable history'
+[[ $(<"$cfg_home/.config/mbx/config.bash") == *'export MBX_GHOST=1'* ]] || \
+    fail 'configure comfort answers must enable ghost'
+[[ $(<"$cfg_home/.config/mbx/config.bash") != *'export MBX_HIGHLIGHT=1'* ]] || \
+    fail 'configure must not enable highlight when ghost is on'
+[[ $(<"$cfg_home/.config/mbx/config.bash") != *'export MBX_COMP_WRAP='* ]] || \
+    fail 'hostile wrap tokens must not be written'
+[[ $(<"$cfg_home/.config/mbx/config.bash") == *MBX_HISTORY_EXCLUDE* ]] || \
+    fail 'configure should write a safe exclude glob'
+[[ ! -e $cfg_home/.bashrc ]] || \
+    fail 'configure without bashrc=1 must not create ~/.bashrc'
+printf 'KEEP\n' >"$cfg_home/.bashrc"
+cat >"$cfg_answers" <<'EOF'
+preset=highlight
+wrap=git
+bashrc=1
+EOF
+env HOME="$cfg_home" bash "$ROOT/scripts/configure.bash" \
+    --answers "$cfg_answers" --no-build >/dev/null
+grep -Fq '# >>> mbx begin' "$cfg_home/.bashrc" || \
+    fail 'configure bashrc=1 must write a managed block'
+grep -Fq 'KEEP' "$cfg_home/.bashrc" || \
+    fail 'configure bashrc=1 must preserve existing bashrc bytes'
+[[ $(<"$cfg_home/.config/mbx/config.bash") == *'export MBX_HIGHLIGHT=1'* ]] || \
+    fail 'highlight preset must enable highlighting'
+[[ $(<"$cfg_home/.config/mbx/config.bash") != *'export MBX_GHOST=1'* ]] || \
+    fail 'highlight preset must not enable ghost'
+bad_answers=$(mktemp "${TMPDIR:-/tmp}/mbx-answers-bad.XXXXXXXX")
+printf 'not_a_key=1\n' >"$bad_answers"
+if env HOME="$cfg_home" bash "$ROOT/scripts/configure.bash" \
+    --answers "$bad_answers" --no-build >/dev/null 2>&1; then
+    fail 'configure must reject unknown answers keys'
+fi
+printf 'exclude=$(reboot)\n' >"$bad_answers"
+if env HOME="$cfg_home" bash "$ROOT/scripts/configure.bash" \
+    --answers "$bad_answers" --no-build >/dev/null 2>&1; then
+    fail 'configure must reject exclude values with $'
+fi
+menu_home=$(mktemp -d "${TMPDIR:-/tmp}/mbx-configure-menu.XXXXXXXX")
+menu_out=$(printf '1\nw\n' | env HOME="$menu_home" bash "$ROOT/scripts/configure.bash" \
+    --no-build 2>&1) || fail "configure menu should accept piped choices: $menu_out"
+[[ -f $menu_home/.config/mbx/config.bash ]] || \
+    fail 'piped configure menu must write a config file'
+[[ $(<"$menu_home/.config/mbx/config.bash") == *'export MBX_GHOST=1'* ]] || \
+    fail 'piped comfort choice must enable ghost'
+[[ ! -e $menu_home/.bashrc ]] || \
+    fail 'piped configure menu must not write bashrc by default'
+rm -f "$cfg_answers" "$bad_answers"
+rm -rf "$cfg_home" "$menu_home"
+
 bashrc_home=$(mktemp -d "${TMPDIR:-/tmp}/mbx-bashrc.XXXXXXXX")
 printf 'SENTINEL\n' >"$bashrc_home/.bashrc"
 bashrc_state=$(env HOME="$bashrc_home" MBX_TEST_ROOT="$ROOT" MBX_BIN="$MBX_TEST_BIN" \

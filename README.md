@@ -14,22 +14,28 @@ search, ghost suggestions, completion overlay). It does **not** edit
 `~/.bashrc` unless you pass `--bashrc`:
 
 ```bash
-bash scripts/install.bash            # this shell: source the printed line
-bash scripts/install.bash --bashrc  # persist in ~/.bashrc, then: exec bash
-mbx_status                           # after reload: what is on
+bash scripts/install.bash --interactive   # menu: pick every option, then w to save
+bash scripts/install.bash --bashrc        # comfort preset + persist in ~/.bashrc
+mbx_configure                             # later: same menu (after the loader is sourced)
+mbx_status
 ```
 
+`--interactive` opens a numbered menu for every user-facing option (features,
+prompt, history extras, keys, timeouts). Ghost and syntax highlighting cannot
+both be on. It does **not** edit `~/.bashrc` unless you turn on persist
+(option 15) or pass `--bashrc`.
+
 Comfort is the highest-QoL preset. History is local SQLite and does not rewrite
-`.bash_history`. Ghost and syntax highlighting cannot both be on; comfort
-chooses ghost. Use `--profile highlight` for coloring instead, or `--profile
-prompt` for the prompt only.
+`.bash_history`. Use `--profile highlight` for coloring instead of ghost, or
+`--profile prompt` for the prompt only. Non-interactive: `bash
+scripts/configure.bash --answers FILE`.
 
 Requirements: Bash 5.x, Rust **1.85** or newer, a real terminal (not a pipe).
 Git is optional (prompt segment and `MBX_COMP_WRAP=git`). If several
 toolchains are installed: `export RUSTUP_TOOLCHAIN=1.85.0`.
 
-Disable without uninstalling by editing `~/.config/mbx/config.bash` or
-`export MBX_HISTORY=0`. Remove the bashrc block with
+Disable without uninstalling by editing `~/.config/mbx/config.bash`, running
+`mbx_configure`, or `export MBX_HISTORY=0`. Remove the bashrc block with
 `bash scripts/install.bash --uninstall-bashrc`. Delete the source line and
 start a new shell to unload MBX. The history store is
 `$XDG_DATA_HOME/mbx/` or `~/.local/share/mbx/`.
@@ -418,6 +424,7 @@ Group by feature. Unset means off for opt-in flags that require `=1`.
 
 ```bash
 # User config (~/.config/mbx/config.bash); env already set in the shell wins
+# Interactive: bash scripts/configure.bash   or   mbx_configure
 MBX_CONFIG=/absolute/path/to/config.bash
 MBX_COMP_WRAP=git                # colon-separated -F commands to wrap (comfort default)
 

@@ -72,3 +72,5 @@ percentiles `deferred`. `scripts/dev-setup.bash` and `source bash/init.bash`
 still never write `~/.bashrc`. `scripts/install.bash` writes
 `~/.config/mbx/config.bash` for a chosen profile; `--bashrc` is an explicit
 opt-in that writes a managed block and is not the default loader.
+`scripts/configure.bash` is an interactive option menu for the same config
+file; persist-in-bashrc stays off unless the user enables it.

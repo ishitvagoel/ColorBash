@@ -16,4 +16,6 @@ printf '  source %q\n\n' "$ROOT/bash/init.bash"
 printf 'This script does not modify ~/.bashrc.\n'
 printf 'For a persistent install with a feature profile:\n\n'
 printf '  bash %q --bashrc\n' "$ROOT/scripts/install.bash"
+printf 'To pick options interactively:\n\n'
+printf '  bash %q --interactive\n' "$ROOT/scripts/install.bash"
 
