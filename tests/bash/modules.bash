@@ -623,6 +623,47 @@ done
 [[ $(<"$ROOT/bash/completion.bash") != *set\ -euo\ pipefail* ]] || \
     fail 'completion.bash must not enable errexit/nounset/pipefail in the sourced module'
 
+# User config is sourced only from an absolute readable file; env wins even if
+# the file uses a bare export.
+mbx_cfg_dir=$(mktemp -d "${TMPDIR:-/tmp}/mbx-cfg.XXXXXXXX")
+printf '[[ ${MBX_HISTORY+x} ]] || export MBX_HISTORY=1\n' >"$mbx_cfg_dir/config.bash"
+printf '[[ ${MBX_GHOST+x} ]] || export MBX_GHOST=1\n' >>"$mbx_cfg_dir/config.bash"
+_MBX_USER_CONFIG_LOADED=0
+unset MBX_HISTORY MBX_GHOST
+MBX_CONFIG=$mbx_cfg_dir/config.bash
+_mbx_load_user_config
+assert_eq 1 "${MBX_HISTORY-}" 'user config should set history when unset'
+assert_eq 1 "${MBX_GHOST-}" 'user config should set ghost when unset'
+MBX_HISTORY=0
+_MBX_USER_CONFIG_LOADED=0
+_mbx_load_user_config
+assert_eq 0 "$MBX_HISTORY" 'an existing env value must win over user config'
+printf 'export MBX_HISTORY=1\nexport MBX_GHOST=1\n' >"$mbx_cfg_dir/config.bash"
+MBX_HISTORY=0
+unset MBX_GHOST
+_MBX_USER_CONFIG_LOADED=0
+_mbx_load_user_config
+assert_eq 0 "$MBX_HISTORY" 'a bare export in user config must not clobber env'
+assert_eq 1 "${MBX_GHOST-}" 'a bare export may set an unset MBX_* flag'
+_MBX_USER_CONFIG_LOADED=0
+unset MBX_HISTORY
+MBX_CONFIG=relative/mbx/config.bash
+_mbx_load_user_config
+[[ -z ${MBX_HISTORY+x} ]] || fail 'relative MBX_CONFIG must not be sourced'
+status_out=$(mbx_status)
+[[ $status_out == *'config: relative/mbx/config.bash'* ]] || \
+    fail "mbx_status should print the configured path: $status_out"
+[[ $status_out == *mbx_configure* ]] || \
+    fail 'mbx_status should mention mbx_configure'
+declare -F mbx_configure >/dev/null 2>&1 || fail 'mbx_configure should be defined'
+_MBX_ROOT=
+mbx_configure --help >/dev/null 2>&1 && \
+    fail 'mbx_configure without _MBX_ROOT should fail'
+unset _MBX_ROOT MBX_CONFIG MBX_HISTORY MBX_GHOST
+_MBX_USER_CONFIG_LOADED=1
+rm -f "$mbx_cfg_dir/config.bash"
+rmdir "$mbx_cfg_dir"
+
 # Completion harness: default install defines no test fixtures (F-1).
 source "$ROOT/bash/completion.bash"
 _mbx_completion_install
@@ -672,6 +713,39 @@ _mbx_comp_wrap_existing_f mbx_comp_words && \
 assert_eq "$_mbx_comp_word_spec" "$(complete -p mbx_comp_words)" \
     'non -F complete spec must be left unchanged'
 unset -v _mbx_comp_word_spec
+
+mbx_comp_wrap_opts() { :; }
+_mbx_comp_wrap_opts_backend() {
+    COMPREPLY=(mbx_opts_candidate)
+}
+complete -o nospace -P pre -S suf -X '!*.o' -F _mbx_comp_wrap_opts_backend \
+    mbx_comp_wrap_opts
+_mbx_comp_wrap_existing_f mbx_comp_wrap_opts || \
+    fail 'wrap_existing_f should wrap a -F spec that has -P/-S/-X'
+_mbx_comp_opts_spec=$(complete -p mbx_comp_wrap_opts)
+[[ $_mbx_comp_opts_spec == *_mbx_comp_existing_adapter* ]] || \
+    fail 'wrapped -P/-S/-X spec should use _mbx_comp_existing_adapter'
+[[ $_mbx_comp_opts_spec == *-o*nospace* ]] || \
+    fail 'wrapped spec should keep -o nospace'
+[[ $_mbx_comp_opts_spec == *-P*pre* ]] || \
+    fail 'wrapped spec should keep -P prefix'
+[[ $_mbx_comp_opts_spec == *-S*suf* ]] || \
+    fail 'wrapped spec should keep -S suffix'
+[[ $_mbx_comp_opts_spec == *-X* ]] || \
+    fail 'wrapped spec should keep -X filter'
+unset -v _mbx_comp_opts_spec
+
+mbx_comp_wrap_cfg() { :; }
+_mbx_comp_wrap_cfg_backend() {
+    COMPREPLY=(mbx_cfg_candidate)
+}
+complete -F _mbx_comp_wrap_cfg_backend mbx_comp_wrap_cfg
+MBX_COMP_WRAP=mbx_comp_wrap_cfg
+_MBX_COMPLETION_INSTALLED=0
+_mbx_completion_install
+complete -p mbx_comp_wrap_cfg | grep -Fq _mbx_comp_existing_adapter || \
+    fail 'MBX_COMP_WRAP should wrap listed -F completers'
+unset MBX_COMP_WRAP
 
 # Fixture opt-in for the existing probe/flag snapshot contract.
 MBX_COMP_FIXTURES=1

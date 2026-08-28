@@ -261,6 +261,18 @@ _mbx_comp_f_backend_from_spec() {
     return 1
 }
 
+_mbx_comp_unquote_word() {
+    local v=$1
+    if ((${#v} >= 2)); then
+        if [[ $v == \'*\' ]]; then
+            v=${v:1:${#v}-2}
+        elif [[ $v == \"*\" ]]; then
+            v=${v:1:${#v}-2}
+        fi
+    fi
+    REPLY=$v
+}
+
 _mbx_comp_options_from_spec() {
     local spec=$1
     local -a words
@@ -268,9 +280,14 @@ _mbx_comp_options_from_spec() {
     _MBX_COMP_SPEC_OPTS=()
     read -r -a words <<<"$spec"
     for ((i = 0; i < ${#words[@]}; i++)); do
-        if [[ ${words[i]} == -o && -n ${words[i + 1]:-} ]]; then
-            _MBX_COMP_SPEC_OPTS+=(-o "${words[i + 1]}")
-        fi
+        case ${words[i]} in
+            -o | -P | -S | -X)
+                if [[ -n ${words[i + 1]:-} ]]; then
+                    _mbx_comp_unquote_word "${words[i + 1]}"
+                    _MBX_COMP_SPEC_OPTS+=("${words[i]}" "$REPLY")
+                fi
+                ;;
+        esac
     done
 }
 
@@ -287,7 +304,7 @@ _mbx_comp_wrap_existing_f() {
     local spec backend
     _mbx_comp_identifier_ok "$command" || return 1
     spec=$(complete -p -- "$command" 2>/dev/null) || return 1
-    if [[ $spec == *_mbx_comp_existing_adapter* ]]; then
+    if [[ $spec == *_mbx_comp_*_adapter* ]]; then
         return 0
     fi
     _mbx_comp_f_backend_from_spec "$spec" || return 1
@@ -684,6 +701,25 @@ _mbx_comp_command_uses_flag_adapter() {
     complete -p "$command" 2>/dev/null | grep -Fq '_mbx_comp_flag'
 }
 
+_mbx_comp_wrap_configured() {
+    local spec=${MBX_COMP_WRAP-}
+    local name rest
+    [[ -n $spec ]] || return 0
+    rest=$spec
+    while [[ -n $rest ]]; do
+        if [[ $rest == *[:,]* ]]; then
+            name=${rest%%[:,]*}
+            rest=${rest#*[:,]}
+        else
+            name=$rest
+            rest=
+        fi
+        name=${name//[[:space:]]/}
+        [[ -n $name ]] || continue
+        _mbx_comp_wrap_existing_f "$name" || true
+    done
+}
+
 _mbx_completion_install() {
     [[ ${_MBX_COMPLETION_INSTALLED:-0} != 1 ]] || return 0
     _mbx_comp_install_accept
@@ -695,5 +731,6 @@ _mbx_completion_install() {
         _mbx_comp_install_rank
         _mbx_comp_install_git
     fi
+    _mbx_comp_wrap_configured
     _MBX_COMPLETION_INSTALLED=1
 }
