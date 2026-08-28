@@ -14,6 +14,7 @@ _MBX_ROOT=$(cd -- "$_MBX_BASH_DIR/.." 2>/dev/null && pwd -P) || return 0
 # Keep each concern inspectable; a helper failure must never prevent the fallback.
 source "$_MBX_ROOT/bash/protocol.bash" || return 0
 source "$_MBX_ROOT/bash/config.bash" || return 0
+_mbx_load_user_config || true
 source "$_MBX_ROOT/bash/fallback.bash" || return 0
 source "$_MBX_ROOT/bash/engine.bash" || return 0
 source "$_MBX_ROOT/bash/prompt.bash" || return 0

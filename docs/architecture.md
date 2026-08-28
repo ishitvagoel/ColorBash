@@ -91,14 +91,15 @@ crates/cli/src/
 
 crates/pty/          genuine POSIX PTY test driver; not a product path
 docs/                research, UX/compatibility contracts, and ADRs
-scripts/             explicit development setup and prompt/IPC/history benchmarks
+scripts/             install profiles, development setup, and prompt/IPC/history benchmarks
 tests/bash/           module contracts, semantic corpus, and integration smoke
 ```
 
 The source-file split is a boundary, not merely an organizational convention.
 The Rust binary delegates immediately to the library composition root. The Bash
-loader only resolves paths, sources modules in dependency order, selects the
-binary, starts the engine, and installs prompt and optional history hooks.
+loader only resolves paths, loads an optional absolute user config, sources
+modules in dependency order, selects the binary, starts the engine, and
+installs prompt and optional history hooks.
 
 ## Dependency direction
 
@@ -222,7 +223,12 @@ additive bits.
 ## Bash prompt lifecycle
 
 `init.bash` returns immediately outside interactive Bash. In an interactive shell
-it sources the modules in their dependency order and preserves existing
+it loads an optional user config (`$MBX_CONFIG`, or
+`$XDG_CONFIG_HOME/mbx/config.bash`, or `~/.config/mbx/config.bash`) from an
+absolute readable file, then sources the modules in their dependency order.
+Already-set environment variables win over that file. `source init.bash` still
+does not write `~/.bashrc`; `scripts/install.bash --bashrc` is an explicit
+opt-in writer of a managed block. It preserves existing
 `PROMPT_COMMAND` entries by converting them to an array and placing two MBX
 callbacks around them:
 

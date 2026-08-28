@@ -121,6 +121,51 @@ if grep -E '>>[[:space:]]*.*bashrc|>[[:space:]]*.*bashrc' "$ROOT/scripts/dev-set
     fail 'dev-setup.bash must not redirect into a bashrc path'
 fi
 
+install_home=$(mktemp -d "${TMPDIR:-/tmp}/mbx-install.XXXXXXXX")
+install_out=$(env HOME="$install_home" bash "$ROOT/scripts/install.bash" \
+    --profile comfort --no-build)
+[[ $install_out == *"profile comfort"* ]] || \
+    fail "install --no-build did not write a comfort profile: $install_out"
+[[ -f $install_home/.config/mbx/config.bash ]] || \
+    fail 'install --no-build must write ~/.config/mbx/config.bash'
+[[ $(<"$install_home/.config/mbx/config.bash") == *MBX_HISTORY=1* ]] || \
+    fail 'comfort profile must opt in to history'
+[[ $(<"$install_home/.config/mbx/config.bash") != *'export MBX_HIGHLIGHT=1'* ]] || \
+    fail 'comfort profile must not enable highlight'
+[[ ! -e $install_home/.bashrc ]] || \
+    fail 'install without --bashrc must not create ~/.bashrc'
+printf 'KEEP\n' >"$install_home/.bashrc"
+env HOME="$install_home" bash "$ROOT/scripts/install.bash" \
+    --profile comfort --no-build --bashrc >/dev/null
+grep -Fq '# >>> mbx begin' "$install_home/.bashrc" || \
+    fail 'install --bashrc must write a managed block'
+grep -Fq 'KEEP' "$install_home/.bashrc" || \
+    fail 'install --bashrc must preserve existing bashrc bytes'
+env HOME="$install_home" bash "$ROOT/scripts/install.bash" \
+    --profile comfort --no-build --bashrc >/dev/null
+begin_count=$(grep -c '# >>> mbx begin' "$install_home/.bashrc")
+[[ $begin_count == 1 ]] || fail "install --bashrc must be idempotent, got $begin_count blocks"
+env HOME="$install_home" bash "$ROOT/scripts/install.bash" --uninstall-bashrc >/dev/null
+grep -Fq '# >>> mbx begin' "$install_home/.bashrc" && \
+    fail 'uninstall-bashrc must remove the managed block'
+grep -Fq 'KEEP' "$install_home/.bashrc" || \
+    fail 'uninstall-bashrc must keep the rest of bashrc'
+if env HOME="$install_home" bash "$ROOT/scripts/install.bash" \
+    --profile nope --no-build >/dev/null 2>&1; then
+    fail 'install --profile nope must fail'
+fi
+highlight_home=$(mktemp -d "${TMPDIR:-/tmp}/mbx-install-hl.XXXXXXXX")
+env HOME="$highlight_home" bash "$ROOT/scripts/install.bash" \
+    --profile highlight --no-build >/dev/null
+[[ $(<"$highlight_home/.config/mbx/config.bash") == *'export MBX_HIGHLIGHT=1'* ]] || \
+    fail 'highlight profile must opt in to highlighting'
+[[ $(<"$highlight_home/.config/mbx/config.bash") != *'export MBX_GHOST=1'* ]] || \
+    fail 'highlight profile must not enable ghost'
+[[ ! -e $highlight_home/.bashrc ]] || \
+    fail 'highlight install without --bashrc must not create ~/.bashrc'
+rm -rf "$highlight_home"
+rm -rf "$install_home"
+
 bashrc_home=$(mktemp -d "${TMPDIR:-/tmp}/mbx-bashrc.XXXXXXXX")
 printf 'SENTINEL\n' >"$bashrc_home/.bashrc"
 bashrc_state=$(env HOME="$bashrc_home" MBX_TEST_ROOT="$ROOT" MBX_BIN="$MBX_TEST_BIN" \

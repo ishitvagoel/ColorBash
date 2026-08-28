@@ -5,7 +5,7 @@
 > brief remains `CODEX_MODERN_BASH_ARCHITECTURE.md`; its checkboxes describe the
 > intended program and are not a status tracker.
 
-- Last reviewed: 2026-08-27 UTC
+- Last reviewed: 2026-08-28 UTC
 - Current milestone: Strategy A MVP is `complete` on Linux (`G5` 2026-08-27); Phase 9 `complete`; macOS `HRD-001` `deferred` (ADR 0012); `HRD-003` `deferred`; ADR 0013 overlay/highlighting in `validation`
 - Active workstream: `HLT-003` hostile corpus (`docs/hlt-003-hostile-gate-plan.md`); G5 revisit macOS PTY; dim paint; percentile benches `deferred`
 - Next decision gate: G5 revisit (macOS matrix, `HLT-003` p99, `HRD-003`, dim paint). ADR 0013 review-close (H-1–H-6, O-1–O-5, M-1) is recorded; `HLT-003` hostile corpus slices 1–2 recorded
@@ -376,7 +376,7 @@ degradation.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `BST-001` | Rust workspace, Bash loader, and development setup | `complete` | `Cargo.toml`, `bash/init.bash`, `scripts/dev-setup.bash` |
+| `BST-001` | Rust workspace, Bash loader, and development setup | `complete` | `Cargo.toml`, `bash/init.bash`, `scripts/dev-setup.bash`, `scripts/install.bash` |
 | `BST-002` | Interactive guard, idempotence, status preservation, and fallback | `complete` | `docs/bst-prm-g0-leftover-close-plan.md` I-1–I-5; `tests/bash/smoke.bash`; `crates/pty/tests/foundation.rs`; platform matrix leftover is `HRD-001` |
 | `BST-003` | MBX1 coprocess and per-call adapters | `complete` | `docs/bst-prm-g0-leftover-close-plan.md` A-1–A-2; `tests/bash/modules.bash`; `tests/integration/protocol.bash`; PTY helper-crash; platform matrix leftover is `HRD-001` |
 | `BST-004` | Debug/trace logging without command text | `complete` | `docs/bst-prm-g0-leftover-close-plan.md` T-1; `crates/cli/src/telemetry.rs`; typed diagnostics omit command text; `MBX_DBG` forbidden; broader lifecycle tracing `deferred` |
@@ -797,3 +797,4 @@ an accepted decoration/ownership ADR.
 | 2026-08-27 | Implemented ADR 0013 review-close slices 1–3 (`bash/highlight.bash`, `bash/completion.bash`, module + PTY asserts H-1–H-6, O-1–O-5, M-1). `HLT-002` and `COMP-004` overlay stay `validation`; `HLT-003` stays `deferred`. |
 | 2026-08-27 | Opened `HLT-003` hostile corpus slice (`docs/hlt-003-hostile-gate-plan.md`): UTF-8 lexer advance fix, Rust/Bash strip round-trip, PTY hostile execute-plain and C0 refusal. `HLT-003` moves to `in-progress`; p99 stays `deferred`. |
 | 2026-08-27 | Recorded `HLT-003` slices 1–2: hostile corpus strip round-trip (S-1–S-4), PTY hostile execute-plain (P-1), module C0 refusal (P-2). UTF-8-safe lexer/strip in `highlight.rs` and `bash/highlight.bash`. `HLT-003` stays `in-progress`; p99 `deferred`. |
+| 2026-08-28 | Added `scripts/install.bash` profiles (`comfort` / `highlight` / `prompt`), optional `~/.config/mbx/config.bash`, `mbx_status`, and `MBX_COMP_WRAP`. Default install and `source init.bash` still never write `~/.bashrc`; `--bashrc` is an explicit managed block. Capture stays off without a profile or `MBX_HISTORY=1`. Do not mark `HLT-002`, `COMP-004`, Phase 6, or `HLT-003` complete. |

@@ -287,7 +287,7 @@ _mbx_comp_wrap_existing_f() {
     local spec backend
     _mbx_comp_identifier_ok "$command" || return 1
     spec=$(complete -p -- "$command" 2>/dev/null) || return 1
-    if [[ $spec == *_mbx_comp_existing_adapter* ]]; then
+    if [[ $spec == *_mbx_comp_*_adapter* ]]; then
         return 0
     fi
     _mbx_comp_f_backend_from_spec "$spec" || return 1
@@ -684,6 +684,25 @@ _mbx_comp_command_uses_flag_adapter() {
     complete -p "$command" 2>/dev/null | grep -Fq '_mbx_comp_flag'
 }
 
+_mbx_comp_wrap_configured() {
+    local spec=${MBX_COMP_WRAP-}
+    local name rest
+    [[ -n $spec ]] || return 0
+    rest=$spec
+    while [[ -n $rest ]]; do
+        if [[ $rest == *[:,]* ]]; then
+            name=${rest%%[:,]*}
+            rest=${rest#*[:,]}
+        else
+            name=$rest
+            rest=
+        fi
+        name=${name//[[:space:]]/}
+        [[ -n $name ]] || continue
+        _mbx_comp_wrap_existing_f "$name" || true
+    done
+}
+
 _mbx_completion_install() {
     [[ ${_MBX_COMPLETION_INSTALLED:-0} != 1 ]] || return 0
     _mbx_comp_install_accept
@@ -695,5 +714,6 @@ _mbx_completion_install() {
         _mbx_comp_install_rank
         _mbx_comp_install_git
     fi
+    _mbx_comp_wrap_configured
     _MBX_COMPLETION_INSTALLED=1
 }

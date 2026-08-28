@@ -68,4 +68,7 @@ never inventoried as `HRD-004`.
 ## Remaining
 
 `HRD-001` / `G5` stay host-blocked. `HRD-003` stays `not-started` with
-percentiles `deferred`. Do not start highlighting or dim paint.
+percentiles `deferred`. `scripts/dev-setup.bash` and `source bash/init.bash`
+still never write `~/.bashrc`. `scripts/install.bash` writes
+`~/.config/mbx/config.bash` for a chosen profile; `--bashrc` is an explicit
+opt-in that writes a managed block and is not the default loader.

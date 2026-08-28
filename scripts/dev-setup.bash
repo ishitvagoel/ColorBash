@@ -14,4 +14,6 @@ printf '\nBuilt %s/target/release/mbx\n' "$ROOT"
 printf 'Try it in the current Bash session with:\n\n'
 printf '  source %q\n\n' "$ROOT/bash/init.bash"
 printf 'This script does not modify ~/.bashrc.\n'
+printf 'For a persistent install with a feature profile:\n\n'
+printf '  bash %q --bashrc\n' "$ROOT/scripts/install.bash"
 

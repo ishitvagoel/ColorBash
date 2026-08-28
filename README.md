@@ -7,50 +7,36 @@ you opt in, records admitted history and offers insert-only suggestions.
 Suggestions and selections insert ordinary Bash text. They **never execute**
 until you press Enter.
 
-## Requirements
-
-- Bash 5.x (interactive tty; a pipe is not a real session)
-- Rust **1.85** or newer (`edition = "2024"`; `cargo` 1.83 cannot load this
-  workspace)
-- Git, only if you want the optional Git prompt segment
-
-If several toolchains are installed:
-
-```bash
-rustup run 1.85.0 cargo --version
-export RUSTUP_TOOLCHAIN=1.85.0   # optional, for this shell
-```
-
 ## Quick start
 
-Build the helper, then source the loader in a **real terminal**:
+One command builds the helper and turns on the **comfort** profile (history
+search, ghost suggestions, completion overlay). It does **not** edit
+`~/.bashrc` unless you pass `--bashrc`:
 
 ```bash
-cargo build --release --workspace
-source "$PWD/bash/init.bash"
+bash scripts/install.bash            # this shell: source the printed line
+bash scripts/install.bash --bashrc  # persist in ~/.bashrc, then: exec bash
+mbx_status                           # after reload: what is on
 ```
 
-`scripts/dev-setup.bash` does the same build and prints the `source` line. It
-does **not** edit `.bashrc`.
+Comfort is the highest-QoL preset. History is local SQLite and does not rewrite
+`.bash_history`. Ghost and syntax highlighting cannot both be on; comfort
+chooses ghost. Use `--profile highlight` for coloring instead, or `--profile
+prompt` for the prompt only.
 
-After you are happy with it, add this near the end of `.bashrc` using the
-repository's absolute path:
+Requirements: Bash 5.x, Rust **1.85** or newer, a real terminal (not a pipe).
+Git is optional (prompt segment and `MBX_COMP_WRAP=git`). If several
+toolchains are installed: `export RUSTUP_TOOLCHAIN=1.85.0`.
 
-```bash
-source /absolute/path/to/ColorBash/bash/init.bash
-```
+Disable without uninstalling by editing `~/.config/mbx/config.bash` or
+`export MBX_HISTORY=0`. Remove the bashrc block with
+`bash scripts/install.bash --uninstall-bashrc`. Delete the source line and
+start a new shell to unload MBX. The history store is
+`$XDG_DATA_HOME/mbx/` or `~/.local/share/mbx/`.
 
-Disable without uninstalling by leaving that `source` line in place and setting
-`MBX_DISABLE_RENDERER=1` (Bash-only prompt) and/or omitting `MBX_HISTORY=1` (no
-sidecar). Remove MBX by deleting the `source` line and starting a new shell.
-The loader never writes `.bashrc` for you.
-
-The optional history file is local SQLite under `$XDG_DATA_HOME/mbx/` or
-`~/.local/share/mbx/`. Empty it with `"$MBX_BIN" history clear`, remove the
-files with `"$MBX_BIN" history delete`, or delete that directory.
-
-`MBX_BIN` is set automatically to `target/release/mbx` if present, otherwise
-`target/debug/mbx`. Override it if you keep the binary elsewhere.
+Environment variables already set in the shell always win over the config
+file. `source bash/init.bash` and `scripts/dev-setup.bash` still never write
+`~/.bashrc`.
 
 ## What to expect in every session
 
@@ -289,8 +275,8 @@ completer.
 ### 8. Wrapped `-F` completion, ranked accept, and cycle
 
 This is an adapter around an existing Bash `-F` completer, not a replacement
-for Tab. Wrap one command, Tab as usual, then optionally accept or cycle the
-ranked candidate.
+for Tab. The comfort install sets `MBX_COMP_WRAP=git`. You can also wrap
+manually:
 
 ```bash
 # After source bash/init.bash in an interactive shell:
@@ -431,6 +417,10 @@ Ghost cycle (`Ctrl-X Ctrl-N` / `Ctrl-X Ctrl-P`) and completion cycle
 Group by feature. Unset means off for opt-in flags that require `=1`.
 
 ```bash
+# User config (~/.config/mbx/config.bash); env already set in the shell wins
+MBX_CONFIG=/absolute/path/to/config.bash
+MBX_COMP_WRAP=git                # colon-separated -F commands to wrap (comfort default)
+
 # Prompt
 MBX_COLOR=never                 # force plain text
 MBX_ICONS=never                 # text fallbacks (default auto is also font-safe)
