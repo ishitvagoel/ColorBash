@@ -100,6 +100,31 @@ EOF
 BEGIN_MARK='# >>> mbx begin'
 END_MARK='# <<< mbx end'
 
+# Resolve ~/.bashrc for writes. Follow a symlink only when the target is a
+# regular file (or not yet created) under $HOME, so dotfile managers keep
+# their link. Refuse anything else.
+bashrc_write_path() {
+    local bashrc=${HOME:?HOME is required}/.bashrc
+    local target
+    if [[ -L $bashrc ]]; then
+        target=$(readlink -f -- "$bashrc" 2>/dev/null) || {
+            printf 'mbx install: cannot resolve ~/.bashrc symlink\n' >&2
+            return 1
+        }
+        if [[ -z $target || $target != "$HOME"/* ]]; then
+            printf 'mbx install: refusing ~/.bashrc symlink outside HOME\n' >&2
+            return 1
+        fi
+        if [[ -e $target && ! -f $target ]]; then
+            printf 'mbx install: ~/.bashrc symlink target is not a regular file\n' >&2
+            return 1
+        fi
+        REPLY=$target
+        return 0
+    fi
+    REPLY=$bashrc
+}
+
 strip_managed_block() {
     local src=$1 dest=$2
     local skip=0 line
@@ -120,12 +145,13 @@ strip_managed_block() {
 }
 
 write_bashrc() {
-    local bashrc=${HOME:?HOME is required}/.bashrc
-    local tmp cleaned
+    local dest tmp cleaned
+    bashrc_write_path || return 1
+    dest=$REPLY
     tmp=$(mktemp)
     cleaned=$(mktemp)
-    if [[ -f $bashrc ]]; then
-        strip_managed_block "$bashrc" "$cleaned"
+    if [[ -f $dest ]]; then
+        strip_managed_block "$dest" "$cleaned"
     else
         : >"$cleaned"
     fi
@@ -137,17 +163,19 @@ write_bashrc() {
         printf 'source %q\n' "$ROOT/bash/init.bash"
         printf '%s\n' "$END_MARK"
     } >"$tmp"
-    mv "$tmp" "$bashrc"
+    mv "$tmp" "$dest"
     rm -f "$cleaned"
 }
 
 uninstall_bashrc() {
-    local bashrc=${HOME:?HOME is required}/.bashrc
-    local cleaned
-    [[ -f $bashrc ]] || return 0
+    local dest cleaned
+    [[ -e ${HOME:?HOME is required}/.bashrc || -L ${HOME}/.bashrc ]] || return 0
+    bashrc_write_path || return 1
+    dest=$REPLY
+    [[ -f $dest ]] || return 0
     cleaned=$(mktemp)
-    strip_managed_block "$bashrc" "$cleaned"
-    mv "$cleaned" "$bashrc"
+    strip_managed_block "$dest" "$cleaned"
+    mv "$cleaned" "$dest"
 }
 
 print_status() {

@@ -1098,3 +1098,20 @@ to prevent recurrence, not to assign blame.
 - Evidence: `sanitize_wrap` in `scripts/configure.bash`; smoke wrap-token
   reject in `tests/bash/smoke.bash`.
 
+## M-057 — Isolated HOME tests inherited XDG_CONFIG_HOME
+
+- Discovered: 2026-08-28
+- Status: Fixed
+- Failed assumption: `env HOME=$tmpdir` was enough to isolate install/configure
+  writes in CI.
+- Impact: GitHub Actions CI failed with `install --no-build must write
+  ~/.config/mbx/config.bash` because `config_path` honored the runner's
+  absolute `XDG_CONFIG_HOME` and wrote outside the temp HOME.
+- Correction: smoke install/configure cases set `XDG_CONFIG_HOME=` and
+  `XDG_DATA_HOME=` via `iso`.
+- Prevention: any test that supplies a fake `HOME` must also clear or override
+  `XDG_CONFIG_HOME` and `XDG_DATA_HOME` when the code under test reads those
+  variables.
+- Evidence: `iso` in `tests/bash/smoke.bash`; CI run
+  https://github.com/ishitvagoel/ColorBash/actions/runs/33132959261
+

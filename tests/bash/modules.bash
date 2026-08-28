@@ -714,6 +714,27 @@ assert_eq "$_mbx_comp_word_spec" "$(complete -p mbx_comp_words)" \
     'non -F complete spec must be left unchanged'
 unset -v _mbx_comp_word_spec
 
+mbx_comp_wrap_opts() { :; }
+_mbx_comp_wrap_opts_backend() {
+    COMPREPLY=(mbx_opts_candidate)
+}
+complete -o nospace -P pre -S suf -X '!*.o' -F _mbx_comp_wrap_opts_backend \
+    mbx_comp_wrap_opts
+_mbx_comp_wrap_existing_f mbx_comp_wrap_opts || \
+    fail 'wrap_existing_f should wrap a -F spec that has -P/-S/-X'
+_mbx_comp_opts_spec=$(complete -p mbx_comp_wrap_opts)
+[[ $_mbx_comp_opts_spec == *_mbx_comp_existing_adapter* ]] || \
+    fail 'wrapped -P/-S/-X spec should use _mbx_comp_existing_adapter'
+[[ $_mbx_comp_opts_spec == *-o*nospace* ]] || \
+    fail 'wrapped spec should keep -o nospace'
+[[ $_mbx_comp_opts_spec == *-P*pre* ]] || \
+    fail 'wrapped spec should keep -P prefix'
+[[ $_mbx_comp_opts_spec == *-S*suf* ]] || \
+    fail 'wrapped spec should keep -S suffix'
+[[ $_mbx_comp_opts_spec == *-X* ]] || \
+    fail 'wrapped spec should keep -X filter'
+unset -v _mbx_comp_opts_spec
+
 mbx_comp_wrap_cfg() { :; }
 _mbx_comp_wrap_cfg_backend() {
     COMPREPLY=(mbx_cfg_candidate)

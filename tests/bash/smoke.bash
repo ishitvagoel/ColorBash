@@ -9,6 +9,13 @@ fail() {
     exit 1
 }
 
+# Isolated HOME tests must not inherit the runner's XDG_* paths (M-057).
+iso() {
+    local home=$1
+    shift
+    env HOME="$home" XDG_CONFIG_HOME= XDG_DATA_HOME= "$@"
+}
+
 [[ -x $MBX_TEST_BIN ]] || fail "mbx binary is missing: $MBX_TEST_BIN"
 
 noninteractive=$(bash --noprofile --norc -c '
@@ -122,7 +129,7 @@ if grep -E '>>[[:space:]]*.*bashrc|>[[:space:]]*.*bashrc' "$ROOT/scripts/dev-set
 fi
 
 install_home=$(mktemp -d "${TMPDIR:-/tmp}/mbx-install.XXXXXXXX")
-install_out=$(env HOME="$install_home" bash "$ROOT/scripts/install.bash" \
+install_out=$(iso "$install_home" bash "$ROOT/scripts/install.bash" \
     --profile comfort --no-build)
 [[ $install_out == *"profile comfort"* ]] || \
     fail "install --no-build did not write a comfort profile: $install_out"
@@ -135,27 +142,54 @@ install_out=$(env HOME="$install_home" bash "$ROOT/scripts/install.bash" \
 [[ ! -e $install_home/.bashrc ]] || \
     fail 'install without --bashrc must not create ~/.bashrc'
 printf 'KEEP\n' >"$install_home/.bashrc"
-env HOME="$install_home" bash "$ROOT/scripts/install.bash" \
+iso "$install_home" bash "$ROOT/scripts/install.bash" \
     --profile comfort --no-build --bashrc >/dev/null
 grep -Fq '# >>> mbx begin' "$install_home/.bashrc" || \
     fail 'install --bashrc must write a managed block'
 grep -Fq 'KEEP' "$install_home/.bashrc" || \
     fail 'install --bashrc must preserve existing bashrc bytes'
-env HOME="$install_home" bash "$ROOT/scripts/install.bash" \
+iso "$install_home" bash "$ROOT/scripts/install.bash" \
     --profile comfort --no-build --bashrc >/dev/null
 begin_count=$(grep -c '# >>> mbx begin' "$install_home/.bashrc")
 [[ $begin_count == 1 ]] || fail "install --bashrc must be idempotent, got $begin_count blocks"
-env HOME="$install_home" bash "$ROOT/scripts/install.bash" --uninstall-bashrc >/dev/null
+iso "$install_home" bash "$ROOT/scripts/install.bash" --uninstall-bashrc >/dev/null
 grep -Fq '# >>> mbx begin' "$install_home/.bashrc" && \
     fail 'uninstall-bashrc must remove the managed block'
 grep -Fq 'KEEP' "$install_home/.bashrc" || \
     fail 'uninstall-bashrc must keep the rest of bashrc'
-if env HOME="$install_home" bash "$ROOT/scripts/install.bash" \
+mkdir -p "$install_home/dotfiles"
+printf 'LINKKEEP\n' >"$install_home/dotfiles/bashrc"
+rm -f "$install_home/.bashrc"
+ln -s "$install_home/dotfiles/bashrc" "$install_home/.bashrc"
+iso "$install_home" bash "$ROOT/scripts/install.bash" \
+    --profile comfort --no-build --bashrc >/dev/null
+[[ -L $install_home/.bashrc ]] || \
+    fail 'install --bashrc must keep a HOME-local bashrc symlink'
+grep -Fq '# >>> mbx begin' "$install_home/dotfiles/bashrc" || \
+    fail 'install --bashrc must write the symlink target'
+grep -Fq 'LINKKEEP' "$install_home/dotfiles/bashrc" || \
+    fail 'install --bashrc must preserve bytes in the symlink target'
+iso "$install_home" bash "$ROOT/scripts/install.bash" --uninstall-bashrc >/dev/null
+[[ -L $install_home/.bashrc ]] || \
+    fail 'uninstall-bashrc must keep a HOME-local bashrc symlink'
+grep -Fq '# >>> mbx begin' "$install_home/dotfiles/bashrc" && \
+    fail 'uninstall-bashrc must strip the managed block from the symlink target'
+outside_bashrc=$(mktemp "${TMPDIR:-/tmp}/mbx-outside-bashrc.XXXXXXXX")
+printf 'OUTSIDE\n' >"$outside_bashrc"
+ln -sf "$outside_bashrc" "$install_home/.bashrc"
+if iso "$install_home" bash "$ROOT/scripts/install.bash" \
+    --profile comfort --no-build --bashrc >/dev/null 2>&1; then
+    fail 'install --bashrc must refuse a bashrc symlink outside HOME'
+fi
+[[ $(<"$outside_bashrc") == OUTSIDE ]] || \
+    fail 'refused bashrc symlink must not rewrite the outside target'
+rm -f "$outside_bashrc"
+if iso "$install_home" bash "$ROOT/scripts/install.bash" \
     --profile nope --no-build >/dev/null 2>&1; then
     fail 'install --profile nope must fail'
 fi
 highlight_home=$(mktemp -d "${TMPDIR:-/tmp}/mbx-install-hl.XXXXXXXX")
-env HOME="$highlight_home" bash "$ROOT/scripts/install.bash" \
+iso "$highlight_home" bash "$ROOT/scripts/install.bash" \
     --profile highlight --no-build >/dev/null
 [[ $(<"$highlight_home/.config/mbx/config.bash") == *'export MBX_HIGHLIGHT=1'* ]] || \
     fail 'highlight profile must opt in to highlighting'
@@ -178,7 +212,7 @@ wrap=git;rm
 exclude=git *
 bashrc=0
 EOF
-cfg_out=$(env HOME="$cfg_home" bash "$ROOT/scripts/configure.bash" \
+cfg_out=$(iso "$cfg_home" bash "$ROOT/scripts/configure.bash" \
     --answers "$cfg_answers" --no-build 2>&1) || \
     fail "configure --answers comfort should succeed: $cfg_out"
 [[ $cfg_out == *'highlight left off'* ]] || \
@@ -203,7 +237,7 @@ preset=highlight
 wrap=git
 bashrc=1
 EOF
-env HOME="$cfg_home" bash "$ROOT/scripts/configure.bash" \
+iso "$cfg_home" bash "$ROOT/scripts/configure.bash" \
     --answers "$cfg_answers" --no-build >/dev/null
 grep -Fq '# >>> mbx begin' "$cfg_home/.bashrc" || \
     fail 'configure bashrc=1 must write a managed block'
@@ -215,17 +249,17 @@ grep -Fq 'KEEP' "$cfg_home/.bashrc" || \
     fail 'highlight preset must not enable ghost'
 bad_answers=$(mktemp "${TMPDIR:-/tmp}/mbx-answers-bad.XXXXXXXX")
 printf 'not_a_key=1\n' >"$bad_answers"
-if env HOME="$cfg_home" bash "$ROOT/scripts/configure.bash" \
+if iso "$cfg_home" bash "$ROOT/scripts/configure.bash" \
     --answers "$bad_answers" --no-build >/dev/null 2>&1; then
     fail 'configure must reject unknown answers keys'
 fi
 printf 'exclude=$(reboot)\n' >"$bad_answers"
-if env HOME="$cfg_home" bash "$ROOT/scripts/configure.bash" \
+if iso "$cfg_home" bash "$ROOT/scripts/configure.bash" \
     --answers "$bad_answers" --no-build >/dev/null 2>&1; then
     fail 'configure must reject exclude values with $'
 fi
 menu_home=$(mktemp -d "${TMPDIR:-/tmp}/mbx-configure-menu.XXXXXXXX")
-menu_out=$(printf '1\nw\n' | env HOME="$menu_home" bash "$ROOT/scripts/configure.bash" \
+menu_out=$(printf '1\nw\n' | iso "$menu_home" bash "$ROOT/scripts/configure.bash" \
     --no-build 2>&1) || fail "configure menu should accept piped choices: $menu_out"
 [[ -f $menu_home/.config/mbx/config.bash ]] || \
     fail 'piped configure menu must write a config file'
@@ -238,7 +272,7 @@ rm -rf "$cfg_home" "$menu_home"
 
 bashrc_home=$(mktemp -d "${TMPDIR:-/tmp}/mbx-bashrc.XXXXXXXX")
 printf 'SENTINEL\n' >"$bashrc_home/.bashrc"
-bashrc_state=$(env HOME="$bashrc_home" MBX_TEST_ROOT="$ROOT" MBX_BIN="$MBX_TEST_BIN" \
+bashrc_state=$(iso "$bashrc_home" env MBX_TEST_ROOT="$ROOT" MBX_BIN="$MBX_TEST_BIN" \
     TERM=dumb bash --noprofile --norc -i 2>/dev/null <<'EOF'
 source "$MBX_TEST_ROOT/bash/init.bash"
 printf 'BASHRC_SOURCED:%s\n' "${_MBX_INITIALIZED:-missing}"
