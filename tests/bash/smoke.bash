@@ -267,8 +267,45 @@ menu_out=$(printf '1\nw\n' | iso "$menu_home" bash "$ROOT/scripts/configure.bash
     fail 'piped comfort choice must enable ghost'
 [[ ! -e $menu_home/.bashrc ]] || \
     fail 'piped configure menu must not write bashrc by default'
-rm -f "$cfg_answers" "$bad_answers"
-rm -rf "$cfg_home" "$menu_home"
+keep_out=$(printf '4\nw\n' | iso "$menu_home" bash "$ROOT/scripts/configure.bash" \
+    --no-build 2>&1) || fail "re-run configure should keep current config: $keep_out"
+[[ $(<"$menu_home/.config/mbx/config.bash") == *'export MBX_GHOST=1'* ]] || \
+    fail 'piped current-config choice must keep ghost'
+[[ $keep_out == *'Current config (detected)'* ]] || \
+    fail "re-run configure should offer current config: $keep_out"
+env_key_answers=$(mktemp "${TMPDIR:-/tmp}/mbx-answers-env.XXXXXXXX")
+printf 'MBX_HISTORY=1\nwrap=ls\n' >"$env_key_answers"
+iso "$menu_home" bash "$ROOT/scripts/configure.bash" \
+    --from-config --answers "$env_key_answers" --no-build >/dev/null
+[[ $(<"$menu_home/.config/mbx/config.bash") == *'export MBX_GHOST=1'* ]] || \
+    fail '--from-config must keep ghost while overlaying answers'
+[[ $(<"$menu_home/.config/mbx/config.bash") == *'export MBX_COMP_WRAP=ls'* ]] || \
+    fail '--from-config answers must update wrap'
+[[ $(<"$menu_home/.config/mbx/config.bash") == *'export MBX_HISTORY=1'* ]] || \
+    fail 'MBX_HISTORY answers alias must enable history'
+printf 'wrap=git\n' >"$env_key_answers"
+iso "$menu_home" env _MBX_ROOT="$ROOT" bash --noprofile --norc -c '
+    source "$1/bash/config.bash"
+    mbx_configure --answers "$2" --no-build
+' _ "$ROOT" "$env_key_answers" >/dev/null
+[[ $(<"$menu_home/.config/mbx/config.bash") == *'export MBX_GHOST=1'* ]] || \
+    fail 'mbx_configure --answers must keep existing ghost via --from-config'
+[[ $(<"$menu_home/.config/mbx/config.bash") == *'export MBX_COMP_WRAP=git'* ]] || \
+    fail 'mbx_configure --answers must overlay wrap'
+build_home=$(mktemp -d "${TMPDIR:-/tmp}/mbx-configure-build.XXXXXXXX")
+empty_path=$(mktemp -d "${TMPDIR:-/tmp}/mbx-empty-path.XXXXXXXX")
+ln -s "$(command -v bash)" "$empty_path/bash"
+printf 'history=0\n' >"$env_key_answers"
+if iso "$build_home" env PATH="$empty_path" bash "$ROOT/scripts/configure.bash" \
+    --build --answers "$env_key_answers" >/dev/null 2>&1; then
+    fail '--build without cargo must fail'
+fi
+[[ ! -e $build_home/.config/mbx/config.bash ]] || \
+    fail '--build failure must not write a config file'
+rm -f "$empty_path/bash"
+rmdir "$empty_path"
+rm -f "$cfg_answers" "$bad_answers" "$env_key_answers"
+rm -rf "$cfg_home" "$menu_home" "$build_home"
 
 bashrc_home=$(mktemp -d "${TMPDIR:-/tmp}/mbx-bashrc.XXXXXXXX")
 printf 'SENTINEL\n' >"$bashrc_home/.bashrc"

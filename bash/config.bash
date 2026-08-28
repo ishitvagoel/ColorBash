@@ -46,23 +46,48 @@ _mbx_load_user_config() {
 }
 
 mbx_status() {
-    local path=-
+    local path=- helper persist=no
     _mbx_user_config_path && path=$REPLY
+    helper=${MBX_BIN:-unset}
+    if [[ $helper != unset ]]; then
+        if [[ -x $helper ]]; then
+            helper="$helper (executable)"
+        else
+            helper="$helper (missing)"
+        fi
+    fi
+    if [[ -n ${HOME:-} && -f ${HOME}/.bashrc ]] && grep -Fq '# >>> mbx begin' "$HOME/.bashrc"; then
+        persist=yes
+    fi
     printf 'config: %s\n' "$path"
-    printf 'helper: %s\n' "${MBX_BIN:-unset}"
+    printf 'helper: %s\n' "$helper"
+    printf 'persist-bashrc: %s\n' "$persist"
     printf 'history: %s\n' "${MBX_HISTORY:-off}"
     printf 'ghost: %s (bound=%s)\n' "${MBX_GHOST:-off}" "${_MBX_GHOST_BOUND:-0}"
     printf 'highlight: %s (bound=%s)\n' "${MBX_HIGHLIGHT:-off}" "${_MBX_HIGHLIGHT_BOUND:-0}"
     printf 'overlay: %s (bound=%s)\n' "${MBX_COMP_OVERLAY:-off}" "${_MBX_COMP_OVERLAY_BOUND:-0}"
     printf 'wrap: %s\n' "${MBX_COMP_WRAP:-off}"
+    printf 'duration: %s\n' "${MBX_ENABLE_DURATION_TIMING:-off}"
+    printf 'ipc: %s\n' "${MBX_IPC_MODE:-auto}"
     printf 'search: Ctrl-X h  restore: Ctrl-X l  ghost cycle: Ctrl-X Ctrl-N/P\n'
     printf 'overlay: Ctrl-X Ctrl-O  accept: Ctrl-X Ctrl-A  dismiss: Ctrl-X j\n'
     printf 'configure: mbx_configure   or: bash scripts/configure.bash\n'
 }
 
 mbx_configure() {
+    local arg from_config=0
     if [[ -n ${_MBX_ROOT:-} && -f "$_MBX_ROOT/scripts/configure.bash" ]]; then
-        bash "$_MBX_ROOT/scripts/configure.bash" "$@"
+        for arg in "$@"; do
+            if [[ $arg == --from-config ]]; then
+                from_config=1
+                break
+            fi
+        done
+        if ((from_config == 0)); then
+            bash "$_MBX_ROOT/scripts/configure.bash" --from-config "$@"
+        else
+            bash "$_MBX_ROOT/scripts/configure.bash" "$@"
+        fi
         return
     fi
     printf 'mbx_configure: run bash scripts/configure.bash from the ColorBash tree\n' >&2

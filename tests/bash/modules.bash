@@ -655,6 +655,10 @@ status_out=$(mbx_status)
     fail "mbx_status should print the configured path: $status_out"
 [[ $status_out == *mbx_configure* ]] || \
     fail 'mbx_status should mention mbx_configure'
+[[ $status_out == *'duration:'* ]] || \
+    fail "mbx_status should print duration: $status_out"
+[[ $status_out == *'persist-bashrc:'* ]] || \
+    fail "mbx_status should print persist-bashrc: $status_out"
 declare -F mbx_configure >/dev/null 2>&1 || fail 'mbx_configure should be defined'
 _MBX_ROOT=
 mbx_configure --help >/dev/null 2>&1 && \

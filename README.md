@@ -16,14 +16,18 @@ search, ghost suggestions, completion overlay). It does **not** edit
 ```bash
 bash scripts/install.bash --interactive   # menu: pick every option, then w to save
 bash scripts/install.bash --bashrc        # comfort preset + persist in ~/.bashrc
-mbx_configure                             # later: same menu (after the loader is sourced)
-mbx_status
+mbx_configure                             # later: same menu, starting from the saved file
+mbx_status                                # flags, helper path, duration, persist-bashrc
 ```
 
 `--interactive` opens a numbered menu for every user-facing option (features,
-prompt, history extras, keys, timeouts). Ghost and syntax highlighting cannot
-both be on. It does **not** edit `~/.bashrc` unless you turn on persist
-(option 15) or pass `--bashrc`.
+prompt, history extras, keys, timeouts). Re-running it (or `mbx_configure`)
+starts from the saved file when one exists; choose **4) Current config** to
+keep those values. Ghost and syntax highlighting cannot both be on. It does
+**not** edit `~/.bashrc` unless you turn on persist (option 15) or pass
+`--bashrc`. Non-interactive overlays: `bash scripts/configure.bash
+--from-config --answers FILE`. `--build` runs `cargo build --release
+--workspace` before writing; the menu defaults to `--no-build`.
 
 Comfort is the highest-QoL preset. History is local SQLite and does not rewrite
 `.bash_history`. Use `--profile highlight` for coloring instead of ghost, or
@@ -425,6 +429,7 @@ Group by feature. Unset means off for opt-in flags that require `=1`.
 ```bash
 # User config (~/.config/mbx/config.bash); env already set in the shell wins
 # Interactive: bash scripts/configure.bash   or   mbx_configure
+# Re-run loads the saved file; overlay with --from-config --answers FILE
 MBX_CONFIG=/absolute/path/to/config.bash
 MBX_COMP_WRAP=git                # colon-separated -F commands to wrap (comfort default)
 
