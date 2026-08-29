@@ -663,6 +663,42 @@ declare -F mbx_configure >/dev/null 2>&1 || fail 'mbx_configure should be define
 _MBX_ROOT=
 mbx_configure --help >/dev/null 2>&1 && \
     fail 'mbx_configure without _MBX_ROOT should fail'
+
+# D-1: mbx doctor reports every section and fails closed on a missing helper.
+declare -F mbx_doctor >/dev/null 2>&1 || fail 'mbx_doctor should be defined'
+MBX_BIN=/nonexistent/mbx
+doctor_status=0
+doctor_out=$(mbx_doctor) || doctor_status=$?
+[[ $doctor_out == *'[FAIL]'*'MBX_BIN is unset or not executable'* ]] || \
+    fail "mbx doctor should fail closed on a missing helper: $doctor_out"
+((doctor_status != 0)) || fail 'mbx doctor must exit nonzero when a FAIL line was printed'
+for doctor_section in Shell 'Terminal capability' Helper Configuration \
+    'Keybinding collisions' 'History store'; do
+    [[ $doctor_out == *"$doctor_section"* ]] || \
+        fail "mbx doctor should print a $doctor_section section: $doctor_out"
+done
+
+# D-2: with a working helper, doctor reports OK for every helper check. The
+# harness sources modules non-interactively, so the shell-interactivity FAIL
+# is expected here and is not what this case is checking.
+MBX_BIN=$MBX_TEST_BIN
+doctor_out=$(mbx_doctor) || true
+[[ $doctor_out == *'[OK]   live handshake: mbx/'* ]] || \
+    fail "mbx doctor should report a live handshake: $doctor_out"
+[[ $doctor_out == *'[OK]'*'is executable'* ]] || \
+    fail "mbx doctor should report the helper as executable: $doctor_out"
+[[ $doctor_out == *'[OK]   version: mbx '* ]] || \
+    fail "mbx doctor should report the helper version: $doctor_out"
+
+# D-3: MBX_GHOST=1 and MBX_HIGHLIGHT=1 together must be reported as a FAIL.
+MBX_GHOST=1
+MBX_HIGHLIGHT=1
+doctor_status=0
+doctor_out=$(mbx_doctor) || doctor_status=$?
+[[ $doctor_out == *'[FAIL]'*'mutually exclusive'* ]] || \
+    fail "mbx doctor should flag ghost+highlight as mutually exclusive: $doctor_out"
+((doctor_status != 0)) || fail 'mbx doctor must exit nonzero when ghost+highlight collide'
+unset MBX_GHOST MBX_HIGHLIGHT
 unset _MBX_ROOT MBX_CONFIG MBX_HISTORY MBX_GHOST
 _MBX_USER_CONFIG_LOADED=1
 rm -f "$mbx_cfg_dir/config.bash"

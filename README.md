@@ -18,6 +18,7 @@ bash scripts/install.bash --interactive   # menu: pick every option, then w to s
 bash scripts/install.bash --bashrc        # comfort preset + persist in ~/.bashrc
 mbx_configure                             # later: same menu, starting from the saved file
 mbx_status                                # flags, helper path, duration, persist-bashrc
+mbx_doctor                                # diagnose: what's off and how to fix it
 ```
 
 `--interactive` opens a numbered menu for every user-facing option (features,
@@ -135,12 +136,13 @@ Expect a prominent `! PROD` marker. `MBX_DISABLE_GIT=1` omits Git discovery.
 `MBX_DISABLE_RENDERER=1` uses the Bash-only fallback. `MBX_COLOR=never`,
 `NO_COLOR`, and `TERM=dumb` render plain text.
 
-**Check it is installed:**
-
-```bash
-[[ -n $MBX_BIN && -x $MBX_BIN ]] && echo "helper=$MBX_BIN"
-"$MBX_BIN" handshake
-```
+**Check it is installed:** `mbx_doctor` — reports Bash version, tty/color/locale
+capability, helper path/version/live handshake, IPC mode, config resolution,
+keybinding collisions for every enabled opt-in feature, and history store
+health, each with a fix line when something needs attention. `mbx_status` is
+its one-line-per-feature summary. Every per-feature "Check" recipe elsewhere
+in this document is covered by `mbx_doctor`; run it first before checking
+things by hand.
 
 **Automated:** `bash tests/bash/modules.bash`, `cargo test -p mbx-pty --test foundation`.
 

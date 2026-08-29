@@ -72,6 +72,176 @@ mbx_status() {
     printf 'search: Ctrl-X h  restore: Ctrl-X l  ghost cycle: Ctrl-X Ctrl-N/P\n'
     printf 'overlay: Ctrl-X Ctrl-O  accept: Ctrl-X Ctrl-A  dismiss: Ctrl-X j\n'
     printf 'configure: mbx_configure   or: bash scripts/configure.bash\n'
+    printf 'diagnose: mbx_doctor\n'
+}
+
+_mbx_doctor_line() {
+    local level=$1 message=$2 fix=${3-}
+    case $level in
+        ok) printf '  [OK]   %s\n' "$message" ;;
+        warn)
+            printf '  [WARN] %s\n' "$message"
+            _MBX_DOCTOR_WARN=$((_MBX_DOCTOR_WARN + 1))
+            ;;
+        fail)
+            printf '  [FAIL] %s\n' "$message"
+            _MBX_DOCTOR_FAIL=$((_MBX_DOCTOR_FAIL + 1))
+            ;;
+    esac
+    [[ -n $fix ]] && printf '         fix: %s\n' "$fix"
+}
+
+# Diagnostic report (brief §41): reports and, unlike mbx_status, explains
+# every failure with a concrete next step. Read-only; never writes config,
+# ~/.bashrc, or the history store. Exit status is nonzero only on [FAIL].
+mbx_doctor() {
+    local _MBX_DOCTOR_WARN=0 _MBX_DOCTOR_FAIL=0
+    local config_path=- version handshake
+
+    printf 'mbx doctor\n\nShell\n'
+    if ((${BASH_VERSINFO[0]:-0} >= 5)); then
+        _mbx_doctor_line ok "Bash $BASH_VERSION"
+    else
+        _mbx_doctor_line fail "Bash $BASH_VERSION is older than the supported 5.x line" \
+            'upgrade Bash; behavior below 5.x is unsupported'
+    fi
+    if [[ $- == *i* ]]; then
+        _mbx_doctor_line ok 'shell is interactive'
+    else
+        _mbx_doctor_line fail 'shell is not interactive; MBX only activates in interactive Bash' \
+            'run this from an interactive shell, not a script or bash -c'
+    fi
+    if [[ -t 1 ]]; then
+        _mbx_doctor_line ok 'stdout is a tty'
+    else
+        _mbx_doctor_line warn \
+            'stdout is not a tty; self-insert wrapping (ghost/highlight) needs a real terminal, a piped shell is not PTY evidence' \
+            'run this in a real terminal, not a pipe, redirect, or command substitution'
+    fi
+
+    printf '\nTerminal capability\n'
+    printf '  TERM=%s COLORTERM=%s LANG=%s MBX_COLOR=%s\n' \
+        "${TERM:-unset}" "${COLORTERM:-unset}" "${LANG:-unset}" "${MBX_COLOR:-auto}"
+    _mbx_color_capable
+    if [[ $REPLY == 1 ]]; then
+        _mbx_doctor_line ok 'color is capable'
+    else
+        _mbx_doctor_line warn \
+            'color is disabled (no tty, TERM=dumb, NO_COLOR set, or MBX_COLOR=never)' \
+            'unset NO_COLOR, set MBX_COLOR=auto, or use a real terminal, if this is unintended'
+    fi
+    case ${LANG:-}${LC_ALL:-} in
+        *UTF-8* | *utf8*) _mbx_doctor_line ok 'locale advertises UTF-8' ;;
+        *)
+            _mbx_doctor_line warn 'locale does not advertise UTF-8; wide/combining glyphs may misalign' \
+                'export LANG=<your-locale>.UTF-8'
+            ;;
+    esac
+    case ${MBX_ICONS:-auto} in
+        nerd) _mbx_doctor_line ok 'icons: Nerd Font glyphs requested (MBX_ICONS=nerd)' ;;
+        never | ascii) _mbx_doctor_line ok "icons: ASCII fallback requested (MBX_ICONS=$MBX_ICONS)" ;;
+        *)
+            _mbx_doctor_line ok \
+                'icons: auto (text fallbacks; set MBX_ICONS=nerd only if your font has Nerd Font glyphs)'
+            ;;
+    esac
+
+    printf '\nHelper\n'
+    if [[ -n ${MBX_BIN:-} && -x $MBX_BIN ]]; then
+        _mbx_doctor_line ok "MBX_BIN=$MBX_BIN is executable"
+        if version=$("$MBX_BIN" --version 2>/dev/null); then
+            _mbx_doctor_line ok "version: $version"
+        else
+            _mbx_doctor_line fail "$MBX_BIN --version failed" \
+                'rebuild: cargo build --release --workspace from the ColorBash tree'
+        fi
+        if handshake=$("$MBX_BIN" handshake 2>/dev/null); then
+            _mbx_doctor_line ok "live handshake: $handshake"
+        else
+            _mbx_doctor_line fail "$MBX_BIN handshake failed" \
+                'rebuild the helper, or confirm MBX_BIN points at a real mbx binary'
+        fi
+    else
+        _mbx_doctor_line fail "MBX_BIN is unset or not executable (${MBX_BIN:-unset})" \
+            'cargo build --release --workspace, then export MBX_BIN=<repo>/target/release/mbx, or re-run scripts/install.bash'
+    fi
+    if [[ ${_MBX_ENGINE_READY:-0} == 1 ]]; then
+        _mbx_doctor_line ok "coprocess attached (IPC mode: ${MBX_IPC_MODE:-auto})"
+    else
+        _mbx_doctor_line warn \
+            "no coprocess attached; using the per-call/spawn transport (IPC mode: ${MBX_IPC_MODE:-auto})" \
+            'expected under MBX_IPC_MODE=off/per-call or MBX_DISABLE_RENDERER=1; otherwise re-source bash/init.bash'
+    fi
+
+    printf '\nConfiguration\n'
+    _mbx_user_config_path && config_path=$REPLY
+    if [[ $config_path == /* && -f $config_path ]]; then
+        _mbx_doctor_line ok "config file: $config_path"
+    elif [[ $config_path == - ]]; then
+        _mbx_doctor_line warn 'no config path could be resolved (HOME unset?)' \
+            'export HOME, or set MBX_CONFIG to an absolute path'
+    else
+        _mbx_doctor_line ok "no config file at $config_path; using environment defaults"
+    fi
+
+    printf '\nKeybinding collisions\n'
+    local -a doctor_features=(
+        'MBX_GHOST:_MBX_GHOST_BOUND:MBX_GHOST_OVERRIDE:ghost suffix'
+        'MBX_HIGHLIGHT:_MBX_HIGHLIGHT_BOUND:MBX_HIGHLIGHT_OVERRIDE:syntax highlighting'
+        'MBX_COMP_OVERLAY:_MBX_COMP_OVERLAY_BOUND:MBX_COMP_OVERLAY_OVERRIDE:completion overlay'
+    )
+    local entry env_var bound_var override_var label any_checked=0
+    for entry in "${doctor_features[@]}"; do
+        IFS=: read -r env_var bound_var override_var label <<<"$entry"
+        [[ ${!env_var:-0} == 1 ]] || continue
+        any_checked=1
+        if [[ ${!bound_var:-0} == 1 ]]; then
+            _mbx_doctor_line ok "$label: chord bound"
+        elif [[ ! -t 1 ]]; then
+            _mbx_doctor_line warn "$label: not bound because stdout is not a tty (see Shell above)" ''
+        elif [[ $env_var == MBX_HIGHLIGHT && ${MBX_GHOST:-0} == 1 ]]; then
+            _mbx_doctor_line warn "$label: not bound because MBX_GHOST=1 is also set (mutually exclusive)" ''
+        else
+            _mbx_doctor_line warn "$label: its chord was already bound, so MBX left it alone" \
+                "export $override_var=1 before sourcing init.bash to force it"
+        fi
+    done
+    ((any_checked)) || _mbx_doctor_line ok 'no opt-in keystroke feature is enabled'
+    if [[ ${MBX_GHOST:-0} == 1 && ${MBX_HIGHLIGHT:-0} == 1 ]]; then
+        _mbx_doctor_line fail 'MBX_GHOST=1 and MBX_HIGHLIGHT=1 are both set; they are mutually exclusive' \
+            'disable one of them (highlight install skips while ghost is enabled)'
+    fi
+
+    printf '\nHistory store\n'
+    if [[ ${MBX_HISTORY:-0} == 1 ]]; then
+        if [[ -n ${MBX_BIN:-} && -x $MBX_BIN ]]; then
+            local store_path store_count store_mode
+            if store_path=$("$MBX_BIN" history path 2>/dev/null); then
+                _mbx_doctor_line ok "store: $store_path"
+                if [[ -f $store_path ]]; then
+                    store_mode=$(stat -c '%a' "$store_path" 2>/dev/null || \
+                        stat -f '%Lp' "$store_path" 2>/dev/null)
+                    if [[ $store_mode == 600 ]]; then
+                        _mbx_doctor_line ok 'store file mode: 0600'
+                    else
+                        _mbx_doctor_line warn "store file mode is ${store_mode:-unknown}, expected 0600" \
+                            "chmod 600 $store_path"
+                    fi
+                fi
+                if store_count=$("$MBX_BIN" history count 2>/dev/null); then
+                    _mbx_doctor_line ok "rows: $store_count"
+                fi
+            else
+                _mbx_doctor_line fail 'could not resolve the history store path' \
+                    'confirm MBX_BIN is executable and MBX_HISTORY=1'
+            fi
+        fi
+    else
+        _mbx_doctor_line ok 'history capture is off (MBX_HISTORY unset or 0)'
+    fi
+
+    printf '\n%d warning(s), %d failure(s)\n' "$_MBX_DOCTOR_WARN" "$_MBX_DOCTOR_FAIL"
+    ((_MBX_DOCTOR_FAIL == 0))
 }
 
 mbx_configure() {
