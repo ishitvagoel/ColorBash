@@ -1318,3 +1318,60 @@ to prevent recurrence, not to assign blame.
   `READLINE_LINE`); `crates/pty/src/session.rs`
   (`visible_text_strips_readline_markers_around_styled_run`, added so the PTY
   test harness can correctly strip real markers once this is fixed).
+
+## M-065 — Completion overlay's DECSC/DECRC save is invalidated by its own scroll
+
+- Discovered: 2026-08-29
+- Status: Open
+- Failed assumption: ADR 0013's completion overlay assumed `\e7` (DECSC,
+  save cursor) before drawing up to eight rows below the prompt, then `\e8`
+  (DECRC, restore) and `\e[J` (erase to end of screen) to hide it, was
+  terminal-safe. DECSC/DECRC save an *absolute* screen position.
+- Impact: reproduced with a genuine PTY session and a purpose-built VT
+  screen model (`crates/pty/src/screen.rs`, added for this evidence): at a
+  6-row terminal with the prompt a couple of lines down (an entirely
+  ordinary state, not a contrived edge case), showing an eight-candidate
+  overlay draws enough lines to scroll the screen. `\e8` then restores the
+  *pre-scroll* absolute coordinates, which no longer correspond to the
+  prompt after the scroll shifted every row up. The subsequent `\e[J` erases
+  from that stale, wrong position — the entire prompt and all prior output
+  are gone; the screen shows only the tail of the overlay itself. The
+  existing overlay PTY suite (`crates/pty/tests/completion_harness.rs`)
+  never caught this because every existing case runs at a fixed 24-row
+  window with the prompt near the top, so the draw never scrolls.
+- Why not fixed here: a correct fix needs to know the cursor's actual
+  current row, which this codebase cannot query today (no DSR — Device
+  Status Report, `\e[6n` — round trip exists; adding one means raw-mode
+  `/dev/tty` manipulation, a bounded read of the terminal's reply, and
+  restoring the caller's `stty` state, none of which is free of its own
+  correctness risk). A naive substitute — replacing the absolute restore
+  with a relative cursor-up by the known drawn-row count — fixes the row but
+  not the column (the cursor is left wherever the last overlay line's text
+  ended, not the prompt's own column), and a subsequent blind `\e[J` from
+  that column would then corrupt the *prompt line itself* instead of the
+  overlay — trading one screen-destroying bug for a different one. Shipping
+  either the known-broken behavior's twin or an unverified guess is worse
+  than shipping the evidence alone.
+- Current state: the reproducing test
+  (`overlay_near_the_bottom_of_a_short_terminal_leaves_the_prompt_intact` in
+  `crates/pty/tests/overlay_screen.rs`) is marked `#[ignore]` with this ID so
+  it documents the defect and stays reproducible on demand
+  (`cargo test -p mbx-pty --test overlay_screen -- --ignored`) without
+  failing the canonical suite for a known, already-shipped gap the review
+  found rather than introduced. A sibling test in the same file
+  (`resize_while_overlay_is_visible_leaves_a_usable_prompt`) confirms a
+  `SIGWINCH` while the overlay is visible is *not* affected — the defect is
+  specifically the scroll-during-draw case.
+- Prevention: DECSC/DECRC (or any other technique that captures an absolute
+  screen position) must not be used to bracket output whose own length can
+  push the cursor's row past the bottom of the terminal — that is exactly
+  the condition that invalidates the saved position. Any future terminal
+  overlay must first establish it will not scroll (e.g., cap drawn rows to
+  the space actually available, which requires knowing the cursor's current
+  row) or use a bracketing technique immune to scrolling.
+- Next step (not done here): either add a bounded DSR cursor-row query as
+  its own reviewed slice, or choose a different overlay rendering strategy,
+  before `COMP-004` can be marked `complete`. See
+  `docs/comp-004-overlay-plan.md` and `docs/roadmap.md`.
+- Evidence: `crates/pty/src/screen.rs` (the VT model used to observe this);
+  `crates/pty/tests/overlay_screen.rs`.
