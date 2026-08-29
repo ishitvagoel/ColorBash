@@ -1534,6 +1534,7 @@ if [ "$1" = highlight ]; then
     while [ $# -gt 0 ]; do
         case "$1" in
             --point) point=$2; shift 2 ;;
+            --color) shift 2 ;;
             *) plain="$plain${plain:+ }$1"; shift ;;
         esac
     done

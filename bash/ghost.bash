@@ -146,28 +146,10 @@ _mbx_ghost_insert_char() {
     READLINE_POINT=$((point + ${#ch}))
 }
 
+# Kept as a thin, stable name for ghost call sites; the bounded reader itself
+# is shared with highlight's coprocess path (M-062) and lives in engine.bash.
 _mbx_ghost_read_line() {
-    local fd=$1
-    local deadline=$2
-    local timeout status=0
-    local LC_ALL=C
-
-    _mbx_deadline_remaining "$deadline" || return 1
-    timeout=$REPLY
-    REPLY=
-    IFS= read -r -t "$timeout" -n 65536 -u "$fd" REPLY || status=$?
-    case $status in
-        0 | 1)
-            [[ -n $REPLY || $status == 0 ]] || return 1
-            if [[ $REPLY == *$'\r' ]]; then
-                REPLY=${REPLY%$'\r'}
-            fi
-            return 0
-            ;;
-        *)
-            return 1
-            ;;
-    esac
+    _mbx_engine_read_line "$1" "$2"
 }
 
 _mbx_ghost_usable_match() {

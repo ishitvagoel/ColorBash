@@ -1,3 +1,4 @@
+use crate::highlight_service::HighlightHandler;
 use crate::history_service::{HistoryHandler, MBX2_MAGIC};
 use crate::service::RequestHandler;
 use crate::telemetry::trace_message;
@@ -12,6 +13,7 @@ use std::time::Duration;
 pub fn serve_stdio(
     handler: &dyn RequestHandler,
     history: Option<Box<dyn HistoryHandler>>,
+    highlight: Option<Box<dyn HighlightHandler>>,
 ) -> Result<(), String> {
     let stdin = io::stdin();
     let stdout = io::stdout();
@@ -20,6 +22,7 @@ pub fn serve_stdio(
         &mut BufWriter::new(stdout.lock()),
         handler,
         history.as_deref(),
+        highlight.as_deref(),
     )
 }
 
@@ -27,13 +30,19 @@ pub fn serve_socket(
     path: &Path,
     handler: &dyn RequestHandler,
     history: Option<Box<dyn HistoryHandler>>,
+    highlight: Option<Box<dyn HighlightHandler>>,
 ) -> Result<(), String> {
     let (listener, _cleanup) = bind_socket(path)?;
 
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-                if let Err(error) = serve_socket_connection(stream, handler, history.as_deref()) {
+                if let Err(error) = serve_socket_connection(
+                    stream,
+                    handler,
+                    history.as_deref(),
+                    highlight.as_deref(),
+                ) {
                     trace_message(&format!("socket_client_error detail={error}"));
                 }
             }
@@ -48,6 +57,7 @@ fn serve_socket_connection(
     stream: UnixStream,
     handler: &dyn RequestHandler,
     history: Option<&dyn HistoryHandler>,
+    highlight: Option<&dyn HighlightHandler>,
 ) -> Result<(), String> {
     stream
         .set_read_timeout(Some(Duration::from_secs(30)))
@@ -58,17 +68,21 @@ fn serve_socket_connection(
         &mut BufWriter::new(stream),
         handler,
         history,
+        highlight,
     )
 }
 
 /// Shared request loop used by every server-side stream adapter. MBX2 frames
-/// (history records) dispatch to the optional history handler; MBX1 frames go
-/// to the prompt request handler.
+/// dispatch by kind to whichever optional handler owns that kind (history
+/// handles RECORD/PING/QUERY/CANCEL; highlight handles HIGHLIGHT,
+/// independently of whether history is enabled — ADR 0014). MBX1 frames go to
+/// the prompt request handler.
 fn serve_connection(
     reader: &mut impl BufRead,
     writer: &mut impl Write,
     handler: &dyn RequestHandler,
     history: Option<&dyn HistoryHandler>,
+    highlight: Option<&dyn HighlightHandler>,
 ) -> Result<(), String> {
     let mut line = String::new();
     loop {
@@ -76,7 +90,7 @@ fn serve_connection(
             return Ok(());
         }
         if line.starts_with(&format!("{MBX2_MAGIC}\t")) {
-            let response = handle_mbx2_line(&line, history);
+            let response = handle_mbx2_line(&line, history, highlight);
             write_message(writer, &response)?;
             continue;
         }
@@ -94,11 +108,67 @@ fn serve_connection(
     }
 }
 
-fn handle_mbx2_line(line: &str, history: Option<&dyn HistoryHandler>) -> String {
+/// Best-effort peek at the MBX2 `kind` field, tolerant of a line too
+/// malformed to have one. Used only to route to the right optional handler
+/// before either handler's own validation runs; it changes nothing about how
+/// a malformed frame is rejected.
+fn mbx2_kind_hint(line: &str) -> &str {
+    line.split('\t').nth(2).unwrap_or_default()
+}
+
+fn handle_mbx2_line(
+    line: &str,
+    history: Option<&dyn HistoryHandler>,
+    highlight: Option<&dyn HighlightHandler>,
+) -> String {
     let request_id = mbx2_request_id(line);
+    if mbx2_kind_hint(line) == "HIGHLIGHT" {
+        let Some(handler) = highlight else {
+            return crate::history_service::encode_mbx2_error(request_id, "unsupported");
+        };
+        return dispatch_mbx2(line, request_id, |id, kind, rest| {
+            match handler.handle(id, kind, rest) {
+                crate::highlight_service::HighlightResponse::Styled {
+                    generation,
+                    point,
+                    line,
+                } => crate::highlight_service::encode_mbx2_styled(id, generation, point, &line),
+                crate::highlight_service::HighlightResponse::Error(kind) => {
+                    crate::history_service::encode_mbx2_error(id, &kind)
+                }
+            }
+        });
+    }
     let Some(handler) = history else {
         return crate::history_service::encode_mbx2_error(request_id, "unsupported");
     };
+    dispatch_mbx2(line, request_id, |id, kind, rest| {
+        match handler.handle(id, kind, rest) {
+            crate::history_service::HistoryResponse::Pong => {
+                crate::history_service::encode_mbx2(id, "PONG")
+            }
+            crate::history_service::HistoryResponse::Ack => {
+                crate::history_service::encode_mbx2(id, "ACK")
+            }
+            crate::history_service::HistoryResponse::Result {
+                generation,
+                commands,
+            } => crate::history_service::encode_mbx2_result(id, generation, &commands),
+            crate::history_service::HistoryResponse::Error(kind) => {
+                crate::history_service::encode_mbx2_error(id, &kind)
+            }
+        }
+    })
+}
+
+/// Shared validation and field-splitting for both MBX2 handler branches: the
+/// magic must match, the request id must decode, and the rest of the frame is
+/// handed to `respond` as owned fields.
+fn dispatch_mbx2(
+    line: &str,
+    request_id: u64,
+    respond: impl FnOnce(u64, &str, &[String]) -> String,
+) -> String {
     if validate_message_line(line).is_err() {
         return crate::history_service::encode_mbx2_error(request_id, "invalid");
     }
@@ -113,21 +183,7 @@ fn handle_mbx2_line(line: &str, history: Option<&dyn HistoryHandler>) -> String 
     };
     let kind = fields.next().unwrap_or_default();
     let rest: Vec<String> = fields.map(str::to_owned).collect();
-    match handler.handle(request_id, kind, &rest) {
-        crate::history_service::HistoryResponse::Pong => {
-            crate::history_service::encode_mbx2(request_id, "PONG")
-        }
-        crate::history_service::HistoryResponse::Ack => {
-            crate::history_service::encode_mbx2(request_id, "ACK")
-        }
-        crate::history_service::HistoryResponse::Result {
-            generation,
-            commands,
-        } => crate::history_service::encode_mbx2_result(request_id, generation, &commands),
-        crate::history_service::HistoryResponse::Error(kind) => {
-            crate::history_service::encode_mbx2_error(request_id, &kind)
-        }
-    }
+    respond(request_id, kind, &rest)
 }
 
 fn mbx2_request_id(line: &str) -> u64 {
@@ -292,7 +348,7 @@ mod tests {
         let mut writer = Vec::new();
         let handler = RecordingHandler::returning(ResponseKind::Prompt("sentinel".to_owned()));
 
-        serve_connection(&mut reader, &mut writer, &handler, None).unwrap();
+        serve_connection(&mut reader, &mut writer, &handler, None, None).unwrap();
 
         assert_eq!(
             String::from_utf8(writer).unwrap(),
@@ -315,7 +371,7 @@ mod tests {
             RecordingHandler::returning(ResponseKind::Prompt("x".repeat(MAX_MESSAGE_BYTES)));
 
         assert_eq!(
-            serve_connection(&mut reader, &mut writer, &handler, None).unwrap_err(),
+            serve_connection(&mut reader, &mut writer, &handler, None, None).unwrap_err(),
             "encoded message exceeds protocol limit"
         );
         assert!(writer.is_empty());
@@ -353,7 +409,7 @@ mod tests {
             calls: Mutex::new(Vec::new()),
         };
 
-        serve_connection(&mut reader, &mut writer, &handler, Some(&history)).unwrap();
+        serve_connection(&mut reader, &mut writer, &handler, Some(&history), None).unwrap();
 
         assert_eq!(
             String::from_utf8(writer).unwrap(),
@@ -390,7 +446,7 @@ mod tests {
         let handler = RecordingHandler::returning(ResponseKind::Prompt("x".to_owned()));
         let history = QueryHistory;
 
-        serve_connection(&mut reader, &mut writer, &handler, Some(&history)).unwrap();
+        serve_connection(&mut reader, &mut writer, &handler, Some(&history), None).unwrap();
 
         assert_eq!(
             String::from_utf8(writer).unwrap(),
@@ -419,9 +475,68 @@ mod tests {
         let handler = RecordingHandler::returning(ResponseKind::Prompt("x".to_owned()));
         let history = CancelHistory;
 
-        serve_connection(&mut reader, &mut writer, &handler, Some(&history)).unwrap();
+        serve_connection(&mut reader, &mut writer, &handler, Some(&history), None).unwrap();
 
         assert_eq!(String::from_utf8(writer).unwrap(), "MBX2\t6\tACK\n");
+    }
+
+    #[test]
+    fn mbx2_highlight_frames_dispatch_to_the_highlight_handler_independently_of_history() {
+        use crate::highlight_service::HighlightResponse;
+
+        struct StubHighlight;
+
+        impl HighlightHandler for StubHighlight {
+            fn handle(&self, id: u64, kind: &str, fields: &[String]) -> HighlightResponse {
+                assert_eq!(id, 5);
+                assert_eq!(kind, "HIGHLIGHT");
+                assert_eq!(fields.len(), 4);
+                HighlightResponse::Styled {
+                    generation: 42,
+                    point: 3,
+                    line: "styled".to_owned(),
+                }
+            }
+        }
+
+        // No history handler at all: HIGHLIGHT must not require MBX_HISTORY=1.
+        let input = b"MBX2\t5\tHIGHLIGHT\t42\t1\t0\tplain\n";
+        let mut reader = Cursor::new(input.to_vec());
+        let mut writer = Vec::new();
+        let handler = RecordingHandler::returning(ResponseKind::Prompt("x".to_owned()));
+        let highlight = StubHighlight;
+
+        serve_connection(&mut reader, &mut writer, &handler, None, Some(&highlight)).unwrap();
+
+        assert_eq!(
+            String::from_utf8(writer).unwrap(),
+            "MBX2\t5\tSTYLED\t42\t3\tstyled\n"
+        );
+    }
+
+    #[test]
+    fn mbx2_without_highlight_handler_fails_closed_even_with_history_present() {
+        use crate::history_service::HistoryResponse;
+
+        struct AnyHistory;
+        impl HistoryHandler for AnyHistory {
+            fn handle(&self, _id: u64, _kind: &str, _fields: &[String]) -> HistoryResponse {
+                panic!("a HIGHLIGHT frame must never reach the history handler");
+            }
+        }
+
+        let input = b"MBX2\t5\tHIGHLIGHT\t1\t1\t0\tplain\n";
+        let mut reader = Cursor::new(input.to_vec());
+        let mut writer = Vec::new();
+        let handler = RecordingHandler::returning(ResponseKind::Prompt("x".to_owned()));
+        let history = AnyHistory;
+
+        serve_connection(&mut reader, &mut writer, &handler, Some(&history), None).unwrap();
+
+        assert_eq!(
+            String::from_utf8(writer).unwrap(),
+            "MBX2\t5\tERROR\tunsupported\n"
+        );
     }
 
     #[test]
@@ -431,7 +546,7 @@ mod tests {
         let mut writer = Vec::new();
         let handler = RecordingHandler::returning(ResponseKind::Prompt("x".to_owned()));
 
-        serve_connection(&mut reader, &mut writer, &handler, None).unwrap();
+        serve_connection(&mut reader, &mut writer, &handler, None, None).unwrap();
 
         assert_eq!(
             String::from_utf8(writer).unwrap(),
@@ -448,7 +563,7 @@ mod tests {
         let handler = RecordingHandler::returning(ResponseKind::Prompt("x".to_owned()));
         let history = RecordingHistoryStub;
 
-        serve_connection(&mut reader, &mut writer, &handler, Some(&history)).unwrap();
+        serve_connection(&mut reader, &mut writer, &handler, Some(&history), None).unwrap();
 
         assert_eq!(
             String::from_utf8(writer).unwrap(),
@@ -465,7 +580,7 @@ mod tests {
         let handler = RecordingHandler::returning(ResponseKind::Prompt("x".to_owned()));
         let history = RecordingHistoryStub;
 
-        serve_connection(&mut reader, &mut writer, &handler, Some(&history)).unwrap();
+        serve_connection(&mut reader, &mut writer, &handler, Some(&history), None).unwrap();
 
         assert_eq!(
             String::from_utf8(writer).unwrap(),

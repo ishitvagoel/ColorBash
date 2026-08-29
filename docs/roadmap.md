@@ -5,10 +5,10 @@
 > brief remains `CODEX_MODERN_BASH_ARCHITECTURE.md`; its checkboxes describe the
 > intended program and are not a status tracker.
 
-- Last reviewed: 2026-08-28 UTC
-- Current milestone: Strategy A MVP is `complete` on Linux (`G5` 2026-08-27); Phase 9 `complete`; macOS `HRD-001` `deferred` (ADR 0012); `HRD-003` `deferred`; ADR 0013 overlay/highlighting in `validation`
-- Active workstream: `HLT-003` hostile corpus (`docs/hlt-003-hostile-gate-plan.md`); G5 revisit macOS PTY; dim paint; percentile benches `deferred`
-- Next decision gate: G5 revisit (macOS matrix, `HLT-003` p99, `HRD-003`, dim paint). ADR 0013 review-close (H-1–H-6, O-1–O-5, M-1) is recorded; `HLT-003` hostile corpus slices 1–2 recorded
+- Last reviewed: 2026-08-29 UTC
+- Current milestone: Strategy A MVP is `complete` on Linux (`G5` 2026-08-27); Phase 9 `complete`; macOS `HRD-001` `deferred` (ADR 0012); `HRD-003` `deferred`; ADR 0013/0014 overlay/highlighting in `validation`
+- Active workstream: `M-064` (Readline does not hide `\001`/`\002` inside `READLINE_LINE`; blocks live highlight color, `HLT-002`); `HLT-003` hostile corpus (`docs/hlt-003-hostile-gate-plan.md`); G5 revisit macOS PTY; dim paint; percentile benches `deferred`
+- Next decision gate: resolve or explicitly descope `M-064` (new ADR + PTY evidence needed before Phase 6 can close); G5 revisit (macOS matrix, `HLT-003` p99, `HRD-003`, dim paint). ADR 0013 review-close (H-1–H-6, O-1–O-5, M-1) is recorded; `HLT-003` hostile corpus slices 1–2 recorded; `HLT-004` coprocess transport recorded (ADR 0014)
 - Editor-facing work: opt-in ghost suffix is on main (ADR 0010). Async QUERY with stale-generation skip is recorded (ADR 0011). Explicit history-search insert (`\C-xh`), cycling, restore (`\C-xl`), cwd preference, and opt-in failed empty-line insert are recorded (ADR 0009). Opt-in syntax highlighting (`MBX_HIGHLIGHT=1`) and completion overlay (`MBX_COMP_OVERLAY=1`) are in `validation` (ADR 0013; `docs/hlt-comp-review-close-plan.md`). Dim paint and type-to-filter overlays are `deferred` from this MVP (G5 revisit)
 - Timing policy: unmet percentile targets are `deferred` and do not block
   product development (`docs/latency-budget-deferral.md`)
@@ -337,7 +337,7 @@ targets stay `deferred` and are not a pass/fail requirement for this close.
 | 3 | History | `complete` | Phase 3A / `G2` complete; `HIST-009` and `HIST-010` complete; write-ack percentiles `deferred` |
 | 4 | Ghost suggestions | `complete` | ADR 0010 suffix; ADR 0011 QUERY + generation skip + overlapping delayed-RESULT PTY; `GHST-004` functional PTY recorded; dim paint `deferred`; latency percentiles `deferred` |
 | 5 | Completion | `complete` | Strategy A insert/fallthrough (`COMP-005`); `G4` / `COMP-001`–`COMP-003` / `GIT-004` complete; ranked-cycle `\C-xn` / `\C-xp`; `COMP-004` overlay slice `validation` (ADR 0013) |
-| 6 | Syntax highlighting | `validation` | ADR 0013; `HLT-001`/`HLT-002` implemented; `HLT-003` hostile gates `in-progress` (slices 1–2); p99 `deferred` |
+| 6 | Syntax highlighting | `validation` | ADR 0013/0014; `HLT-004` coprocess transport `complete`; `HLT-002` `blocked` on `M-064` (Readline caret-renders markers inside `READLINE_LINE`, so live color stays off); `HLT-003` hostile gates `in-progress` (slices 1–2); p99 `deferred` |
 | 7 | Git/provider expansion | `complete` | MVP exits `GIT-002` / `GIT-004` (`docs/git-phase7-mvp-close-plan.md`); `GIT-005` SDK `deferred`; upstream/remotes/tags unauthorized |
 | 8 | Enhanced Ctrl+R | `complete` | `SRCH-001`–`SRCH-003` complete (ADR 0009); cwd/signal/opt-in failed insert recorded; 100k interactive leftover `deferred`; overlay `deferred`; interactive repo insert unauthorized |
 | 9 | Release hardening | `complete` | `HRD-002` and `HRD-004` complete; Linux `HRD-001` L-1–L-5 recorded; macOS `HRD-001` `deferred` (ADR 0012); `HRD-003` `deferred`; `G5` closed (`docs/g5-strategy-a-close-plan.md`) |
@@ -512,9 +512,19 @@ before `COMP-004` moves to `complete`. Type-to-filter GUI menus remain
 
 ### Phase 6 — Syntax highlighting
 
-Status: `validation` (ADR 0013; owner **G5 revisit**). Strategy A highlighting
-is implemented; hostile-input and latency exit gates remain open.
-IDs are kept. Do not idle product development on percentile leftovers.
+Status: `validation` (ADR 0013/0014; owner **G5 revisit**). The coprocess
+transport slice (`HLT-004`) is `complete`. A more fundamental defect than the
+open hostile-input/latency gates was found while closing it: **real color has
+never rendered correctly in the live interactive path** (`M-064` — Readline
+caret-renders `\001`/`\002` inside `READLINE_LINE` instead of treating them as
+zero-width, unlike their documented `PS1` behavior). This was previously
+masked by a second, now-fixed bug (`M-062`) that kept color silently off in
+every real session. `bash/highlight.bash`'s interactive refresh currently
+sends `color=0` unconditionally as a deliberate, evidenced safe state, not a
+regression. Do not mark `HLT-002`, `HLT-003`, or Phase 6 `complete` until
+`M-064` is resolved by a follow-up ADR and PTY evidence, or the live-color
+goal is explicitly descoped with an accepted decision — a percentile leftover
+never blocked this phase and still does not; a correctness gap does.
 
 Define a tolerant token taxonomy only after Readline redraw feasibility is known.
 The highlighter must accept incomplete Bash, never execute or expand input, bound
@@ -524,11 +534,13 @@ and strip back to the exact original bytes.
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
 | `HLT-001` | Define token taxonomy and tolerant incomplete-input lexer | `validation` | `docs/hlt-001-lexer-plan.md`; `crates/cli/src/highlight.rs`; `cargo test -p mbx highlight::` |
-| `HLT-002` | Integrate terminal-safe styling without taking execution ownership | `validation` | `docs/hlt-002-integration-plan.md`; `bash/highlight.bash`; `tests/bash/modules.bash`; `crates/pty/tests/highlight.rs` |
-| `HLT-003` | Pass exact-byte stripping, hostile-input, PTY, and latency gates | `in-progress` | `docs/hlt-003-hostile-gate-plan.md`; slices 1–2 S-1–S-4 and P-1–P-2 recorded; p99 `deferred` |
+| `HLT-002` | Integrate terminal-safe styling without taking execution ownership | `blocked` | `docs/hlt-002-integration-plan.md`; `bash/highlight.bash`; `tests/bash/modules.bash`; `crates/pty/tests/highlight.rs`; blocked on `M-064` — styling is not terminal-safe in `READLINE_LINE` today |
+| `HLT-003` | Pass exact-byte stripping, hostile-input, PTY, and latency gates | `in-progress` | `docs/hlt-003-hostile-gate-plan.md`; slices 1–2 S-1–S-4 and P-1–P-2 recorded; p99 `deferred`; slice 3 (if any) should incorporate `M-064` evidence once a rendering fix exists |
+| `HLT-004` | Route HIGHLIGHT over the coprocess instead of forking per keystroke | `complete` | `docs/adr/0014-highlight-over-coprocess.md`; `crates/cli/src/highlight_service.rs`; `docs/protocol-mbx2.md` HIGHLIGHT/STYLED; `crates/pty/tests/highlight.rs` (`wire_highlight_forks_no_helper_process_per_keystroke`, `cli_fallback_highlight_does_fork_the_helper_per_keystroke`) |
 
-Exit condition: `HLT-003` if G5 keeps highlighting in scope; otherwise remain
-`deferred` with an ADR or roadmap note. Do not delete these IDs.
+Exit condition: `HLT-003` if G5 keeps highlighting in scope, **and** `M-064`
+resolved (or an accepted descope of live color), before Phase 6 can be
+`complete`. `HLT-004` does not close Phase 6 alone. Do not delete these IDs.
 
 ### Phase 7 — Git and provider expansion
 
@@ -604,16 +616,25 @@ Strategy A MVP on Linux is `complete` (`G5` 2026-08-27). Capture stays
 disabled by default. Unmet percentile leftovers are `deferred` and must not
 block product slices (`docs/latency-budget-deferral.md`).
 
-1. **G5 revisit** when a macOS host is available: run the `HRD-001` pairwise
+1. **`M-064`** (new, highest priority for Phase 6): determine whether any
+   Readline-recognized technique makes styling genuinely invisible inside
+   `READLINE_LINE`, or whether ADR 0013's marker-based design needs a
+   superseding ADR. This blocks `HLT-002` and Phase 6 `complete`; it is a
+   correctness gap, not a deferrable percentile. Until resolved, the
+   interactive refresh correctly stays at `color=0`; do not flip that without
+   this evidence.
+2. **G5 revisit** when a macOS host is available: run the `HRD-001` pairwise
    matrix per ADR 0012. Do not fake it on Linux.
-2. **`HLT-003`** hostile corpus and highlight p99 on Linux (`docs/latency-budget-deferral.md`
+3. **`HLT-003`** hostile corpus and highlight p99 on Linux (`docs/latency-budget-deferral.md`
    defers percentiles; do not block on them). ADR 0013 review-close slices 1–3
-   (H-1–H-6, O-1–O-5, M-1) are implemented; do not mark `HLT-002`, `COMP-004`,
-   or Phase 6 `complete` without gate evidence beyond the review asserts.
-3. `HRD-003` / `PRM-004` percentiles stay `deferred` unless an ADR ratifies new
+   (H-1–H-6, O-1–O-5, M-1) are implemented; `HLT-004` coprocess transport is
+   complete (ADR 0014). Do not mark `HLT-002`, `COMP-004`, or Phase 6
+   `complete` without gate evidence beyond the review asserts, and not before
+   `M-064` above.
+4. `HRD-003` / `PRM-004` percentiles stay `deferred` unless an ADR ratifies new
    numbers or a functional prompt-path defect is proven.
-4. `GIT-005` provider SDK stays post-MVP `deferred`.
-5. Do not enable capture by default. Do not combine `MBX_GHOST=1` with
+5. `GIT-005` provider SDK stays post-MVP `deferred`.
+6. Do not enable capture by default. Do not combine `MBX_GHOST=1` with
    `MBX_HIGHLIGHT=1`.
 
 ## Provisional performance and safety budgets
@@ -802,3 +823,4 @@ an accepted decoration/ownership ADR.
 | 2026-08-28 | Review fixes for install/configure: isolate `XDG_CONFIG_HOME` in smoke HOME tests (M-057); `--bashrc` follows a HOME-local bashrc symlink and refuses targets outside `$HOME`; wrap copies `-P`/`-S`/`-X` as well as `-o`. Do not mark `HLT-002`, `COMP-004`, Phase 6, or `HLT-003` complete. |
 | 2026-08-28 | Configure re-entry loads the saved file (opening choice 4 / `--from-config`; `mbx_configure` passes `--from-config`). `--build` runs `cargo build --release --workspace`. `mbx_status` prints duration, persist-bashrc, and helper executable/missing. Do not mark `HLT-002`, `COMP-004`, Phase 6, or `HLT-003` complete. |
 | 2026-08-29 | Repository review (`docs/repo-review-2026-08-29.md`) plus its Track 0 fixes: `unreadable_store_fails_closed_without_widening` no longer assumes a non-privileged caller (M-060), so `bash tests/run.bash` now completes as root; `tests/integration/protocol.bash` resolves a relative binary argument before the case that changes directory (M-061); CI (`.github/workflows/ci.yml`) gained an MSRV 1.85.0 job, a release-profile build job, Bash 5.0/5.1/5.2 legs for `HRD-001`, and a manual macOS `workflow_dispatch` job. |
+| 2026-08-29 | `HLT-004` (Track 1 of the review plan): accepted ADR 0014, routing `MBX_HIGHLIGHT=1`'s live refresh over the coprocess via a new independent `HighlightHandler` and MBX2 `HIGHLIGHT`/`STYLED` frame pair, structurally eliminating the per-keystroke helper-process fork (`crates/pty/tests/highlight.rs` proves zero non-serve `mbx` invocations while the coprocess is ready, contrasted with the CLI fallback). Also fixed `M-063` (a `[N] PID` job announcement leaking from `_mbx_engine_write`/`_mbx_engine_exchange` when called from a `bind -x` keystroke callback — affected ghost's existing wire path too; its own PTY suite got noticeably faster once fixed). While fixing highlight's color-detection bug (`M-062`, mitigated: the helper decided color from its own never-a-terminal stdout), found a deeper, previously-undiscovered defect (`M-064`, open): Readline caret-renders `\001`/`\002` inside `READLINE_LINE` rather than hiding them as it does in `PS1`, so the live interactive path has never rendered real color correctly. The interactive refresh deliberately keeps `color=0` until `M-064` is resolved; `HLT-002` moves to `blocked` and Phase 6 stays `validation` pending that work, not the previously-tracked percentile leftover. |

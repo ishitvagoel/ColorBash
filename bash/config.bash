@@ -94,9 +94,25 @@ mbx_configure() {
     return 1
 }
 
+# Single source of truth for "can this session show color": stdout is a tty,
+# TERM is not dumb, and neither NO_COLOR nor MBX_COLOR=never is set. Bash is
+# the only side of the coprocess boundary that can see its own controlling
+# terminal, so every adapter that needs a color decision (prompt flags,
+# highlight's HIGHLIGHT frame and CLI --color fallback) must get it from here
+# rather than asking the helper to inspect its own stdout, which is a pipe in
+# every IPC path and therefore always reports non-terminal (M-062).
+_mbx_color_capable() {
+    if [[ ! -t 1 || ${TERM:-dumb} == dumb || -n ${NO_COLOR+x} || ${MBX_COLOR:-auto} == never ]]; then
+        REPLY=0
+    else
+        REPLY=1
+    fi
+}
+
 _mbx_prompt_flags() {
     local flags=0
-    if [[ ! -t 1 || ${TERM:-dumb} == dumb || -n ${NO_COLOR+x} || ${MBX_COLOR:-auto} == never ]]; then
+    _mbx_color_capable
+    if [[ $REPLY == 0 ]]; then
         ((flags |= _MBX_FLAG_NO_COLOR))
     fi
     if (( (flags & _MBX_FLAG_NO_COLOR) == 0 )); then

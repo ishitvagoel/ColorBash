@@ -44,10 +44,17 @@ pub fn execute(command: CliCommand, renderer: &dyn PromptRendering) -> Result<()
                     Box::new(policy),
                 )))
             };
+            // Highlighting has no privacy or storage contract and does not
+            // require MBX_HISTORY=1 (ADR 0014), so the handler is always
+            // present; Bash decides whether to ever send a HIGHLIGHT frame.
+            let highlight_handler: Option<Box<dyn crate::highlight_service::HighlightHandler>> =
+                Some(Box::new(crate::highlight_service::HighlightService));
             match target {
-                ServeTarget::Stdio => transport::serve_stdio(&service, history_handler),
+                ServeTarget::Stdio => {
+                    transport::serve_stdio(&service, history_handler, highlight_handler)
+                }
                 ServeTarget::Socket(path) => {
-                    transport::serve_socket(&path, &service, history_handler)
+                    transport::serve_socket(&path, &service, history_handler, highlight_handler)
                 }
             }
         }
@@ -162,8 +169,12 @@ fn execute_highlight(command: HighlightCommand) -> Result<(), String> {
             text,
             point,
             no_color,
+            color,
         } => {
-            let color = !no_color && !environment::color_disabled_for_stdout();
+            let color = match color {
+                Some(explicit) => explicit,
+                None => !no_color && !environment::color_disabled_for_stdout(),
+            };
             let rendered = crate::highlight::highlight_line(&text, point, color)
                 .ok_or_else(|| "highlight input was rejected".to_owned())?;
             println!("{}", rendered.0);

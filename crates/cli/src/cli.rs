@@ -60,6 +60,13 @@ pub enum HighlightCommand {
         text: String,
         point: usize,
         no_color: bool,
+        /// An explicit color decision from a caller that already knows the
+        /// terminal capability (Bash, via `_mbx_color_capable`). When
+        /// present it wins over `no_color` and over this process's own
+        /// stdout, which is meaningless here: direct CLI use aside, both the
+        /// coprocess and the process-substitution spawn path never have the
+        /// interactive shell's terminal on their own stdout (M-062).
+        color: Option<bool>,
     },
 }
 
@@ -114,7 +121,7 @@ pub fn help_text(version: &str) -> String {
          mbx history search branch NAME [--limit N]\n  \
          mbx history search fuzzy TEXT [--cwd PATH] [--limit N]\n  \
          mbx history search failed [--limit N]\n  \
-         mbx highlight TEXT [--point N] [--no-color]\n\n\
+         mbx highlight TEXT [--point N] [--no-color] [--color 0|1]\n\n\
          PROMPT OPTIONS:\n  --cwd PATH  --status N  --duration-ms N  --flags BITS\n  \
          --no-color  --ascii  --nerd-font  --ssh  --production  --disable-git"
     )
@@ -190,6 +197,7 @@ fn parse_highlight(args: &[String]) -> Result<HighlightCommand, String> {
     let text = args.first().cloned().ok_or("highlight requires TEXT")?;
     let mut point = text.len();
     let mut no_color = false;
+    let mut color = None;
     let mut index = 1;
     while index < args.len() {
         match args[index].as_str() {
@@ -202,14 +210,26 @@ fn parse_highlight(args: &[String]) -> Result<HighlightCommand, String> {
                     .map_err(|_| "--point must be an unsigned integer")?;
             }
             "--no-color" => no_color = true,
+            "--color" => {
+                index += 1;
+                color = Some(match args.get(index).map(String::as_str) {
+                    Some("0") => false,
+                    Some("1") => true,
+                    _ => return Err("--color requires 0 or 1".to_owned()),
+                });
+            }
             unknown => return Err(format!("unknown highlight option: {unknown}")),
         }
         index += 1;
+    }
+    if no_color && color == Some(true) {
+        return Err("--no-color conflicts with --color 1".to_owned());
     }
     Ok(HighlightCommand::Line {
         text,
         point,
         no_color,
+        color,
     })
 }
 

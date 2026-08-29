@@ -1197,3 +1197,124 @@ to prevent recurrence, not to assign blame.
   case.
 - Evidence: `tests/integration/protocol.bash`; passes with both a relative
   and an absolute `target/debug/mbx` argument.
+
+## M-062 — Highlight color was decided from the helper's own stdout, which is never a terminal
+
+- Discovered: 2026-08-29
+- Status: Mitigated
+- Failed assumption: `crate::environment::color_disabled_for_stdout()`
+  (an `io::stdout().is_terminal()` check on the `mbx` process itself) was a
+  valid way to decide whether to style `mbx highlight`'s output.
+- Impact: every production caller of `mbx highlight` — the process
+  substitution spawn (`exec {fd}< <(exec "$MBX_BIN" highlight ...)`) and the
+  MBX2 coprocess added by ADR 0014 alike — has the mbx process's own stdout
+  connected to a pipe, never the interactive terminal. `color_disabled_for_stdout()`
+  therefore always returned true in real use, so `MBX_HIGHLIGHT=1` silently
+  never styled anything in a live session, despite passing every existing
+  test (none asserted color was actually present) and being carried as
+  `validation` in the roadmap. Only a user manually running
+  `"$MBX_BIN" highlight ...` directly at their own terminal (the README's
+  demo invocation) ever saw real color, because that invocation's stdout
+  genuinely is the terminal.
+- Correction: `mbx highlight` gained an explicit `--color 0|1` (and the
+  MBX2 `HIGHLIGHT` frame an explicit `color` field) that a caller who can see
+  the real terminal — Bash, via the single `_mbx_color_capable` predicate
+  already used for prompt flags — passes explicitly, instead of the helper
+  guessing from its own stdout. `_mbx_color_capable` was factored out of
+  `_mbx_prompt_flags` in `bash/config.bash` as the one place this decision is
+  made. The pre-existing stdout-tty check remains only as the *default* for a
+  direct manual CLI invocation with no `--color` given.
+- Why `Mitigated` and not `Fixed`: the plumbing is correct and tested, but
+  `bash/highlight.bash`'s live interactive refresh (`_mbx_highlight_refresh_wire`
+  and `_mbx_highlight_refresh_cli`) still passes `color=0` unconditionally,
+  because enabling it exposed a second, deeper defect — M-064 — that must be
+  resolved first. Do not flip these to a real color decision without also
+  resolving M-064; doing so alone would replace plain typed text with visibly
+  garbled terminal output on every keystroke.
+- Prevention: a capability decision (terminal color, width, TTY-ness) must
+  come from whichever side of an IPC boundary can actually observe it, passed
+  explicitly as data — never re-derived by inspecting the other side's own
+  process state. This is the same rule ADR 0007/`PRM-007` already apply to
+  prompt rendering; highlighting had quietly violated it.
+- Evidence: `crates/cli/src/cli.rs` (`--color` parsing),
+  `crates/cli/src/app.rs::execute_highlight`, `bash/config.bash`
+  (`_mbx_color_capable`), `docs/adr/0014-highlight-over-coprocess.md`.
+
+## M-063 — `set +m` does not suppress a background job's start announcement from a keystroke callback
+
+- Discovered: 2026-08-29
+- Status: Fixed
+- Failed assumption: `_mbx_engine_write`'s and `_mbx_engine_exchange`'s
+  `( trap '' PIPE; printf ... ) &` background write was adequately silenced
+  for an interactive session because the caller (ghost, and now highlight)
+  already wraps the whole call in `set +m; ...; set -m`.
+- Impact: confirmed with a minimal reproduction (`set +m; ( sleep 0.2 ) &`
+  under a real PTY) that Bash still prints `[N] PID` for a backgrounded job
+  regardless of monitor mode, when the backgrounding happens inside a
+  `bind -x` self-insert callback — the announcement goes to the shell's own
+  stderr, not the command's. The same call from `PROMPT_COMMAND` does not
+  print it; only the keystroke-callback context does. Every wire-path
+  keystroke therefore leaked a `[N] PID` line into the terminal, corrupting
+  the redraw and, in one PTY test, cascading into repeated redraws that blew
+  through the test's timeout. This affected ghost's existing wire path too,
+  not only highlighting's new one — it had simply never been exercised
+  densely enough (or checked for this specific artifact) to be caught.
+- Correction: wrap the whole backgrounding statement's stderr, not rely on
+  job-control mode: `{ ( trap '' PIPE; printf ... ) & } 2>/dev/null`. `$!`
+  still resolves to the correct PID through the group. Applied identically in
+  `_mbx_engine_write` and `_mbx_engine_exchange`.
+- Prevention: `set +m` suppresses job-control *behavior* (SIGTSTP handling,
+  foreground/background switching), not the interactive shell's `[N] PID`
+  start announcement for a bare `&`; suppressing that announcement requires
+  redirecting the backgrounding statement's own stderr. Any future background
+  job started from a `bind -x` callback must be checked under a PTY with
+  monitor mode considered untrustworthy for this purpose.
+- Evidence: `bash/engine.bash` (`_mbx_engine_write`, `_mbx_engine_exchange`);
+  `crates/pty/tests/ghost.rs` full suite green and faster afterward (65.18s →
+  21.61s, consistent with removing spurious redraw cascades);
+  `crates/pty/tests/highlight.rs` full suite.
+
+## M-064 — Readline does not treat `\001`/`\002` as invisible inside `READLINE_LINE`
+
+- Discovered: 2026-08-29
+- Status: Open
+- Failed assumption: ADR 0013 assumed Readline's non-printing markers
+  (`RL_PROMPT_START_IGNORE`/`_END_IGNORE`, `\001`/`\002`) make an enclosed SGR
+  run zero-width and invisible wherever they appear, because that is their
+  documented behavior inside `PS1`.
+- Impact: they do not have that effect when they appear inside the *edit
+  buffer* (`READLINE_LINE`, as `bind -x` highlighting and ghost both use).
+  Confirmed empirically and at the byte level (not merely inferred): once
+  M-062's color-detection bug was fixed enough to let real styled bytes reach
+  `READLINE_LINE`, Bash's own redisplay rendered the markers and the CSI
+  escape they wrap using its ordinary unprintable-control-character
+  convention — literal, visible `^A`, `^[`, `^B` two-character sequences —
+  instead of hiding them. This means opt-in syntax highlighting's live
+  interactive path has never displayed real color correctly since its
+  original implementation; the defect was masked by M-062 (color was always
+  off in practice) and by every existing test asserting only byte-exactness
+  or plain-mode round-tripping, never that genuine color rendered
+  correctly on screen.
+- Current state: `bash/highlight.bash`'s live refresh paths
+  (`_mbx_highlight_refresh_wire`, `_mbx_highlight_refresh_cli`) deliberately
+  pass `color=0` unconditionally, so the interactive feature stays in its
+  long-standing safe (uncolored, non-garbled) state. `mbx highlight`'s direct
+  CLI output is unaffected (it never goes through Readline's buffer
+  redisplay) and does render real color, matching the README's manual demo.
+- Prevention: a technique's documented behavior for one call site (`PS1`)
+  must not be assumed to transfer to a structurally different call site
+  (`READLINE_LINE`) without a PTY test that actually captures and asserts the
+  rendered bytes contain no leftover control characters — not just that they
+  round-trip back to the plain buffer.
+- Next step (not done here): research whether any Readline-recognized
+  technique makes styling genuinely invisible within the edit buffer, or
+  whether the whole marker-based design in ADR 0013 needs a superseding
+  decision. This needs its own ADR and PTY evidence, not a wire-protocol
+  change; see `docs/adr/0014-highlight-over-coprocess.md`.
+- Evidence: byte-level capture and analysis over a live PTY session (raw
+  `0x01`/`0x1b`/`0x02` confirmed present via `od -c` on `mbx highlight`'s own
+  output, contrasted with the literal two-character `^A`/`^[`/`^B` sequences
+  Bash's redisplay produced for the same bytes once inserted into
+  `READLINE_LINE`); `crates/pty/src/session.rs`
+  (`visible_text_strips_readline_markers_around_styled_run`, added so the PTY
+  test harness can correctly strip real markers once this is fixed).

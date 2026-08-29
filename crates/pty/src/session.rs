@@ -249,11 +249,31 @@ pub fn contains_str(haystack: &[u8], needle: &str) -> bool {
     contains(haystack, needle.as_bytes())
 }
 
+/// Strips terminal escapes and Readline's non-printing markers so assertions
+/// can compare against the same plain bytes a user would read on screen.
+/// `\u{01}`/`\u{02}` (SOH/STX) bracket styled runs that Readline itself never
+/// draws; without stripping them, a genuinely styled line (e.g.
+/// `MBX_HIGHLIGHT=1`) breaks any assertion expecting the exact plain
+/// substring, because the markers sit right at token boundaries (M-064).
+/// Before the highlight color fix (M-062) no test ever produced real color
+/// here, so this gap was never exercised.
 pub fn visible_text(bytes: &[u8]) -> String {
     let mut visible = String::new();
     let lossy = String::from_utf8_lossy(bytes);
     let mut chars = lossy.chars().peekable();
+    let mut skipping = false;
     while let Some(character) = chars.next() {
+        if character == '\u{01}' {
+            skipping = true;
+            continue;
+        }
+        if character == '\u{02}' {
+            skipping = false;
+            continue;
+        }
+        if skipping {
+            continue;
+        }
         if character == '\u{1b}' {
             match chars.peek() {
                 Some('[') => {
@@ -314,5 +334,14 @@ mod tests {
     fn visible_text_strips_osc_with_st_terminator() {
         let raw = b"\x1b]0;title\x1b\\ok\r\n";
         assert_eq!(visible_text(raw), "ok\n");
+    }
+
+    #[test]
+    fn visible_text_strips_readline_markers_around_styled_run() {
+        let raw = "printf \x01\x1b[32m\x02'HL:plain\\n'\x01\x1b[0m\x02\x08\x08\x08"
+            .as_bytes()
+            .to_vec();
+        assert_eq!(visible_text(&raw), "printf 'HL:plain\\n'\u{8}\u{8}\u{8}");
+        assert!(visible_contains(&raw, "printf 'HL:plain\\n'"));
     }
 }

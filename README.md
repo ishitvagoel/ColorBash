@@ -78,13 +78,14 @@ These rules hold whether a feature is on or off:
 | Stock Tab | always | Tab | No (stock Bash insert) |
 | Ranked accept / cycle | wrap a `-F` completer, then Tab | `Ctrl-X Ctrl-A`; `Ctrl-X` `n`/`p` | No until Enter |
 | Completion overlay | `MBX_COMP_OVERLAY=1` after wrapped Tab | `Ctrl-X Ctrl-O` toggle; `Ctrl-X` `j` dismiss | No until Enter |
-| Syntax highlighting | `MBX_HIGHLIGHT=1` | self-insert wrap | Enter runs **plain** bytes |
+| Syntax highlighting | `MBX_HIGHLIGHT=1` | self-insert wrap | Enter runs **plain** bytes; live color currently off (§10, `M-064`) |
 
 Incompatible: **`MBX_GHOST=1` and `MBX_HIGHLIGHT=1` together.** Highlight
 install skips when ghost is enabled.
 
 Not in this MVP: dim after-every-key ghost paint, type-to-filter Ctrl+R
-overlay, macOS PTY matrix. Canonical status: [`docs/roadmap.md`](docs/roadmap.md).
+overlay, macOS PTY matrix, live highlight color (`M-064`). Canonical status:
+[`docs/roadmap.md`](docs/roadmap.md).
 
 ---
 
@@ -358,15 +359,28 @@ text. Display bytes are sanitized (no raw controls).
 
 Requires `MBX_HIGHLIGHT=1`. Needs a tty. **Skipped** when `MBX_GHOST=1`.
 
+**Live color is currently off by design, not a configuration step you're
+missing.** Bash's own Readline renders the `\001`/`\002` markers this feature
+uses to make color invisible-width by displaying them as literal `^A`/`^[`
+control-character sequences instead of hiding them — that convention only
+applies inside `PS1`, not inside the edit buffer (`READLINE_LINE`). Typing at
+the prompt with `MBX_HIGHLIGHT=1` exercises the full pipeline below (lexer,
+coprocess round trip, exact-byte recovery on Enter) with styling forced off
+(`M-064` in `MISTAKES.md`; `docs/adr/0014-highlight-over-coprocess.md`).
+
 ```bash
 MBX_HIGHLIGHT=1 bash --noprofile --norc
 source /absolute/path/to/ColorBash/bash/init.bash
 ```
 
-Type `if echo "$HOME"; then true; fi # note`. Keywords, quotes, variables,
-operators, numbers, and comments should take color; ordinary words stay
-default. Incomplete quotes are still classified (tolerant lexer). Lines over
-4 KiB or containing NUL stay unstyled.
+Type `if echo "$HOME"; then true; fi # note`. The line still round-trips
+through the lexer and redraws correctly; it will not visibly change color
+until `M-064` is resolved. Incomplete quotes are still classified (tolerant
+lexer). Lines over 4 KiB or containing NUL stay unstyled.
+
+The lexer's token/color mapping below is real and already used by the
+standalone `mbx highlight` command (which writes straight to your terminal,
+not through Readline, so `M-064` does not apply there):
 
 | Color (16-color SGR) | Token |
 | --- | --- |
@@ -399,7 +413,10 @@ shell:
 "$MBX_BIN" highlight 'ls /tmp/中文/café' --no-color
 ```
 
-`--no-color` (or a non-tty) returns the exact input bytes.
+`--no-color` (or a non-tty, with no `--color` override) returns the exact
+input bytes. `--color 0|1` overrides that default explicitly; it is what
+Bash itself passes for both the coprocess and CLI-fallback interactive paths
+(currently always `0`, per `M-064` above).
 
 **Automated:** `cargo test -p mbx highlight::`,
 `cargo test -p mbx-pty --test highlight`, highlight contracts in
