@@ -1,5 +1,5 @@
 use crate::VERSION;
-use crate::cli::{self, CliCommand, HighlightCommand, HistoryCommand, ServeTarget};
+use crate::cli::{self, CliCommand, HighlightCommand, HistoryCommand, RepoCommand, ServeTarget};
 use crate::environment;
 use crate::history::{HistoryControl, HistoryError, HistoryPolicy, HistorySearch};
 use crate::prompt::PromptRendering;
@@ -62,6 +62,7 @@ pub fn execute(command: CliCommand, renderer: &dyn PromptRendering) -> Result<()
         CliCommand::BenchmarkClient { socket, iterations } => benchmark_client(&socket, iterations),
         CliCommand::History(history) => execute_history(history),
         CliCommand::Highlight(highlight) => execute_highlight(highlight),
+        CliCommand::Repo(repo) => execute_repo(repo),
         CliCommand::Version => {
             println!("mbx {VERSION}");
             Ok(())
@@ -180,6 +181,31 @@ fn execute_highlight(command: HighlightCommand) -> Result<(), String> {
             println!("{}", rendered.0);
             println!("{}", rendered.1);
             Ok(())
+        }
+    }
+}
+
+/// `mbx repo root` — the same ADR 0007 Git adapter history's writer already
+/// uses for repository-root enrichment, exposed as a direct CLI command so
+/// Bash never calls `git` itself (`_mbx_search_repo_root`, `MBX_SEARCH_REPO`).
+fn execute_repo(command: RepoCommand) -> Result<(), String> {
+    match command {
+        RepoCommand::Root { cwd } => {
+            if environment::git_discovery_disabled() {
+                return Err("git discovery is disabled (MBX_DISABLE_GIT=1)".to_owned());
+            }
+            let cwd = match cwd {
+                Some(path) => path,
+                None => std::env::current_dir().map_err(|error| error.to_string())?,
+            };
+            let provider = GitRepositoryStatusProvider::default();
+            match provider.context(&cwd).map_err(|error| error.to_string())? {
+                Some(context) => {
+                    println!("{}", context.root);
+                    Ok(())
+                }
+                None => Err("not inside a Git repository".to_owned()),
+            }
         }
     }
 }

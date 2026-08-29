@@ -5,9 +5,10 @@ signal/terminal-state PTY are recorded. CLI `search failed` / `search repo` /
 `search branch` are on main (`HIST-010`). This packet adds opt-in empty-line
 `\C-xh` use of `history search failed` and closes `SRCH-003` Strategy A
 metadata filters. Overlay/age columns stay `deferred`. 100k interactive
-percentiles stay `deferred`. Interactive repo-root insert stays unauthorized
-(needs a trusted root; CLI `search repo` remains). Do not start highlighting
-or dim paint.
+percentiles stay `deferred`. Interactive repo-root insert was authorized and
+implemented in a follow-up slice once `mbx repo root` existed — see
+`docs/srch-003-repo-filter-plan.md`; do not read this file's "unauthorized"
+framing as still current. Do not start highlighting or dim paint.
 
 ## Why this slice
 

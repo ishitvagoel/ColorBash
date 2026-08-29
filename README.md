@@ -218,6 +218,10 @@ Enter. Expect `MBX_SRCH:alpha`. An empty line plus the same chord inserts the
 newest row from `$PWD` (or the global newest if this directory has no rows).
 `MBX_SEARCH_FAILED=1` prefers failed empty-line rows first.
 `MBX_SEARCH_CWD=0` uses global recent only on an empty line.
+`MBX_SEARCH_REPO=1` resolves the current Git worktree root via
+`mbx repo root` (Bash never calls `git` itself) and prefers rows recorded
+anywhere in that repository on an empty line, falling back to cwd/recent
+outside a worktree or when the repo has no rows.
 
 If the chord is already bound, MBX leaves it alone unless
 `MBX_SEARCH_OVERRIDE=1` (insert) or `MBX_SEARCH_RESTORE_OVERRIDE=1` (restore).
@@ -485,6 +489,7 @@ MBX_SEARCH_TIMEOUT=0.10
 MBX_SEARCH_LIMIT=8              # bounded snapshot size (max 16)
 MBX_SEARCH_CWD=0                # empty-line search uses global recent only
 MBX_SEARCH_FAILED=1             # empty-line search prefers failed rows first
+MBX_SEARCH_REPO=1               # empty-line search prefers rows from the current Git repo
 
 # Editor insert token
 MBX_EDITOR_INSERT_TOKEN=hello

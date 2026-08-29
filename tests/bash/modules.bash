@@ -1528,6 +1528,48 @@ assert_eq 'cwd-hit' "$READLINE_LINE" \
 unset MBX_SEARCH_FAILED
 _mbx_search_clear
 
+# R-1: MBX_SEARCH_REPO=1 resolves the root via `mbx repo root`, then prefers
+# repo-scoped rows over cwd (PTY evidence in
+# crates/pty/tests/history_search.rs: empty_line_inserts_repo_when_opt_in).
+cat >"$search_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+case " $* " in
+    *" repo root "*) printf '%s\n' "/fake/repo/root" ;;
+    *" search repo "*) printf '%s\n' "repo-hit" ;;
+    *" search cwd "*) printf '%s\n' "cwd-hit" ;;
+    *" search recent "*) printf '%s\n' "recent-hit" ;;
+    *) printf '%s\n' "other-hit" ;;
+esac
+EOF
+MBX_SEARCH_REPO=1
+READLINE_LINE=
+READLINE_POINT=0
+_mbx_search_insert
+assert_eq 'repo-hit' "$READLINE_LINE" \
+    'MBX_SEARCH_REPO=1 empty-line search should prefer repo-scoped rows'
+unset MBX_SEARCH_REPO
+_mbx_search_clear
+
+# R-2: a resolvable-but-empty or failed repo root falls through to cwd
+# rather than failing the whole lookup closed.
+cat >"$search_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+case " $* " in
+    *" repo root "*) exit 1 ;;
+    *" search cwd "*) printf '%s\n' "cwd-hit" ;;
+    *" search recent "*) printf '%s\n' "recent-hit" ;;
+    *) printf '%s\n' "other-hit" ;;
+esac
+EOF
+MBX_SEARCH_REPO=1
+READLINE_LINE=
+READLINE_POINT=0
+_mbx_search_insert
+assert_eq 'cwd-hit' "$READLINE_LINE" \
+    'MBX_SEARCH_REPO=1 with no repo root should fall through to cwd'
+unset MBX_SEARCH_REPO
+_mbx_search_clear
+
 MBX_HISTORY=0
 READLINE_LINE='keep-me'
 READLINE_POINT=7

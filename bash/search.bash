@@ -121,6 +121,39 @@ _mbx_search_helper() {
     ((child_status == 0))
 }
 
+_mbx_search_repo_root() {
+    local deadline output_fd child_pid status=1
+    local root=
+
+    REPLY=
+    [[ -x ${MBX_BIN:-} ]] || return 1
+    _mbx_deadline_after "${MBX_SEARCH_TIMEOUT:-${MBX_HISTORY_TIMEOUT:-0.10}}" || return 1
+    deadline=$REPLY
+    _MBX_SEARCH_SAVED_MONITOR=0
+    _MBX_SEARCH_SAVED_NOTIFY=0
+    [[ $- == *m* ]] && _MBX_SEARCH_SAVED_MONITOR=1
+    [[ $- == *b* ]] && _MBX_SEARCH_SAVED_NOTIFY=1
+    set +m
+    set +b
+    exec {output_fd}< <(exec "$MBX_BIN" repo root --cwd "$PWD" 2>/dev/null)
+    child_pid=$!
+    if _mbx_search_read_line "$output_fd" "$deadline"; then
+        # Copy out of REPLY before _mbx_wait_child_until overwrites it with an
+        # exit status (M-049/M-055).
+        root=$REPLY
+    fi
+    exec {output_fd}<&-
+    if ! _mbx_wait_child_until "$child_pid" "$deadline"; then
+        _mbx_terminate_child "$child_pid"
+    else
+        status=$REPLY
+    fi
+    _mbx_search_restore_jobs
+    [[ -n $root ]] || return 1
+    REPLY=$root
+    return 0
+}
+
 _mbx_search_query() {
     local query=$1
     local limit
@@ -131,6 +164,14 @@ _mbx_search_query() {
     if [[ -z $query ]]; then
         if [[ ${MBX_SEARCH_FAILED:-0} == 1 ]]; then
             _mbx_search_helper "$limit" history search failed --limit "$limit" || true
+            if ((${#_MBX_SEARCH_MATCHES[@]} > 0)); then
+                return 0
+            fi
+        fi
+        if [[ ${MBX_SEARCH_REPO:-0} == 1 ]] && _mbx_search_repo_root; then
+            local repo_root=$REPLY
+            _mbx_search_helper "$limit" history search repo "$repo_root" \
+                --limit "$limit" || true
             if ((${#_MBX_SEARCH_MATCHES[@]} > 0)); then
                 return 0
             fi
