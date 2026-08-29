@@ -1153,3 +1153,47 @@ to prevent recurrence, not to assign blame.
 - Evidence: `maybe_build` in `scripts/configure.bash`; smoke
   `--build` without cargo.
 
+
+## M-060 — A permission test assumed CAP_DAC_OVERRIDE could not be present
+
+- Discovered: 2026-08-29
+- Status: Fixed
+- Failed assumption: `unreadable_store_fails_closed_without_widening` treated
+  a successful open of a mode-`0000` file as impossible, so it panicked
+  instead of asserting an invariant.
+- Impact: root (or any caller with `CAP_DAC_OVERRIDE`, the default uid in many
+  container images) bypasses the mode-`0000` denial at the kernel level, so
+  `QueuedHistoryStore::open` succeeds there. `bash tests/run.bash` failed at
+  `cargo test --workspace` on such a host, before Clippy or any Bash suite
+  ran, so the canonical suite could not be completed in that environment at
+  all.
+- Correction: the test now mirrors its sibling
+  `restrictive_file_is_not_made_more_permissive` — it accepts either outcome
+  and asserts the invariant that actually holds under both: the on-disk mode
+  is never widened by our own code.
+- Prevention: a test that asserts an OS-level permission denial must accept
+  a privileged caller's outcome too, and assert the narrower invariant (no
+  widening) rather than the open's success or failure.
+- Evidence: `crates/cli/src/storage.rs`
+  (`unreadable_store_fails_closed_without_widening`); passes identically as
+  uid 0 and as a non-root user.
+
+## M-061 — A relative helper path stopped resolving after an intentional `cd`
+
+- Discovered: 2026-08-29
+- Status: Fixed
+- Failed assumption: a `$MBX_TEST_BIN` argument could stay relative for the
+  whole script, because most callers only used the absolute default.
+- Impact: `tests/integration/protocol.bash target/debug/mbx`, the exact
+  invocation `README.md` documents, failed with "No such file or directory"
+  — one case in the script `cd`s into a directory it then deletes, and a
+  relative path no longer resolves from there. Only `tests/run.bash`, which
+  always passes an absolute path, had ever exercised this script.
+- Correction: the script resolves a relative `$MBX_TEST_BIN` against the
+  invocation `$PWD` immediately after reading it, before any `cd`.
+- Prevention: a test harness that both accepts a relative path argument and
+  changes directory mid-run must resolve that argument to an absolute path
+  first, and the documented invocation must itself be run as a regression
+  case.
+- Evidence: `tests/integration/protocol.bash`; passes with both a relative
+  and an absolute `target/debug/mbx` argument.

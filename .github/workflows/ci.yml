@@ -3,12 +3,14 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   test:
+    name: Canonical suite (stable)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,3 +19,80 @@ jobs:
       - name: Run checks
         run: bash tests/run.bash
 
+  msrv:
+    name: MSRV (Rust 1.85.0)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust 1.85.0
+        run: |
+          rustup toolchain install 1.85.0 --profile minimal --component clippy --component rustfmt
+          rustup default 1.85.0
+      - name: Build, test, and lint at the declared minimum toolchain
+        run: |
+          cargo build --workspace
+          cargo test --workspace
+          cargo clippy --workspace --all-targets -- -D warnings
+
+  release-build:
+    name: Release profile build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the release workspace
+        run: cargo build --release --workspace
+
+  # HRD-001 Linux pairwise leg: the canonical suite's Bash suites must pass on
+  # every Bash release the compatibility contract names, not only whatever
+  # ships on ubuntu-latest. Each container builds its own toolchain because a
+  # binary built on ubuntu-latest's glibc will not run on an older base image.
+  bash-matrix:
+    name: Bash suites (${{ matrix.bash_label }})
+    needs: test
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: ubuntu:20.04
+            bash_label: "bash 5.0, ubuntu:20.04"
+          - image: ubuntu:22.04
+            bash_label: "bash 5.1, ubuntu:22.04"
+          - image: ubuntu:24.04
+            bash_label: "bash 5.2, ubuntu:24.04"
+    steps:
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates curl build-essential git
+      - name: Install Rust 1.85.0
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --profile minimal --default-toolchain 1.85.0
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - uses: actions/checkout@v4
+      - name: Report the Bash version under test
+        run: bash --version | head -1
+      - name: Build the helper
+        run: cargo build --workspace
+      - name: Run the Bash suites
+        run: |
+          bash tests/bash/modules.bash target/debug/mbx
+          bash tests/integration/protocol.bash target/debug/mbx
+          bash tests/bash/smoke.bash target/debug/mbx
+
+  # HRD-001 macOS leg stays deferred per ADR 0012 (no macOS host in scope for
+  # this repository's automated CI). This job exists so the leg has somewhere
+  # to run rather than only a roadmap note: trigger it manually from a macOS
+  # host when one becomes available, via workflow_dispatch.
+  macos-pty:
+    name: macOS PTY matrix (manual; ADR 0012)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust components
+        run: rustup component add rustfmt clippy
+      - name: Run checks
+        run: bash tests/run.bash
