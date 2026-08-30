@@ -1501,3 +1501,102 @@ to prevent recurrence, not to assign blame.
 - Evidence: `crates/cli/src/provider.rs` (`retry_while_timed_out` and its
   contract test); the diverging stable/MSRV results on commit `57c5957`
   (`actions/runs/33290559060`).
+
+## M-070 — `mbx doctor` reported three of the ten chords MBX installs
+
+- Discovered: 2026-08-30
+- Status: Fixed
+- Failed assumption: `DIAG-001` advertised per-feature keybinding-collision
+  coverage, and the implementation's feature table listed only the three
+  opt-in features (`MBX_GHOST`, `MBX_HIGHLIGHT`, `MBX_COMP_OVERLAY`). The
+  assumption was that those are the only installers that can decline a chord.
+  They are not: history-search insert and restore, insert token, ranked accept,
+  and ranked cycle all install whenever the shell is interactive, all decline
+  an already-bound chord, and all have their own `*_OVERRIDE` escape hatch.
+- Impact: the most likely collisions were invisible. With `\C-xh` already
+  bound, `_mbx_search_install` leaves `_MBX_SEARCH_BOUND=0` and doctor printed
+  "no opt-in keystroke feature is enabled" — actively misleading, in the one
+  command whose entire purpose is to explain why something is not working.
+  Two further defects sat in the same section: a feature whose chord was
+  declined was attributed to "stdout is not a tty" even for features that
+  never test a tty, and the installers that do test one test *stdin*
+  (`-t 0`), not stdout, so the explanation named the wrong file descriptor.
+  Separately, `MBX_HISTORY=1` with a store whose path resolves but whose row
+  count fails printed no diagnostic at all, letting doctor exit zero while
+  history capture was unusable.
+- Correction: widened the table to all ten chords, added a per-row flag so the
+  tty explanation is offered only by the two features that actually gate on
+  one and now asks about stdin to match them, distinguished "installer has not
+  run" from "chord declined", and made an unreadable history store a `[FAIL]`
+  with a fix line.
+- Prevention: a diagnostic command's coverage claim is a contract like any
+  other and needs a test that enumerates what it must cover. "Reports every
+  collision" is not evidenced by a test that only exercises the features the
+  author happened to think of.
+- Evidence: `bash/config.bash` (`mbx_doctor`); `tests/bash/modules.bash` D-4
+  (an always-on installer that declined its chord is named along with its
+  override variable) and D-5 (an unreadable store is a `[FAIL]` and a nonzero
+  exit). Reported by an automated reviewer on PR #52 and confirmed against the
+  installers before fixing.
+
+## M-071 — The release workflow would publish a release from a manual branch run
+
+- Discovered: 2026-08-30
+- Status: Fixed
+- Failed assumption: `.github/workflows/release.yml` (added for `REL-001`)
+  carried `workflow_dispatch` so the pipeline could be smoke-tested without
+  cutting a tag, on the assumption that a manual run would exercise the build
+  and stop there.
+- Impact: both jobs ran. On a `workflow_dispatch` from a branch,
+  `GITHUB_REF_NAME` is the branch name, so the publish step would have run
+  `gh release create main` — and `gh release create` creates a missing tag
+  from the default branch's latest state, so a single manual run would have
+  published a bogus release *and* an unintended tag whose commit need not
+  match the uploaded binaries. The one action the workflow's own header
+  comment promised required "a deliberate, human decision" was reachable by
+  the button meant for testing.
+- Correction: gated the `publish` job on
+  `startsWith(github.ref, 'refs/tags/v')`. `workflow_dispatch` now does what
+  it was meant to do — build the matrix and stop — which is exactly what an
+  untested pipeline needs.
+- Prevention: a workflow with both a tag trigger and a manual trigger must
+  state, per job, which triggers that job is for. Any job with an external
+  side effect defaults to the narrower trigger.
+- Evidence: `.github/workflows/release.yml`. Reported by an automated reviewer
+  on PR #52.
+
+## M-072 — A Bash render-deadline test was a benchmark of the host's Bash build
+
+- Discovered: 2026-08-30
+- Status: Fixed
+- Failed assumption: `tests/bash/modules.bash` asserted that a near-64 KiB
+  prompt request against a deliberately stalled coprocess completes in under
+  200 000 us, with `MBX_RENDER_TIMEOUT=.10`. The assumption behind that
+  constant was that the fixed cost outside the deadline-governed section fits
+  in the remaining 100 ms on every supported Bash.
+- Impact: the Bash 5.0 CI leg — added by this same branch, so this had never
+  been observed before — failed on it, while 5.1 and 5.2 passed. Reproduced
+  locally against a from-source Bash 5.0 build. Measuring elapsed minus
+  timeout at render timeouts of 50/100/200 ms gave a flat ~121 ms on Bash 5.0
+  and a flat ~32 ms on Bash 5.2. The flatness is the finding: **the deadline is
+  honored exactly on both versions**, and what differs is only a fixed
+  per-version cost that the deadline never governed. The test was failing a
+  supported configuration for a property it was not trying to assert, and no
+  product defect existed.
+- Correction: replaced the single-run wall-clock ceiling with a differential
+  measurement — the same stalled request is run at two render timeouts and the
+  elapsed times must differ by the timeout difference. The per-version fixed
+  cost is identical in both runs and cancels. A generous absolute ceiling still
+  catches an unbounded wait, which is what a genuinely broken deadline
+  produces, since the stall never returns.
+- Why this is not loosening the test: the new form asserts something the old
+  one could not — that elapsed time *tracks the deadline*. Sabotaging the
+  fixture so the timeout no longer governs (both runs at one budget) makes it
+  fail with a delta of -364 us, confirmed before landing.
+- Prevention: when a test's subject is that a deadline is honored, assert
+  against the deadline, not against a wall-clock constant that also has to
+  cover unrelated fixed costs. If a constant is unavoidable, derive it from a
+  measurement taken on the same host in the same run.
+- Evidence: `tests/bash/modules.bash` (`measure_near_limit_prompt` and its two
+  assertions); all three Bash suites pass on a from-source Bash 5.0 build and
+  on Bash 5.2.

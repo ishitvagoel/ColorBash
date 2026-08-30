@@ -185,28 +185,54 @@ mbx_doctor() {
     fi
 
     printf '\nKeybinding collisions\n'
+    # Every chord MBX installs, not only the opt-in ones: the always-on
+    # installers (history search and its restore, insert token, ranked accept
+    # and cycle) decline an occupied chord exactly as ghost/highlight/overlay
+    # do, and each has its own `*_OVERRIDE` escape hatch. Reporting only the
+    # three opt-in features left the most common collisions — `\C-xh` and
+    # `\C-x\C-y` are popular chords — completely invisible.
+    #
+    # Field 1 is the env var that gates the feature, or `-` for one that
+    # installs whenever the shell is interactive. Field 5 marks the two
+    # features whose installer additionally requires PTY evidence, so only
+    # those get the tty explanation — attributing a declined chord to "no tty"
+    # for a feature that never checked one would send the reader after the
+    # wrong cause. Note the installers test *stdin* (`-t 0`), which is what
+    # self-insert wrapping needs; this check must match them rather than
+    # asking about stdout.
     local -a doctor_features=(
-        'MBX_GHOST:_MBX_GHOST_BOUND:MBX_GHOST_OVERRIDE:ghost suffix'
-        'MBX_HIGHLIGHT:_MBX_HIGHLIGHT_BOUND:MBX_HIGHLIGHT_OVERRIDE:syntax highlighting'
-        'MBX_COMP_OVERLAY:_MBX_COMP_OVERLAY_BOUND:MBX_COMP_OVERLAY_OVERRIDE:completion overlay'
+        '-:_MBX_SEARCH_BOUND:MBX_SEARCH_OVERRIDE:history-search insert (Ctrl-X h):0'
+        '-:_MBX_SEARCH_RESTORE_BOUND:MBX_SEARCH_RESTORE_OVERRIDE:history-search restore (Ctrl-X l):0'
+        '-:_MBX_EDITOR_INSERT_BOUND:MBX_EDITOR_OVERRIDE:insert token (Ctrl-X Ctrl-Y):0'
+        '-:_MBX_COMP_ACCEPT_BOUND:MBX_COMP_ACCEPT_OVERRIDE:ranked accept (Ctrl-X Ctrl-A):0'
+        '-:_MBX_COMP_CYCLE_NEXT_BOUND:MBX_COMP_CYCLE_OVERRIDE:ranked cycle next (Ctrl-X n):0'
+        '-:_MBX_COMP_CYCLE_PREV_BOUND:MBX_COMP_CYCLE_OVERRIDE:ranked cycle previous (Ctrl-X p):0'
+        'MBX_GHOST:_MBX_GHOST_BOUND:MBX_GHOST_OVERRIDE:ghost suffix:1'
+        'MBX_HIGHLIGHT:_MBX_HIGHLIGHT_BOUND:MBX_HIGHLIGHT_OVERRIDE:syntax highlighting:1'
+        'MBX_COMP_OVERLAY:_MBX_COMP_OVERLAY_BOUND:MBX_COMP_OVERLAY_OVERRIDE:completion overlay toggle (Ctrl-X Ctrl-O):0'
+        'MBX_COMP_OVERLAY:_MBX_COMP_OVERLAY_DISMISS_BOUND:MBX_COMP_OVERLAY_OVERRIDE:completion overlay dismiss (Ctrl-X j):0'
     )
-    local entry env_var bound_var override_var label any_checked=0
+    local entry env_var bound_var override_var label tty_gated any_checked=0
     for entry in "${doctor_features[@]}"; do
-        IFS=: read -r env_var bound_var override_var label <<<"$entry"
-        [[ ${!env_var:-0} == 1 ]] || continue
+        IFS=: read -r env_var bound_var override_var label tty_gated <<<"$entry"
+        [[ $env_var == - || ${!env_var:-0} == 1 ]] || continue
         any_checked=1
         if [[ ${!bound_var:-0} == 1 ]]; then
             _mbx_doctor_line ok "$label: chord bound"
-        elif [[ ! -t 1 ]]; then
-            _mbx_doctor_line warn "$label: not bound because stdout is not a tty (see Shell above)" ''
+        elif [[ -z ${!bound_var+x} ]]; then
+            _mbx_doctor_line warn "$label: its installer has not run in this shell" \
+                'source bash/init.bash from an interactive shell'
         elif [[ $env_var == MBX_HIGHLIGHT && ${MBX_GHOST:-0} == 1 ]]; then
             _mbx_doctor_line warn "$label: not bound because MBX_GHOST=1 is also set (mutually exclusive)" ''
+        elif [[ $tty_gated == 1 && ! -t 0 ]]; then
+            _mbx_doctor_line warn "$label: not bound because stdin is not a tty (see Shell above)" \
+                'run this in a real terminal; self-insert wrapping needs PTY evidence'
         else
             _mbx_doctor_line warn "$label: its chord was already bound, so MBX left it alone" \
                 "export $override_var=1 before sourcing init.bash to force it"
         fi
     done
-    ((any_checked)) || _mbx_doctor_line ok 'no opt-in keystroke feature is enabled'
+    ((any_checked)) || _mbx_doctor_line ok 'no MBX keystroke feature is installed'
     if [[ ${MBX_GHOST:-0} == 1 && ${MBX_HIGHLIGHT:-0} == 1 ]]; then
         _mbx_doctor_line fail 'MBX_GHOST=1 and MBX_HIGHLIGHT=1 are both set; they are mutually exclusive' \
             'disable one of them (highlight install skips while ghost is enabled)'
@@ -228,8 +254,18 @@ mbx_doctor() {
                             "chmod 600 $store_path"
                     fi
                 fi
+                # A store whose path resolves but whose row count does not is
+                # a store the shell cannot actually use — corrupt, locked, or
+                # unreadable. Reporting the path and then silently omitting the
+                # count would let doctor finish with zero failures while
+                # history capture is broken, which is the opposite of what this
+                # command is for.
                 if store_count=$("$MBX_BIN" history count 2>/dev/null); then
                     _mbx_doctor_line ok "rows: $store_count"
+                else
+                    _mbx_doctor_line fail \
+                        'the history store exists but could not be read (corrupt, locked, or unreadable)' \
+                        "check permissions on $store_path, or move it aside to let MBX recreate it"
                 fi
             else
                 _mbx_doctor_line fail 'could not resolve the history store path' \

@@ -502,16 +502,57 @@ near_limit_size=$((_MBX_PROTOCOL_MAX_MESSAGE_BYTES - \
     ${#request_prefix} - ${#request_suffix}))
 printf -v near_limit_logical_pwd '%*s' "$near_limit_size" ''
 serve_prompt_marker=${TMPDIR:-/tmp}/colorbash-serve-prompt-$BASHPID-$RANDOM
-rm -f -- "$marker" "$serve_prompt_marker"
 export MBX_STALL_SERVE_PROMPT_MARKER=$serve_prompt_marker
-MBX_RENDER_TIMEOUT=.10
-_mbx_engine_start || fail 'the near-limit-PWD fixture did not complete its handshake'
-_mbx_clock_now_us
-started_us=$REPLY
-PWD=$near_limit_logical_pwd _mbx_update_prompt 0 -
-_mbx_clock_now_us
-elapsed_us=$((REPLY - started_us))
-((elapsed_us < 200000)) || fail 'near-limit request encoding escaped the render deadline'
+
+# What must hold is that the render *deadline* governs how long a near-limit
+# request against a stalled coprocess can take. A single run against a
+# hardcoded wall-clock ceiling cannot test that, because the run also carries a
+# fixed per-version cost outside the deadline-governed section, and that cost
+# differs several-fold across the Bash releases this project supports. Measured
+# on one host at render timeouts of 50/100/200 ms, elapsed minus timeout was a
+# flat ~121 ms on Bash 5.0 and a flat ~32 ms on Bash 5.2 — the deadline is
+# honored exactly on both, but a fixed 200 ms ceiling (100 ms timeout plus
+# 100 ms of allowance) fits only the faster one. That made the old assertion a
+# benchmark of the host's Bash build rather than a check of the deadline, and
+# it failed the Bash 5.0 CI leg for that reason alone.
+#
+# So measure the deadline directly: run the same stalled request at two
+# timeouts and require the elapsed times to differ by the timeout difference.
+# The per-version fixed cost is identical in both runs and cancels out. A
+# deadline that is not honored cannot produce that difference — the stall is
+# indefinite, so a broken deadline hangs for seconds, which the absolute
+# ceiling below also catches.
+measure_near_limit_prompt() {
+    local timeout=$1
+    rm -f -- "$marker" "$serve_prompt_marker"
+    MBX_RENDER_TIMEOUT=$timeout
+    _mbx_engine_start || fail 'the near-limit-PWD fixture did not complete its handshake'
+    _mbx_clock_now_us
+    local started=$REPLY
+    PWD=$near_limit_logical_pwd _mbx_update_prompt 0 -
+    _mbx_clock_now_us
+    REPLY=$((REPLY - started))
+}
+
+measure_near_limit_prompt .05
+near_limit_fast_us=$REPLY
+# The stalled peer must be reachable and the deadline must not have been
+# refreshed per call, on this run as much as the next.
+[[ -e $serve_prompt_marker ]] || fail 'the fitting near-limit request was not sent'
+[[ ! -e $marker ]] || fail 'near-limit rendering granted per-call a second budget'
+wait_for_deferred_reap
+
+measure_near_limit_prompt .15
+near_limit_slow_us=$REPLY
+near_limit_delta_us=$((near_limit_slow_us - near_limit_fast_us))
+((near_limit_delta_us > 50000 && near_limit_delta_us < 200000)) || \
+    fail "the render deadline did not govern the near-limit request: a 100000us larger timeout changed elapsed time by ${near_limit_delta_us}us (${near_limit_fast_us}us then ${near_limit_slow_us}us)"
+# Absolute ceiling: the stall never returns, so a deadline that fails to fire
+# leaves this in the seconds. Generous enough for the slowest supported Bash,
+# tight enough that an unbounded wait cannot pass.
+((near_limit_fast_us < 1000000)) || \
+    fail "near-limit request against a stalled coprocess was not bounded: ${near_limit_fast_us}us"
+elapsed_us=$near_limit_slow_us
 [[ -e $serve_prompt_marker ]] || fail 'the fitting near-limit request was not sent'
 [[ ! -e $marker ]] || fail 'near-limit rendering granted per-call a second budget'
 assert_eq 0 "${_MBX_ENGINE_READY:-missing}" \
@@ -699,6 +740,53 @@ doctor_out=$(mbx_doctor) || doctor_status=$?
     fail "mbx doctor should flag ghost+highlight as mutually exclusive: $doctor_out"
 ((doctor_status != 0)) || fail 'mbx doctor must exit nonzero when ghost+highlight collide'
 unset MBX_GHOST MBX_HIGHLIGHT
+
+# D-4: the collision report covers every chord MBX installs, not only the
+# three opt-in features. An always-on installer that declined an occupied
+# chord must be named along with its own override variable.
+_MBX_SEARCH_BOUND=0
+_MBX_SEARCH_RESTORE_BOUND=1
+_MBX_EDITOR_INSERT_BOUND=0
+_MBX_COMP_ACCEPT_BOUND=1
+_MBX_COMP_CYCLE_NEXT_BOUND=1
+_MBX_COMP_CYCLE_PREV_BOUND=1
+doctor_out=$(mbx_doctor) || true
+[[ $doctor_out == *'history-search insert (Ctrl-X h)'* ]] || \
+    fail "mbx doctor should report the history-search chord: $doctor_out"
+[[ $doctor_out == *'MBX_SEARCH_OVERRIDE=1'* ]] || \
+    fail "mbx doctor should name MBX_SEARCH_OVERRIDE for a declined search chord: $doctor_out"
+[[ $doctor_out == *'MBX_EDITOR_OVERRIDE=1'* ]] || \
+    fail "mbx doctor should name MBX_EDITOR_OVERRIDE for a declined insert-token chord: $doctor_out"
+[[ $doctor_out == *'[OK]   history-search restore (Ctrl-X l): chord bound'* ]] || \
+    fail "mbx doctor should report a bound restore chord as OK: $doctor_out"
+[[ $doctor_out != *'no MBX keystroke feature is installed'* ]] || \
+    fail "mbx doctor must not claim nothing is installed when chords are bound: $doctor_out"
+unset _MBX_SEARCH_BOUND _MBX_SEARCH_RESTORE_BOUND _MBX_EDITOR_INSERT_BOUND \
+    _MBX_COMP_ACCEPT_BOUND _MBX_COMP_CYCLE_NEXT_BOUND _MBX_COMP_CYCLE_PREV_BOUND
+
+# D-5: MBX_HISTORY=1 with a store whose path resolves but whose count fails is
+# an unusable store and must be a FAIL, not a silently omitted row count.
+doctor_stub_dir=$(mktemp -d)
+cat >"$doctor_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+case "$1 $2" in
+    "history path") printf '%s\n' "/nonexistent/store.sqlite3" ;;
+    "history count") exit 1 ;;
+    *) printf 'mbx 0.0.0-test\n' ;;
+esac
+EOF
+chmod +x "$doctor_stub_dir/mbx"
+MBX_BIN=$doctor_stub_dir/mbx
+MBX_HISTORY=1
+doctor_status=0
+doctor_out=$(mbx_doctor) || doctor_status=$?
+[[ $doctor_out == *'[FAIL]'*'could not be read'* ]] || \
+    fail "mbx doctor should fail when the history store cannot be read: $doctor_out"
+((doctor_status != 0)) || \
+    fail 'mbx doctor must exit nonzero when the history store is unreadable'
+unset MBX_HISTORY
+rm -rf "$doctor_stub_dir"
+
 unset _MBX_ROOT MBX_CONFIG MBX_HISTORY MBX_GHOST
 _MBX_USER_CONFIG_LOADED=1
 rm -f "$mbx_cfg_dir/config.bash"
