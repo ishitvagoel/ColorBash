@@ -1124,6 +1124,35 @@ assert_eq mbx_comp_reply_0 "${_MBX_COMP_OVERLAY_CANDIDATES[0]:-}" \
     'overlay snapshot head should match the ranked list'
 assert_eq mbx_comp_reply_7 "${_MBX_COMP_OVERLAY_CANDIDATES[7]:-}" \
     'overlay snapshot should keep the eighth ranked row'
+
+# OV-2 (M-065): the overlay must never draw more rows than the terminal can
+# hold under the prompt. Reserving rows keeps the saved cursor valid, but
+# reserving more rows than exist scrolls the prompt off the top entirely, so
+# the draw is capped at LINES-2 — the prompt's own row plus one line of
+# context.
+saved_lines=${LINES:-}
+LINES=6
+_mbx_comp_overlay_capacity
+assert_eq 4 "$REPLY" 'a six-row terminal should allow four overlay rows'
+LINES=24
+_mbx_comp_overlay_capacity
+assert_eq 22 "$REPLY" 'a 24-row terminal should allow 22 overlay rows'
+LINES=2
+_mbx_comp_overlay_capacity
+assert_eq 0 "$REPLY" 'a two-row terminal leaves no room for the overlay'
+LINES=1
+_mbx_comp_overlay_capacity
+assert_eq 0 "$REPLY" 'capacity must clamp at zero rather than go negative'
+LINES=not-a-number
+_mbx_comp_overlay_capacity
+assert_eq 22 "$REPLY" 'a nonsensical LINES should fall back to 24 rows, not disable the overlay'
+unset LINES
+_mbx_comp_overlay_capacity
+assert_eq 22 "$REPLY" 'an unset LINES should fall back to 24 rows'
+if [[ -n $saved_lines ]]; then
+    LINES=$saved_lines
+fi
+unset saved_lines
 _MBX_COMP_OVERLAY_VISIBLE=1
 _MBX_COMP_OVERLAY_LINES=8
 _MBX_COMP_OVERLAY_INDEX=0

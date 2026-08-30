@@ -443,6 +443,60 @@ _mbx_comp_overlay_have_tty() {
     [[ -t 1 ]] && [[ -w /dev/tty ]]
 }
 
+# Make room for `count` rows below the cursor *before* anything saves the
+# cursor position, and return to the starting cell.
+#
+# `\e7` (DECSC) records an absolute screen position. The overlay used to save
+# first and then draw, so whenever the draw itself scrolled the screen the
+# saved position no longer referred to the prompt — every row had shifted up —
+# and the `\e8` + `\e[J` on dismiss erased from the wrong origin, destroying
+# the prompt and the scrollback above it (M-065).
+#
+# Scrolling here instead inverts that: `\eD` (IND) moves down one row and
+# scrolls at the bottom margin, so after `count` of them the screen has
+# already absorbed whatever scroll the draw was going to cause. Moving back up
+# `count` rows lands on the prompt's row wherever it now is — if the screen
+# scrolled by `s`, the cursor is at `L - count` and the prompt moved to
+# `R - s`, and those are the same row. A `\e7` taken after this cannot be
+# invalidated, because the draw that follows fits in rows that already exist.
+#
+# IND, not `\n`: IND leaves the column alone. `\n` would return the cursor to
+# column 0, so the saved position would be the start of the prompt line rather
+# than the user's cursor within it, and the dismissing `\e[J` would then erase
+# the prompt text itself — trading a scrollback bug for a worse one.
+# How many overlay rows this terminal can show without scrolling the prompt
+# off the top.
+#
+# Reserving rows keeps the saved cursor valid (see `_mbx_comp_overlay_reserve`)
+# but does not stop the reservation itself from scrolling the prompt away
+# entirely: eight rows do not fit under a prompt on a six-row terminal, and
+# drawing them anyway leaves a screen of candidates and no prompt. If the draw
+# scrolls by `s`, the prompt lands on row `L - k` for `k` drawn rows, so
+# `k <= L - 2` keeps both the prompt and one line of context on screen.
+#
+# `LINES` is maintained by Bash for an interactive shell (`checkwinsize`, on by
+# default) and re-read on SIGWINCH, so it tracks a resize. A missing or
+# nonsensical value falls back to the conventional 24 rather than guessing
+# zero, which would silently disable the overlay.
+_mbx_comp_overlay_capacity() {
+    local rows=${LINES:-}
+
+    [[ $rows =~ ^[0-9]+$ ]] && ((rows > 0)) || rows=24
+    REPLY=$((rows - 2))
+    ((REPLY > 0)) || REPLY=0
+}
+
+_mbx_comp_overlay_reserve() {
+    local count=${1:-0}
+    local index pad=
+
+    ((count > 0)) || return 0
+    for ((index = 0; index < count; index++)); do
+        pad+=$'\eD'
+    done
+    printf '%s\e[%dA' "$pad" "$count" >/dev/tty 2>/dev/null || true
+}
+
 _mbx_comp_overlay_clear() {
     local lines=${_MBX_COMP_OVERLAY_LINES:-0}
     [[ $lines -gt 0 ]] || {
@@ -469,8 +523,16 @@ _mbx_comp_overlay_refresh() {
     ((idx >= n)) && idx=$((n - 1))
     _MBX_COMP_OVERLAY_INDEX=$idx
     if _mbx_comp_overlay_have_tty; then
+        local draw=$((n < 8 ? n : 8))
+        _mbx_comp_overlay_capacity
+        ((draw <= REPLY)) || draw=$REPLY
+        if ((draw <= 0)); then
+            _MBX_COMP_OVERLAY_VISIBLE=0
+            return 0
+        fi
+        _mbx_comp_overlay_reserve "$draw"
         printf '\e7' >/dev/tty 2>/dev/null || true
-        for ((i = 0; i < n && i < 8; i++)); do
+        for ((i = 0; i < draw; i++)); do
             kind=${_MBX_COMP_OVERLAY_KINDS[i]:-}
             desc=${_MBX_COMP_OVERLAY_DESCS[i]:-}
             _mbx_comp_sanitize_display "${_MBX_COMP_OVERLAY_CANDIDATES[i]}"

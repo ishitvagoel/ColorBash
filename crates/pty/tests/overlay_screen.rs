@@ -21,6 +21,20 @@ const OVERLAY_KEYSEQ: &[u8] = &[CTRL_X, 0x0f];
 const OVERLAY_DISMISS_KEYSEQ: &[u8] = &[CTRL_X, b'j'];
 const TAB: u8 = 0x09;
 
+/// Reads until the shell goes quiet, returning everything captured.
+///
+/// The overlay draws its selected row as `> cand0`, which contains the same
+/// `"> "` the input anchor does, so waiting on a needle after a dismiss can
+/// match the very rows the dismiss is supposed to erase and return before it
+/// has happened. Draining on a timeout has no needle to be fooled by.
+fn drain(session: &mut PtySession, seconds: u64) -> Vec<u8> {
+    match session.read_until(deadline(seconds), mbx_pty::DEFAULT_CAPTURE_LIMIT, |_| false) {
+        Ok(output) => output,
+        Err(mbx_pty::PtyError::Timeout(captured)) => captured,
+        Err(error) => panic!("draining the session failed: {error}"),
+    }
+}
+
 fn spawn_overlay_shell(home: &Path, rows: u16, cols: u16, prelude: &str) -> PtySession {
     fs::write(
         home.join("rc.bash"),
@@ -64,70 +78,100 @@ complete -F _mbx_comp_many_backend mbx_comp_many
 ";
 
 #[test]
-#[ignore = "M-065: confirmed open defect, not yet fixed. The overlay's \\e7/\\e8 \
-            (DECSC/DECRC) save is an absolute screen position; drawing enough \
-            rows to scroll the screen invalidates it, and the subsequent \\e[J \
-            erases from the wrong origin, destroying the prompt and prior \
-            output (reproduced below). A correct fix needs either DSR cursor-row \
-            querying (which this codebase does not have) or a different \
-            rendering strategy - both are a new ADR-level decision, not a \
-            same-pass patch. Run explicitly with --ignored to reproduce."]
 fn overlay_near_the_bottom_of_a_short_terminal_leaves_the_prompt_intact() {
     let home = TempHome::new("ov-scr1");
     // 6 rows total; typing a couple of blank lines first pushes the active
     // prompt down near the bottom, the case the overlay's fixed 24-row test
     // fixture (completion_harness.rs) never exercises.
     let mut session = spawn_overlay_shell(home.path(), 6, 60, EIGHT_CANDIDATE_PRELUDE);
-    wait_all(&mut session, &["> "]);
+
+    // Replay the *whole* session through the screen model. Applying only the
+    // last couple of reads to a fresh `Screen` would model a terminal that
+    // booted mid-session, so nothing printed earlier could ever be found and
+    // the assertions below would be meaningless.
+    let mut transcript: Vec<u8> = Vec::new();
+    macro_rules! step {
+        ($needles:expr) => {{
+            let chunk = wait_all(&mut session, $needles);
+            transcript.extend_from_slice(&chunk);
+        }};
+    }
+
+    step!(&["> "]);
     session
         .write_str("echo one\n", deadline(2))
         .expect("filler 1");
-    wait_all(&mut session, &["\none", "> "]);
+    step!(&["\none", "> "]);
     session
         .write_str("echo two\n", deadline(2))
         .expect("filler 2");
-    wait_all(&mut session, &["\ntwo", "> "]);
+    step!(&["\ntwo", "> "]);
     session
         .write_str("_mbx_comp_wrap_existing_f mbx_comp_many\n", deadline(2))
         .expect("wrap");
-    wait_all(&mut session, &["> "]);
-
+    step!(&["> "]);
     session
         .write_str("mbx_comp_many cand", deadline(2))
         .expect("type prefix");
-    wait_all(&mut session, &["mbx_comp_many cand"]);
+    step!(&["mbx_comp_many cand"]);
     session.write_all(&[TAB], deadline(2)).expect("tab");
+
+    let mut before = Screen::new(6, 60);
+    before.apply(&transcript);
+    assert!(
+        before
+            .lines()
+            .iter()
+            .any(|line| line.contains("mbx_comp_many cand")),
+        "fixture check: the typed prompt should be on screen before the \
+         overlay is shown; screen was:\n{}",
+        before.lines().join("\n")
+    );
+
     session
         .write_all(OVERLAY_KEYSEQ, deadline(2))
         .expect("show overlay");
-    let shown = wait_all(&mut session, &["cand0"]);
-
+    step!(&["cand0"]);
     session
         .write_all(OVERLAY_KEYSEQ, deadline(2))
         .expect("hide overlay");
-    // Give the hide time to land before taking the final snapshot.
-    let after_hide = wait_all(&mut session, &["> "]);
+    transcript.extend_from_slice(&drain(&mut session, 2));
 
-    let mut screen = Screen::new(6, 60);
-    screen.apply(&shown);
-    screen.apply(&after_hide);
+    let mut after = Screen::new(6, 60);
+    after.apply(&transcript);
+    let lines = after.lines();
 
-    let lines = screen.lines();
-    let prompt_lines: Vec<&String> = lines.iter().filter(|line| line.contains("> ")).collect();
+    // The defect: showing eight rows under a prompt near the bottom scrolls
+    // the screen, which invalidates the overlay's absolute `\e7` save. The
+    // `\e8` on dismiss then restores a position that is no longer where the
+    // overlay starts, so the following `\e[J` erases from the wrong origin —
+    // leaving the drawn candidate rows stranded on screen and taking the
+    // scrollback that was above them instead.
+    //
+    // Readline redraws the prompt line after the widget returns, so "is the
+    // prompt visible" does *not* discriminate: it comes back either way. What
+    // separates the two is whether the overlay's own rows were actually
+    // erased. Against the unfixed code this screen reads
+    // `cand2 cand3 cand4 cand5 cand6` above the prompt, with every earlier
+    // line gone.
+    let stranded: Vec<&String> = lines
+        .iter()
+        .filter(|line| (0..8).any(|n| line.contains(&format!("cand{n}"))))
+        .collect();
     assert!(
-        !prompt_lines.is_empty(),
-        "the prompt line must still be visible somewhere on screen after the \
-         overlay is shown and hidden near the bottom of a short terminal; \
-         screen was:\n{}",
+        stranded.is_empty(),
+        "dismissing the overlay must erase every row it drew; these were left \
+         on screen: {stranded:?}\nfull screen was:\n{}",
         lines.join("\n")
     );
+
+    // The prompt must also still be usable. This holds trivially when the
+    // rows above were erased correctly, and is kept as a guard against a fix
+    // that erases too much.
     assert!(
-        lines
-            .iter()
-            .any(|line| line.contains("echo two") || line.contains("two")),
-        "output printed before the overlay was ever shown must not be \
-         destroyed by ED (\\e[J) run from the wrong saved cursor position; \
-         screen was:\n{}",
+        lines.iter().any(|line| line.contains("mbx_comp_many cand")),
+        "the prompt and its typed text must survive showing and hiding the \
+         overlay near the bottom of a short terminal; screen was:\n{}",
         lines.join("\n")
     );
 
