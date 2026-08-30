@@ -1124,6 +1124,99 @@ assert_eq mbx_comp_reply_0 "${_MBX_COMP_OVERLAY_CANDIDATES[0]:-}" \
     'overlay snapshot head should match the ranked list'
 assert_eq mbx_comp_reply_7 "${_MBX_COMP_OVERLAY_CANDIDATES[7]:-}" \
     'overlay snapshot should keep the eighth ranked row'
+
+# OV-2 (M-065): the overlay must never draw more rows than the terminal can
+# hold under the prompt. Reserving rows keeps the saved cursor valid, but
+# reserving more rows than exist scrolls the prompt off the top entirely, so
+# the draw is capped at LINES-2 — the prompt's own row plus one line of
+# context.
+saved_lines=${LINES:-}
+LINES=6
+_mbx_comp_overlay_capacity
+assert_eq 4 "$REPLY" 'a six-row terminal should allow four overlay rows'
+LINES=24
+_mbx_comp_overlay_capacity
+assert_eq 22 "$REPLY" 'a 24-row terminal should allow 22 overlay rows'
+LINES=2
+_mbx_comp_overlay_capacity
+assert_eq 0 "$REPLY" 'a two-row terminal leaves no room for the overlay'
+LINES=1
+_mbx_comp_overlay_capacity
+assert_eq 0 "$REPLY" 'capacity must clamp at zero rather than go negative'
+LINES=not-a-number
+_mbx_comp_overlay_capacity
+assert_eq 22 "$REPLY" 'a nonsensical LINES should fall back to 24 rows, not disable the overlay'
+unset LINES
+_mbx_comp_overlay_capacity
+assert_eq 22 "$REPLY" 'an unset LINES should fall back to 24 rows'
+if [[ -n $saved_lines ]]; then
+    LINES=$saved_lines
+fi
+unset saved_lines
+
+# OV-3 (M-065 follow-up): capping the draw must also cap navigation and
+# acceptance. With eight candidates on a six-row terminal only four rows are
+# drawn, so cycling must wrap within those four — otherwise the selection
+# walks onto rows that are not on screen, nothing is highlighted, and ranked
+# accept inserts a candidate the user never saw.
+saved_lines=${LINES:-}
+LINES=6
+_MBX_COMP_OVERLAY_CANDIDATES=(c0 c1 c2 c3 c4 c5 c6 c7)
+_MBX_COMP_OVERLAY_KINDS=() _MBX_COMP_OVERLAY_DESCS=()
+_MBX_COMP_OVERLAY_INDEX=0
+_MBX_COMP_OVERLAY_VISIBLE=1
+_MBX_COMP_OVERLAY_SHOWN=4
+for _ov_step in 1 2 3 4; do
+    _mbx_comp_cycle_next
+done
+assert_eq 0 "$_MBX_COMP_OVERLAY_INDEX" \
+    'four cycle-next steps across four drawn rows should wrap back to the first'
+_mbx_comp_cycle_prev
+assert_eq 3 "$_MBX_COMP_OVERLAY_INDEX" \
+    'cycle-prev from the first drawn row should wrap to the last drawn row, not the last candidate'
+((_MBX_COMP_OVERLAY_INDEX < _MBX_COMP_OVERLAY_SHOWN)) || \
+    fail 'the overlay selection escaped the rows actually drawn'
+
+# An index pointing past the drawn rows must not be accepted: that candidate
+# was never on screen.
+_MBX_COMP_OVERLAY_INDEX=6
+_MBX_COMP_OVERLAY_SHOWN=4
+_MBX_COMP_OVERLAY_VISIBLE=1
+READLINE_LINE='c'
+READLINE_POINT=1
+# The eligibility gate needs a matching ranked snapshot, otherwise it refuses
+# the insert for an unrelated reason and this case proves nothing.
+_MBX_COMP_RANKED_REPLY=c0
+_MBX_COMP_WORD_START=0
+_MBX_COMP_WORD_END=1
+_MBX_COMP_SNAP_START=0
+_mbx_comp_accept_ranked
+assert_eq 'c' "$READLINE_LINE" \
+    'accepting an overlay row that was never drawn must insert nothing'
+
+# Control: the same setup with the selection on a drawn row does insert, so
+# the assertion above is not passing because the whole path is inert.
+_MBX_COMP_OVERLAY_INDEX=1
+_MBX_COMP_OVERLAY_SHOWN=4
+_MBX_COMP_OVERLAY_VISIBLE=1
+READLINE_LINE='c'
+READLINE_POINT=1
+_MBX_COMP_RANKED_REPLY=c0
+_MBX_COMP_WORD_START=0
+_MBX_COMP_WORD_END=1
+_MBX_COMP_SNAP_START=0
+_mbx_comp_accept_ranked
+assert_eq 'c1' "$READLINE_LINE" \
+    'accepting a drawn overlay row should insert that candidate'
+unset _MBX_COMP_RANKED_REPLY _MBX_COMP_SNAP_START _MBX_COMP_WORD_START _MBX_COMP_WORD_END
+unset _ov_step _MBX_COMP_OVERLAY_SHOWN
+_MBX_COMP_OVERLAY_VISIBLE=0
+_MBX_COMP_OVERLAY_CANDIDATES=()
+unset READLINE_LINE READLINE_POINT
+if [[ -n $saved_lines ]]; then
+    LINES=$saved_lines
+fi
+unset saved_lines
 _MBX_COMP_OVERLAY_VISIBLE=1
 _MBX_COMP_OVERLAY_LINES=8
 _MBX_COMP_OVERLAY_INDEX=0

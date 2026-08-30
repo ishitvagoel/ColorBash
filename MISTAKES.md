@@ -1322,59 +1322,81 @@ to prevent recurrence, not to assign blame.
 ## M-065 — Completion overlay's DECSC/DECRC save is invalidated by its own scroll
 
 - Discovered: 2026-08-29
-- Status: Open
+- Status: Fixed (2026-08-30)
 - Failed assumption: ADR 0013's completion overlay assumed `\e7` (DECSC,
   save cursor) before drawing up to eight rows below the prompt, then `\e8`
   (DECRC, restore) and `\e[J` (erase to end of screen) to hide it, was
   terminal-safe. DECSC/DECRC save an *absolute* screen position.
 - Impact: reproduced with a genuine PTY session and a purpose-built VT
-  screen model (`crates/pty/src/screen.rs`, added for this evidence): at a
-  6-row terminal with the prompt a couple of lines down (an entirely
-  ordinary state, not a contrived edge case), showing an eight-candidate
-  overlay draws enough lines to scroll the screen. `\e8` then restores the
-  *pre-scroll* absolute coordinates, which no longer correspond to the
-  prompt after the scroll shifted every row up. The subsequent `\e[J` erases
-  from that stale, wrong position — the entire prompt and all prior output
-  are gone; the screen shows only the tail of the overlay itself. The
-  existing overlay PTY suite (`crates/pty/tests/completion_harness.rs`)
-  never caught this because every existing case runs at a fixed 24-row
-  window with the prompt near the top, so the draw never scrolls.
-- Why not fixed here: a correct fix needs to know the cursor's actual
-  current row, which this codebase cannot query today (no DSR — Device
-  Status Report, `\e[6n` — round trip exists; adding one means raw-mode
-  `/dev/tty` manipulation, a bounded read of the terminal's reply, and
-  restoring the caller's `stty` state, none of which is free of its own
-  correctness risk). A naive substitute — replacing the absolute restore
-  with a relative cursor-up by the known drawn-row count — fixes the row but
-  not the column (the cursor is left wherever the last overlay line's text
-  ended, not the prompt's own column), and a subsequent blind `\e[J` from
-  that column would then corrupt the *prompt line itself* instead of the
-  overlay — trading one screen-destroying bug for a different one. Shipping
-  either the known-broken behavior's twin or an unverified guess is worse
-  than shipping the evidence alone.
-- Current state: the reproducing test
-  (`overlay_near_the_bottom_of_a_short_terminal_leaves_the_prompt_intact` in
-  `crates/pty/tests/overlay_screen.rs`) is marked `#[ignore]` with this ID so
-  it documents the defect and stays reproducible on demand
-  (`cargo test -p mbx-pty --test overlay_screen -- --ignored`) without
-  failing the canonical suite for a known, already-shipped gap the review
-  found rather than introduced. A sibling test in the same file
-  (`resize_while_overlay_is_visible_leaves_a_usable_prompt`) confirms a
-  `SIGWINCH` while the overlay is visible is *not* affected — the defect is
-  specifically the scroll-during-draw case.
-- Prevention: DECSC/DECRC (or any other technique that captures an absolute
-  screen position) must not be used to bracket output whose own length can
-  push the cursor's row past the bottom of the terminal — that is exactly
-  the condition that invalidates the saved position. Any future terminal
-  overlay must first establish it will not scroll (e.g., cap drawn rows to
-  the space actually available, which requires knowing the cursor's current
-  row) or use a bracketing technique immune to scrolling.
-- Next step (not done here): either add a bounded DSR cursor-row query as
-  its own reviewed slice, or choose a different overlay rendering strategy,
-  before `COMP-004` can be marked `complete`. See
-  `docs/comp-004-overlay-plan.md` and `docs/roadmap.md`.
-- Evidence: `crates/pty/src/screen.rs` (the VT model used to observe this);
-  `crates/pty/tests/overlay_screen.rs`.
+  screen model (`crates/pty/src/screen.rs`): at a 6-row terminal with the
+  prompt a couple of lines down — an entirely ordinary state, not a
+  contrived edge case — showing an eight-candidate overlay draws enough
+  lines to scroll the screen. `\e8` then restores the *pre-scroll* absolute
+  coordinates, which no longer correspond to the overlay's origin, and the
+  following `\e[J` erases from that stale position. The observable damage is
+  that the overlay's own rows are left stranded on screen while the
+  scrollback above them is destroyed: the modelled screen reads
+  `cand2 cand3 cand4 cand5 cand6` with every earlier line gone. The existing
+  overlay PTY suite (`crates/pty/tests/completion_harness.rs`) never caught
+  this because every case runs at a fixed 24-row window with the prompt near
+  the top, so the draw never scrolls.
+- Correction: two changes, both in `bash/completion.bash`.
+  1. `_mbx_comp_overlay_reserve` makes room *before* anything saves the
+     cursor. `\eD` (IND) moves down a row and scrolls at the bottom margin,
+     so `count` of them let the screen absorb the scroll the draw was going
+     to cause; moving back up `count` rows lands on the prompt's row wherever
+     it now is (if the screen scrolled by `s`, the cursor is at `L - count`
+     and the prompt moved to `R - s`, which are the same row). A `\e7` taken
+     after this cannot be invalidated. IND rather than `\n` specifically
+     because IND leaves the column alone — `\n` would save the start of the
+     prompt line instead of the user's cursor within it, and the dismissing
+     `\e[J` would then erase the prompt text itself.
+  2. `_mbx_comp_overlay_capacity` caps the draw at `LINES - 2`. Reserving
+     keeps the save valid but does not stop the reservation itself from
+     scrolling the prompt off the top: eight rows do not fit under a prompt
+     on a six-row terminal. With `k` drawn rows the prompt lands on `L - k`,
+     so `k <= L - 2` keeps it and one line of context on screen.
+  No DSR (`\e[6n`) round trip was needed after all. The earlier note that a
+  fix required one was wrong: it assumed the cursor's row had to be *known*,
+  when it only had to be made *safe*. Avoiding DSR also avoids its real
+  costs — a timeout on terminals that do not answer, and the risk of
+  swallowing type-ahead while reading the reply.
+- Trap found while validating: "is the prompt still visible" does **not**
+  discriminate this bug. Readline redraws the prompt line after a `bind -x`
+  widget returns, so it comes back either way, and a test asserting only that
+  passes against the unfixed code. The property that separates them is
+  whether the overlay's own rows were actually erased.
+- Prevention: DECSC/DECRC (or any technique that captures an absolute screen
+  position) must not bracket output whose own length can push the cursor past
+  the bottom of the terminal. Either reserve the space first, so the scroll
+  happens before the save, or cap the output to the space that exists. And
+  when writing the test, assert the state that only the defect can produce —
+  not the state a later redraw will restore regardless.
+- Follow-up defect introduced by the fix, caught in review before merge:
+  capping the *draw* without capping the *selection* let navigation and
+  acceptance address rows that were never on screen. With eight candidates on
+  a six-row terminal only four rows are drawn, but `_mbx_comp_cycle_next` and
+  `_mbx_comp_cycle_prev` still advanced modulo all eight, so past index 3
+  nothing was highlighted and `_mbx_comp_accept_ranked` would insert a
+  candidate the user had never seen — a direct violation of the project's
+  central promise that nothing is inserted the user did not choose.
+  `_MBX_COMP_OVERLAY_SHOWN` now records the drawn count on every path
+  (computed before the tty branch, so it means the same thing whether or not
+  this process owns a terminal) and bounds both cycling and acceptance.
+  Covered by `tests/bash/modules.bash` OV-3, whose accept case needed a
+  matching ranked snapshot to reach the insertion at all — without it the
+  eligibility gate refused for an unrelated reason and the assertion was
+  vacuous, passing against both the fixed and unfixed code. A control case
+  asserting that a *drawn* row does insert now guards that.
+- Evidence: `bash/completion.bash`
+  (`_mbx_comp_overlay_reserve`, `_mbx_comp_overlay_capacity`,
+  `_MBX_COMP_OVERLAY_SHOWN`);
+  `crates/pty/tests/overlay_screen.rs`
+  (`overlay_near_the_bottom_of_a_short_terminal_leaves_the_prompt_intact`, no
+  longer `#[ignore]`d — it fails against the unfixed code listing the five
+  stranded rows, and passes with the fix); `crates/pty/src/screen.rs` gained
+  IND/RI so the model can represent the fix; `tests/bash/modules.bash` OV-2
+  covers the capacity clamp including a nonsensical `LINES`.
 
 ## M-066 — Highlight's coprocess loop dropped the ACK tolerance its ghost twin has
 

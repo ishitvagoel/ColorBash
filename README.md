@@ -103,13 +103,13 @@ These MVP leftovers are **not** available for interactive use:
 | Ghost dim / live paint | Opt-in suffix ghost exists (ADR 0010); dim after-every-key styling does not |
 | Type-to-filter Ctrl+R overlay | Explicit `\C-xh` insert exists (ADR 0009); redraw-on-key overlay does not |
 | Live syntax highlighting | Full pipeline works; Readline renders its own invisible-marker bytes visibly inside the edit buffer, so color stays off (`M-064`, open) |
-| Completion overlay near a short terminal | Can corrupt the prompt if the draw scrolls the screen (`M-065`, open) |
 | Prebuilt binaries | No tag has been cut yet; `.github/workflows/release.yml` exists but is untested (`REL-001`, in progress) |
 | macOS PTY matrix | `deferred` (ADR 0012); needs a macOS host. Linux nested/SSH/login/vim/tmux PTY is recorded |
 
-Strategy A MVP on Linux is `complete` (`G5` 2026-08-27). Opt-in highlighting and
-completion overlay are ADR 0013/0014 and remain `validation`/`blocked` until
-`M-064` and `M-065` are resolved. Dim paint, type-to-filter overlays, and
+Strategy A MVP on Linux is `complete` (`G5` 2026-08-27). Opt-in highlighting
+stays `blocked` on `M-064`; the completion overlay is `validation` since
+`M-065` was fixed (it reserves its rows before saving the cursor, so a draw
+that scrolls can no longer corrupt the prompt). Dim paint, type-to-filter overlays, and
 macOS matrix are **G5 revisit**.
 
 The helper bundles SQLite (`rusqlite` with the `bundled` feature) for the
