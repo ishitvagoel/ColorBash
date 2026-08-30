@@ -1597,6 +1597,25 @@ to prevent recurrence, not to assign blame.
   against the deadline, not against a wall-clock constant that also has to
   cover unrelated fixed costs. If a constant is unavoidable, derive it from a
   measurement taken on the same host in the same run.
+- Follow-up correction, same day: the first version of the differential ran
+  the shorter leg at a 50 ms timeout, below the original 100 ms. That measured
+  the deadline correctly but was too short for a 64 KiB request to reach the
+  stalled peer at all on Bash 5.0 in a container, so `the fitting near-limit
+  request was not sent` failed instead. Both legs now sit at or above the
+  original timeout (100 ms and 200 ms). The tolerance window is measured
+  rather than guessed: the delta lands near the nominal 100 000 us idle and
+  compressed to ~68 000 us with every core saturated, so the window is
+  30 000-250 000 us, still far from the ~0 a non-governing deadline produces.
+- Known remaining exposure, not fixed here: `tests/bash/modules.bash` contains
+  nine hardcoded wall-clock ceilings of this same shape (lines ~364, 419, 438,
+  458, 474, 489, 583, 607, 628). Only the near-limit one has ever failed in
+  CI, and the rest pass on Bash 5.0, 5.1, and 5.2 there, so they are left
+  alone rather than rewritten inside an already-large change. Under
+  deliberately induced full-core saturation — harsher than this CI runs — the
+  `oversized request fallback escaped the render deadline` assertion at line
+  489 also fails, which is evidence the pattern is systemic rather than
+  specific to the one case fixed here. Converting the remainder to
+  deadline-relative assertions deserves its own slice.
 - Evidence: `tests/bash/modules.bash` (`measure_near_limit_prompt` and its two
   assertions); all three Bash suites pass on a from-source Bash 5.0 build and
   on Bash 5.2.
