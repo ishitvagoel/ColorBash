@@ -1689,3 +1689,54 @@ to prevent recurrence, not to assign blame.
   a billing one, and should set a concurrency group from the start.
 - Evidence: `.github/workflows/ci.yml`; the disagreeing pair of runs
   33291533211 and 33291535294 on commit `8684622`.
+
+## M-075 — PTY history cases raced the very budget MBX is designed to abandon
+
+- Discovered: 2026-08-30
+- Status: Mitigated (not Fixed — see "What is not established" below)
+- Failed assumption: the PTY suites that assert "this command was recorded"
+  (`wait_for_count`) treated recording as guaranteed once the prompt returned.
+  It is not. MBX deliberately drops a history record rather than let a slow
+  helper stall the prompt, so every such case is implicitly racing
+  `MBX_HISTORY_TIMEOUT`. The harness already knew this in part — its comment
+  says these cases are "tolerant of heavily parallel CI load" and had raised
+  the budget from the production 0.10 s to 1.0 s — but 1.0 s is still a race
+  when many PTY binaries run at once, which is exactly what
+  `cargo test --workspace` does.
+- Impact: intermittent red on tests that assert history semantics, for a
+  reason that is not a defect in what they assert. Observed twice: in CI on
+  commit `8684622` (`ctrl_p_loads_history_after_dismissing_suffix`, `last=0`)
+  and locally during a full-suite run
+  (`space_separated_prefix_shows_suffix_and_enter_runs_typed_bytes`, same
+  helper). The CI instance is doubly informative: the two concurrent runs of
+  that same commit disagreed, one passing the canonical suite while the other
+  failed this test — see `M-074` for the duplicate-run contention that made it
+  likelier.
+- Mitigation: raised the tolerant PTY default from 1.0 s to 5.0 s for both
+  `MBX_IPC_TIMEOUT` and `MBX_HISTORY_TIMEOUT`. This cannot hide a regression in
+  deadline behavior, because deadline behavior is asserted in
+  `tests/bash/modules.bash` and in the dedicated production-timeout case
+  (`spawn_history_shell_production_timeouts`, still 0.10 s), never here.
+- Instrumentation: `wait_for_count`'s failure now reports poll count and
+  elapsed time, the store's files with byte sizes, the exit status, stdout and
+  stderr of both `history count` and `history search recent`, and any live
+  helper process matching the binary under test. The previous message —
+  "count never reached 2; last=0" — could not distinguish records dropped on a
+  slow exchange, a coprocess that never started, a store never written, and a
+  query that itself failed. The next occurrence will say which.
+- What is not established: the root cause. `last=0` means *neither* of two
+  records landed, which fits a severe stall but not a marginal one, so the
+  timeout may be a contributing factor rather than the whole story. This is
+  recorded as `Mitigated` rather than `Fixed` because the failure could not be
+  reproduced in roughly 22 deliberate attempts — the ghost suite alone 6/6 and
+  4/4 under full CPU saturation, every PTY binary concurrently 5/5, the full
+  canonical suite 3/3 idle and 2/2 saturated. A fix that cannot be validated
+  against a reproduction is a guess; widening a budget that is documented as
+  deliberately wide here, and making the next failure legible, is not.
+- Prevention: a test that asserts an outcome the product is explicitly
+  permitted to abandon under load must either take that permission away for
+  the duration of the test or assert the abandonment instead. Decide which,
+  rather than inheriting a budget from production and hoping.
+- Evidence: `crates/pty/tests/common/mod.rs` (`spawn_history_shell`,
+  `wait_for_count`, `store_diagnostics`); CI runs 33291533211 and 33291535294
+  on commit `8684622`.

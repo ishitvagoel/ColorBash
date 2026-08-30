@@ -86,8 +86,17 @@ impl Drop for TempHome {
     }
 }
 
+/// The tolerant default for cases whose subject is history semantics.
+///
+/// 5.0 s, not the production 0.10 s and not the 1.0 s this used to pass. MBX
+/// is designed to *drop* a history record rather than let a slow helper stall
+/// the prompt, so any case that asserts "this command was recorded" is racing
+/// that budget whenever the machine is loaded. Deadline behavior itself is
+/// asserted in `tests/bash/modules.bash`, not here, so a wide budget here
+/// cannot hide a regression in it — it only stops these cases from failing for
+/// a reason they are not testing. See `M-075`.
 pub fn spawn_history_shell(home: &Path, extra_env: &[(&str, &str)]) -> PtySession {
-    spawn_history_shell_with_timeouts(home, extra_env, "1.0", "1.0")
+    spawn_history_shell_with_timeouts(home, extra_env, "5.0", "5.0")
 }
 
 pub fn spawn_history_shell_production_timeouts(
@@ -111,7 +120,7 @@ pub fn spawn_history_shell_rc(
     extra_env: &[(&str, &str)],
     rc_prelude: &str,
 ) -> PtySession {
-    spawn_history_shell_rc_with_timeouts(home, extra_env, rc_prelude, "1.0", "1.0")
+    spawn_history_shell_rc_with_timeouts(home, extra_env, rc_prelude, "5.0", "5.0")
 }
 
 fn spawn_history_shell_rc_with_timeouts(
@@ -268,29 +277,103 @@ pub fn count_entries(bin: &Path, data_home: &Path) -> u64 {
 }
 
 pub fn wait_for_count(bin: &Path, data_home: &Path, expected: u64) {
-    let deadline = Instant::now() + Duration::from_secs(8);
+    let started = Instant::now();
+    let deadline = started + Duration::from_secs(8);
+    let mut polls = 0u32;
     loop {
         let current = count_entries(bin, data_home);
+        polls += 1;
         if current == expected {
             return;
         }
         if Instant::now() >= deadline {
-            let recent = query(bin, &["history", "search", "recent"], data_home);
-            let store_dir = data_home.join("mbx");
-            let files: Vec<String> = fs::read_dir(&store_dir)
-                .map(|entries| {
-                    entries
-                        .filter_map(|entry| entry.ok())
-                        .map(|entry| entry.file_name().to_string_lossy().into_owned())
-                        .collect()
-                })
-                .unwrap_or_default();
             panic!(
-                "history count never reached {expected}; last={current} recent={recent:?} files={files:?}"
+                "history count never reached {expected}; last={current} \
+                 after {polls} polls over {:?}\n{}",
+                started.elapsed(),
+                store_diagnostics(bin, data_home)
             );
         }
         std::thread::sleep(Duration::from_millis(50));
     }
+}
+
+/// State worth having when a history wait times out.
+///
+/// The bare "count never reached N" message could not distinguish the cases
+/// that actually matter: records dropped on a slow exchange, a coprocess that
+/// never came up, a store that was never written, or a query that itself
+/// failed. This gathers enough to tell them apart on the next occurrence,
+/// because this failure has proven rare enough (not reproduced in ~22
+/// deliberate attempts across CPU saturation, concurrent PTY binaries, and
+/// full-suite runs) that a single good failure report is worth more than
+/// another guess. See `M-075`.
+fn store_diagnostics(bin: &Path, data_home: &Path) -> String {
+    let store_dir = data_home.join("mbx");
+    let mut report = String::new();
+
+    let files: Vec<String> = fs::read_dir(&store_dir)
+        .map(|entries| {
+            entries
+                .filter_map(|entry| entry.ok())
+                .map(|entry| {
+                    let size = entry.metadata().map(|meta| meta.len()).unwrap_or(0);
+                    format!("{}({size}B)", entry.file_name().to_string_lossy())
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    report.push_str(&format!("  store files: {files:?}\n"));
+
+    // A `-wal`/`-shm` pair present with an empty main file means a writer
+    // opened the store but its pages were never checkpointed — a different
+    // failure than "nothing ever tried to write".
+    let count = run_history(bin, &["history", "count"], data_home);
+    report.push_str(&format!(
+        "  history count: status={:?} stdout={:?} stderr={:?}\n",
+        count.status.code(),
+        String::from_utf8_lossy(&count.stdout).trim(),
+        String::from_utf8_lossy(&count.stderr).trim()
+    ));
+
+    let recent = run_history(
+        bin,
+        &["history", "search", "recent", "--limit", "50"],
+        data_home,
+    );
+    report.push_str(&format!(
+        "  recent: status={:?} stdout={:?} stderr={:?}\n",
+        recent.status.code(),
+        String::from_utf8_lossy(&recent.stdout).trim(),
+        String::from_utf8_lossy(&recent.stderr).trim()
+    ));
+
+    // Whether any helper is still alive separates "the coprocess died" from
+    // "the coprocess is up but its records never landed".
+    // Match the helper binary's own path rather than the substring "mbx",
+    // which also hits the test runner's command line and any shell that
+    // happens to mention it.
+    let needle = bin.to_string_lossy().into_owned();
+    let helpers = Command::new("ps")
+        .args(["-eo", "pid,stat,etime,args"])
+        .output()
+        .map(|out| {
+            let listed: Vec<String> = String::from_utf8_lossy(&out.stdout)
+                .lines()
+                .filter(|line| line.contains(&needle) && !line.contains("cargo"))
+                .take(12)
+                .map(|line| format!("    {}", line.trim()))
+                .collect();
+            if listed.is_empty() {
+                "    <none alive>".to_owned()
+            } else {
+                listed.join("\n")
+            }
+        })
+        .unwrap_or_else(|error| format!("    <ps failed: {error}>"));
+    report.push_str(&format!("  live mbx processes:\n{helpers}\n"));
+
+    report
 }
 
 pub fn sidecar_commands(bin: &Path, data_home: &Path) -> Vec<String> {
