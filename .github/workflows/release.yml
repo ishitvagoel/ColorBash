@@ -48,7 +48,7 @@ jobs:
           stage="mbx-${version}-${{ matrix.target }}"
           mkdir -p "$stage"
           cp target/release/mbx "$stage/"
-          cp README.md LICENSE-MIT LICENSE-APACHE "$stage/" 2>/dev/null || true
+          cp README.md LICENSE-MIT LICENSE-APACHE "$stage/"
           tar -czf "${stage}.tar.gz" "$stage"
           sha256sum "${stage}.tar.gz" > "${stage}.tar.gz.sha256"
       - uses: actions/upload-artifact@v4

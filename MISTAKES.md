@@ -1375,3 +1375,89 @@ to prevent recurrence, not to assign blame.
   `docs/comp-004-overlay-plan.md` and `docs/roadmap.md`.
 - Evidence: `crates/pty/src/screen.rs` (the VT model used to observe this);
   `crates/pty/tests/overlay_screen.rs`.
+
+## M-066 — Highlight's coprocess loop dropped the ACK tolerance its ghost twin has
+
+- Discovered: 2026-08-30
+- Status: Fixed
+- Failed assumption: `_mbx_highlight_refresh_wire` (added for `HLT-004`, ADR
+  0014) was written as a deliberate mirror of `_mbx_ghost_query_wire`, and
+  the mirroring was assumed complete because both loops implement the same
+  ADR 0011 generation and stale-reply skip. They did not match: ghost's loop
+  skips an intervening three-field `ACK` frame and keeps reading, and the
+  highlight copy omitted that branch, so any frame that was not a `STYLED`
+  fell straight through to `_mbx_engine_stop`.
+- Impact: `MBX_GHOST` and `MBX_HIGHLIGHT` are mutually exclusive, but
+  `MBX_HIGHLIGHT` and `MBX_HISTORY` are not — both features read the one
+  coprocess fd. A history `RECORD` whose `ACK` was still queued when a
+  keystroke landed mid-cycle would be read by the highlight loop, fail to
+  parse as `STYLED`, and tear down a perfectly healthy helper. The visible
+  result is highlighting silently degrading to plain text and the next
+  prompt cycle paying a fresh helper spawn, for a condition the transport
+  was explicitly designed to tolerate.
+- Correction: added the same ACK-skip branch ghost uses, with a comment
+  naming why the two features share the fd. The non-ACK case still stops the
+  engine, so the fix does not widen into "ignore every unexpected frame".
+- Prevention: when a new feature copies an existing wire loop, diff the two
+  loops rather than re-deriving them — the branches that look like defensive
+  padding (ACK tolerance here) are the ones that encode a real, already-paid
+  lesson. Two loops reading the same fd must agree about every frame kind
+  that can appear on it.
+- Evidence: `bash/highlight.bash` (`_mbx_highlight_refresh_wire`);
+  `tests/bash/modules.bash` H-6 (a queued ACK is skipped and does not stop
+  the engine) and H-7 (an unexpected non-ACK frame still stops it). Both
+  were confirmed to fail against the unfixed code before the fix landed.
+
+## M-067 — `mbx repo root` output was trusted without checking the child's exit status
+
+- Discovered: 2026-08-30
+- Status: Fixed
+- Failed assumption: `_mbx_search_repo_root` (added for the `SRCH-003` repo
+  filter) assumed a non-empty first line of output was sufficient evidence
+  that the helper had resolved a repository root, because `mbx repo root`
+  prints nothing and exits nonzero outside a repository. The function did
+  capture the child's exit status into a local, then never read it.
+- Impact: the guarded case — no repository — happened to work, because the
+  helper writes nothing there. The unguarded case is a child that is killed
+  or times out after emitting a partial first line: `_mbx_search_read_line`
+  returns that fragment, and the search would then scope history to a
+  truncated path, silently returning the wrong rows instead of falling
+  through to the cwd and recent tiers. A `status` local that is assigned and
+  never read is the tell.
+- Correction: gate acceptance on `((status == 0))` before the non-empty
+  check, so only a helper that actually exited cleanly can scope the search.
+- Prevention: a spawned helper's exit status is part of its answer, not
+  optional metadata — read it, or do not capture it. Treat an assigned-but-
+  unread status variable in a Bash helper wrapper as a defect, not lint
+  noise.
+- Evidence: `bash/search.bash` (`_mbx_search_repo_root`);
+  `tests/bash/modules.bash` R-3 (a helper that prints a plausible root but
+  exits nonzero must fall through to cwd), confirmed to fail against the
+  unfixed code.
+
+## M-068 — A declared workspace license shipped with no license text in the tree
+
+- Discovered: 2026-08-30
+- Status: Fixed
+- Failed assumption: `Cargo.toml` has declared `license = "MIT OR
+  Apache-2.0"` since the workspace was created, and `.github/workflows/
+  release.yml` (added for `REL-001`) was written to package `LICENSE-MIT`
+  and `LICENSE-APACHE` into every release tarball on the assumption those
+  files existed. Neither file was ever in the repository.
+- Impact: the packaging step used `cp ... 2>/dev/null || true`, so the
+  missing files were swallowed and the release tarball would have shipped
+  binaries under a declared dual license with no license text — a real
+  distribution defect that the workflow's own error suppression was hiding.
+  Nothing would have failed loudly at tag time.
+- Correction: added `LICENSE-MIT` and `LICENSE-APACHE` matching the license
+  already declared in `Cargo.toml`, and removed the error suppression from
+  the packaging `cp` so a future missing file fails the release build
+  instead of silently producing an incomplete tarball. The copyright line
+  reads "The ColorBash Authors"; the repository owner should replace it if
+  they want a different holder named.
+- Prevention: `2>/dev/null || true` on a packaging step converts a missing
+  deliverable into a silent one. Suppress errors only where the failure is
+  genuinely expected and harmless, and never on the step that assembles what
+  ships.
+- Evidence: `LICENSE-MIT`, `LICENSE-APACHE`,
+  `.github/workflows/release.yml`.

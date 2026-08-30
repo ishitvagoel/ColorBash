@@ -1570,6 +1570,28 @@ assert_eq 'cwd-hit' "$READLINE_LINE" \
 unset MBX_SEARCH_REPO
 _mbx_search_clear
 
+# R-3: a helper that prints a plausible root but exits nonzero (a killed or
+# timed-out child can leave a partial first line behind) must not be trusted;
+# the lookup falls through to cwd rather than scoping to a half-read path.
+cat >"$search_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+case " $* " in
+    *" repo root "*) printf '%s\n' "/fake/repo/root"; exit 1 ;;
+    *" search repo "*) printf '%s\n' "repo-hit" ;;
+    *" search cwd "*) printf '%s\n' "cwd-hit" ;;
+    *" search recent "*) printf '%s\n' "recent-hit" ;;
+    *) printf '%s\n' "other-hit" ;;
+esac
+EOF
+MBX_SEARCH_REPO=1
+READLINE_LINE=
+READLINE_POINT=0
+_mbx_search_insert
+assert_eq 'cwd-hit' "$READLINE_LINE" \
+    'a repo root printed by a failing helper must not be used'
+unset MBX_SEARCH_REPO
+_mbx_search_clear
+
 MBX_HISTORY=0
 READLINE_LINE='keep-me'
 READLINE_POINT=7
@@ -1704,6 +1726,39 @@ _MBX_HIGHLIGHT_ACTIVE=0
 _mbx_highlight_self_insert $'\x01'
 assert_eq 'echo keep' "$_MBX_HIGHLIGHT_PLAIN" \
     'highlight self-insert must refuse C0 bytes'
+
+# H-6: MBX_HIGHLIGHT=1 and MBX_HISTORY=1 can both be on (only ghost and
+# highlight are mutually exclusive), so a history RECORD's ACK can still be
+# queued on the shared coprocess fd when a keystroke lands mid-cycle. The wire
+# path must skip it and keep reading for its own STYLED frame, the way ghost's
+# identical loop already does, instead of tearing down a healthy helper.
+_MBX_TEST_ENGINE_STOPPED=0
+_mbx_engine_write() { return 0; }
+_mbx_engine_stop() { _MBX_TEST_ENGINE_STOPPED=1; }
+exec {highlight_wire_fd}< <(printf '%s\n%s\n' \
+    $'MBX2\t90\tACK' $'MBX2\t91\tSTYLED\t1\t4\techo')
+_MBX_ENGINE_OUT_FD=$highlight_wire_fd
+_mbx_highlight_refresh_wire 'echo' 4 1 "$(_mbx_deadline_after 2 && printf '%s' "$REPLY")" || \
+    fail 'highlight wire path should skip a queued ACK and accept its own STYLED frame'
+assert_eq 'echo' "$REPLY" 'highlight wire path should return the STYLED line after skipping an ACK'
+assert_eq 4 "$_MBX_HIGHLIGHT_STYLED_POINT" \
+    'highlight wire path should return the STYLED point after skipping an ACK'
+assert_eq 0 "$_MBX_TEST_ENGINE_STOPPED" \
+    'a queued ACK must not stop the coprocess on the highlight wire path'
+exec {highlight_wire_fd}<&-
+
+# H-7: an unrelated frame that is not an ACK is still a hard desync and must
+# stop the engine, so the fix above does not widen into "ignore everything".
+exec {highlight_wire_fd}< <(printf '%s\n' $'MBX2\t92\tPONG')
+_MBX_ENGINE_OUT_FD=$highlight_wire_fd
+_MBX_TEST_ENGINE_STOPPED=0
+_mbx_highlight_refresh_wire 'echo' 4 1 "$(_mbx_deadline_after 2 && printf '%s' "$REPLY")" && \
+    fail 'highlight wire path should fail on an unexpected non-ACK frame'
+assert_eq 1 "$_MBX_TEST_ENGINE_STOPPED" \
+    'an unexpected non-ACK frame must stop the coprocess on the highlight wire path'
+exec {highlight_wire_fd}<&-
+unset -f _mbx_engine_write _mbx_engine_stop
+unset _MBX_ENGINE_OUT_FD _MBX_TEST_ENGINE_STOPPED
 
 unset MBX_BIN MBX_HIGHLIGHT _MBX_HIGHLIGHT_PLAIN _MBX_HIGHLIGHT_POINT \
     _MBX_HIGHLIGHT_ACTIVE _MBX_HIGHLIGHT_INSTALLED _MBX_HIGHLIGHT_BOUND READLINE_LINE READLINE_POINT

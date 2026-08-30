@@ -149,6 +149,11 @@ _mbx_search_repo_root() {
         status=$REPLY
     fi
     _mbx_search_restore_jobs
+    # Accept the root only when the helper actually succeeded. `mbx repo root`
+    # prints nothing and exits nonzero outside a repository or under
+    # MBX_DISABLE_GIT=1, but a timed-out or killed child can leave a partial
+    # first line in `root`; the exit status is what distinguishes them.
+    ((status == 0)) || return 1
     [[ -n $root ]] || return 1
     REPLY=$root
     return 0

@@ -301,6 +301,16 @@ _mbx_highlight_refresh_wire() {
             _mbx_engine_stop
             return 1
         }
+        # A history RECORD's ACK can still be queued on the shared fd when a
+        # keystroke lands mid-cycle: MBX_HIGHLIGHT=1 and MBX_HISTORY=1 are not
+        # mutually exclusive (only ghost and highlight are), and both features
+        # read the one coprocess. Skip it the way ghost's identical loop does
+        # rather than tearing down a healthy helper.
+        if ((${#fields[@]} == 3)) && \
+            [[ ${fields[0]} == "$_MBX_PROTOCOL_MAGIC_HISTORY" && \
+                ${fields[2]} == ACK ]]; then
+            continue
+        fi
         _mbx_engine_stop
         return 1
     done
