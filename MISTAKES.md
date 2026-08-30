@@ -1805,3 +1805,40 @@ to prevent recurrence, not to assign blame.
   PROMPT_COMMAND did not receive the command status" and passes with it, run
   against a from-source Bash 5.0 placed first in `PATH` so the inner shells are
   genuinely 5.0.
+
+## M-077 — `mbx history clear` failed on lock contention a user was already waiting through
+
+- Discovered: 2026-08-30
+- Status: Fixed
+- Failed assumption: `BUSY_TIMEOUT_MS` (100 ms) is applied to every SQLite
+  connection the history store opens, on the assumption that one budget suits
+  every caller. It does not. 100 ms is exactly right for the prompt path — MBX
+  must never stall the prompt waiting on another shell's lock, and dropping a
+  record is the designed degradation there. It is exactly wrong for a command
+  the person at the keyboard typed and is already waiting on.
+- Impact: `HistoryControl::clear` opened its connection through
+  `open_connection`, which does wait out contention on the *open*, and then ran
+  `DELETE FROM history` with no retry at all — only the connection's 100 ms
+  `busy_timeout`. A second shell writing at that moment surfaced to the user as
+  `mbx: history write: database is locked` on a command that had every reason
+  to succeed. Two open shells is the ordinary case for a shell integration, not
+  an edge case. Found because it failed CI on PR #53, in a diff that touched no
+  history code.
+- Correction: `clear` now goes through `execute_batch_with_lock_retry_until`,
+  machinery this file already had and this one statement had never used, with a
+  new `USER_COMMAND_BUSY_DEADLINE_MS` (2 s) budget. The hot-path
+  `BUSY_TIMEOUT_MS` is untouched, so nothing about the prompt's
+  never-stall guarantee changes. `delete` needs nothing — it removes files
+  rather than touching SQLite — so `clear` was the only user-invoked write
+  exposed.
+- Prevention: a single timeout constant shared between a latency-critical hot
+  path and a user-invoked command encodes one policy for two situations with
+  opposite requirements. When adding a budget, name the caller it is for. The
+  tell here was a retry helper sitting in the same file, used by the writer
+  loop and by `open_connection`, that the one statement which actually reached
+  a user had skipped.
+- Evidence: `crates/cli/src/storage.rs`
+  (`clear_waits_out_a_concurrent_writer_instead_of_failing`), which holds the
+  write lock from a second connection for 400 ms — past the hot-path budget,
+  inside the user-command one. Against the unfixed code it reproduces CI's
+  exact failure, `HistoryError { kind: Write, message: "database is locked" }`.
