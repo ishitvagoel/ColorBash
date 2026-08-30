@@ -1461,3 +1461,43 @@ to prevent recurrence, not to assign blame.
   ships.
 - Evidence: `LICENSE-MIT`, `LICENSE-APACHE`,
   `.github/workflows/release.yml`.
+
+## M-069 — A parsing test was gated on a 50 ms wall-clock budget it could not control
+
+- Discovered: 2026-08-30
+- Status: Fixed
+- Failed assumption: `provider::tests::context_returns_root_and_branch_for_a_worktree`
+  (and two sibling tests that also drive the real `git` binary) asserted that
+  `GitRepositoryStatusProvider` reads back the right repository root and
+  branch. Because the provider hard-clamps every Git acquisition to
+  `MAX_GIT_DEADLINE` (50 ms) — a product invariant that
+  `configured_deadline_is_clamped_to_fifty_milliseconds` asserts on purpose,
+  and that no caller can raise — each of these tests was *also*, silently,
+  an assertion that the machine running it can fork and exec `git` twice
+  inside 50 ms. That held on every developer machine it was written on.
+- Impact: it does not hold on a shared CI runner. On the first push of this
+  branch the test timed out in the `Canonical suite (stable)` job and passed
+  in the `MSRV (Rust 1.85.0)` job — same commit, same runner image, opposite
+  results, which is direct evidence the failure is machine-speed dependent
+  and not a code regression. Left alone this would have made the canonical
+  suite intermittently red for reasons unrelated to any change under review,
+  which is the fastest way to teach a team to ignore a red suite.
+- Correction: added a `retry_while_timed_out` test helper that retries **only**
+  `ProviderErrorKind::Timeout`, bounded at 20 attempts with a 10 ms pause, and
+  applied it at the three sites that spawn the real `git`. The product
+  deadline is untouched — loosening it was never an option and would have
+  destroyed the invariant these tests exist to protect.
+- Why this is not "just retrying a flake": the retry is scoped to the single
+  error kind that expresses "this machine was slow", and to nothing else. A
+  genuine regression — a wrong root, a wrong branch, a malformed-output or
+  spawn error — still fails on the first attempt.
+  `timeout_retry_helper_retries_only_timeouts` asserts exactly that, so the
+  narrowness is evidenced rather than merely intended.
+- Prevention: a test whose subject is parsing or correctness must not also be
+  an unstated benchmark. When the code under test carries a wall-clock
+  deadline, decide explicitly which of the two properties each test is
+  measuring, and isolate the timing assertion into a test that says so in its
+  name.
+- Evidence: `crates/cli/src/provider.rs` (`retry_while_timed_out` and its
+  contract test); the diverging stable/MSRV results on commit `57c5957`
+  (`actions/runs/33290559060`).
