@@ -1372,8 +1372,25 @@ to prevent recurrence, not to assign blame.
   happens before the save, or cap the output to the space that exists. And
   when writing the test, assert the state that only the defect can produce —
   not the state a later redraw will restore regardless.
+- Follow-up defect introduced by the fix, caught in review before merge:
+  capping the *draw* without capping the *selection* let navigation and
+  acceptance address rows that were never on screen. With eight candidates on
+  a six-row terminal only four rows are drawn, but `_mbx_comp_cycle_next` and
+  `_mbx_comp_cycle_prev` still advanced modulo all eight, so past index 3
+  nothing was highlighted and `_mbx_comp_accept_ranked` would insert a
+  candidate the user had never seen — a direct violation of the project's
+  central promise that nothing is inserted the user did not choose.
+  `_MBX_COMP_OVERLAY_SHOWN` now records the drawn count on every path
+  (computed before the tty branch, so it means the same thing whether or not
+  this process owns a terminal) and bounds both cycling and acceptance.
+  Covered by `tests/bash/modules.bash` OV-3, whose accept case needed a
+  matching ranked snapshot to reach the insertion at all — without it the
+  eligibility gate refused for an unrelated reason and the assertion was
+  vacuous, passing against both the fixed and unfixed code. A control case
+  asserting that a *drawn* row does insert now guards that.
 - Evidence: `bash/completion.bash`
-  (`_mbx_comp_overlay_reserve`, `_mbx_comp_overlay_capacity`);
+  (`_mbx_comp_overlay_reserve`, `_mbx_comp_overlay_capacity`,
+  `_MBX_COMP_OVERLAY_SHOWN`);
   `crates/pty/tests/overlay_screen.rs`
   (`overlay_near_the_bottom_of_a_short_terminal_leaves_the_prompt_intact`, no
   longer `#[ignore]`d — it fails against the unfixed code listing the five

@@ -232,6 +232,11 @@ _mbx_comp_overlay_snapshot() {
         _MBX_COMP_OVERLAY_DESCS+=("${_MBX_COMP_DESCS[idx]:-}")
     done
     _MBX_COMP_OVERLAY_INDEX=0
+# How many candidates the last draw actually put on screen. The overlay caps
+# its draw at what the terminal can hold, so this can be fewer than the
+# snapshot holds; navigation and acceptance are bounded by it so neither can
+# reach a row the user cannot see (M-065 follow-up).
+_MBX_COMP_OVERLAY_SHOWN=0
 }
 
 _mbx_comp_identifier_ok() {
@@ -388,7 +393,14 @@ _mbx_comp_accept_ranked() {
     local token=${_MBX_COMP_RANKED_REPLY-}
     local current
     if [[ ${_MBX_COMP_OVERLAY_VISIBLE:-0} == 1 ]]; then
-        token=${_MBX_COMP_OVERLAY_CANDIDATES[_MBX_COMP_OVERLAY_INDEX]:-}
+        # Only a row the overlay actually drew may be accepted. Nothing should
+        # be insertable that the user never had on screen to choose.
+        local shown=${_MBX_COMP_OVERLAY_SHOWN:-0}
+        if ((shown > 0 && _MBX_COMP_OVERLAY_INDEX < shown)); then
+            token=${_MBX_COMP_OVERLAY_CANDIDATES[_MBX_COMP_OVERLAY_INDEX]:-}
+        else
+            token=
+        fi
         _mbx_comp_overlay_dismiss
     fi
     [[ -n $token ]] || return 0
@@ -430,7 +442,9 @@ _mbx_comp_cycle_ranked() {
 
 _mbx_comp_cycle_prev() {
     if [[ ${_MBX_COMP_OVERLAY_VISIBLE:-0} == 1 ]]; then
-        local n=${#_MBX_COMP_OVERLAY_CANDIDATES[@]}
+        # Wrap within the rows on screen, not the whole snapshot.
+        local n=${_MBX_COMP_OVERLAY_SHOWN:-0}
+        ((n > 0)) || n=${#_MBX_COMP_OVERLAY_CANDIDATES[@]}
         ((n > 0)) || return 0
         _MBX_COMP_OVERLAY_INDEX=$(( (_MBX_COMP_OVERLAY_INDEX + n - 1) % n ))
         _mbx_comp_overlay_refresh
@@ -501,6 +515,7 @@ _mbx_comp_overlay_clear() {
     local lines=${_MBX_COMP_OVERLAY_LINES:-0}
     [[ $lines -gt 0 ]] || {
         _MBX_COMP_OVERLAY_VISIBLE=0
+        _MBX_COMP_OVERLAY_SHOWN=0
         return 0
     }
     if _mbx_comp_overlay_have_tty; then
@@ -508,6 +523,7 @@ _mbx_comp_overlay_clear() {
     fi
     _MBX_COMP_OVERLAY_LINES=0
     _MBX_COMP_OVERLAY_VISIBLE=0
+    _MBX_COMP_OVERLAY_SHOWN=0
 }
 
 _mbx_comp_overlay_refresh() {
@@ -521,15 +537,27 @@ _mbx_comp_overlay_refresh() {
     }
     _mbx_comp_overlay_clear
     ((idx >= n)) && idx=$((n - 1))
+
+    # Decide how many rows this draw covers *before* branching on the tty, so
+    # `_MBX_COMP_OVERLAY_SHOWN` means the same thing on every path. Navigation
+    # and acceptance are bounded by it, and those must not depend on whether
+    # this particular process happens to own a terminal.
+    local draw=$((n < 8 ? n : 8))
+    _mbx_comp_overlay_capacity
+    ((draw <= REPLY)) || draw=$REPLY
+    if ((draw <= 0)); then
+        _MBX_COMP_OVERLAY_VISIBLE=0
+        _MBX_COMP_OVERLAY_SHOWN=0
+        return 0
+    fi
+    # The selection must stay on a row that is actually drawn: capping the
+    # draw without capping the index would leave nothing highlighted and let
+    # ranked accept insert a candidate the user never saw.
+    ((idx < draw)) || idx=$((draw - 1))
     _MBX_COMP_OVERLAY_INDEX=$idx
+    _MBX_COMP_OVERLAY_SHOWN=$draw
+
     if _mbx_comp_overlay_have_tty; then
-        local draw=$((n < 8 ? n : 8))
-        _mbx_comp_overlay_capacity
-        ((draw <= REPLY)) || draw=$REPLY
-        if ((draw <= 0)); then
-            _MBX_COMP_OVERLAY_VISIBLE=0
-            return 0
-        fi
         _mbx_comp_overlay_reserve "$draw"
         printf '\e7' >/dev/tty 2>/dev/null || true
         for ((i = 0; i < draw; i++)); do
@@ -608,7 +636,9 @@ _mbx_comp_install_overlay() {
 
 _mbx_comp_cycle_next() {
     if [[ ${_MBX_COMP_OVERLAY_VISIBLE:-0} == 1 ]]; then
-        local n=${#_MBX_COMP_OVERLAY_CANDIDATES[@]}
+        # Wrap within the rows on screen, not the whole snapshot.
+        local n=${_MBX_COMP_OVERLAY_SHOWN:-0}
+        ((n > 0)) || n=${#_MBX_COMP_OVERLAY_CANDIDATES[@]}
         ((n > 0)) || return 0
         _MBX_COMP_OVERLAY_INDEX=$(( (_MBX_COMP_OVERLAY_INDEX + 1) % n ))
         _mbx_comp_overlay_refresh
