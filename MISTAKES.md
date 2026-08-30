@@ -1740,3 +1740,46 @@ to prevent recurrence, not to assign blame.
 - Evidence: `crates/pty/tests/common/mod.rs` (`spawn_history_shell`,
   `wait_for_count`, `store_diagnostics`); CI runs 33291533211 and 33291535294
   on commit `8684622`.
+
+## M-076 — MBX was a complete no-op on Bash 5.0, and destroyed the user's PROMPT_COMMAND doing it
+
+- Discovered: 2026-08-30
+- Status: Fixed
+- Failed assumption: `_mbx_install_hooks` installed its prompt chain as
+  `PROMPT_COMMAND=(_mbx_capture_status "${existing[@]}" _mbx_render_prompt)`,
+  assuming an array `PROMPT_COMMAND` works on every Bash the project supports.
+  An array `PROMPT_COMMAND` is a **Bash 5.1** feature. Bash 5.0 treats the
+  variable as an ordinary string and runs element 0 only.
+- Impact: on Bash 5.0 — named as supported by `README.md` ("Bash 5.x"),
+  `docs/bash-compatibility.md`, and the `HRD-001` roadmap entry — MBX did
+  nothing at all. Only `_mbx_capture_status` ran each prompt;
+  `_mbx_render_prompt` never did, so `PS1` was never set and the shell kept its
+  stock prompt (verified: `PS1` remained `\s-\v\$ `). At the same time the
+  assignment discarded any pre-existing `PROMPT_COMMAND`, so a user who had
+  another framework installed lost that hook and gained nothing in exchange.
+  Silent in both directions.
+- Why it was invisible: every assertion about the hooks inspected the
+  *variable* rather than its *effect* — `${#PROMPT_COMMAND[@]}` was 2, which
+  looks correct and says nothing about whether Bash will run it. Local
+  development is Bash 5.2, no CI ran 5.0 before this branch added the leg, and
+  `tests/bash/smoke.bash` spawns plain `bash` for its inner shells, so running
+  the suite *with* a 5.0 interpreter still exercised 5.2 inside. Correcting an
+  earlier claim of mine in this same session: "all three Bash suites pass on a
+  from-source Bash 5.0 build" was wrong for `smoke.bash` for exactly that
+  reason — only a `bash` shim earlier in `PATH` actually tests it.
+- Correction: build the chain once, then install it as an array on Bash 5.1+
+  and as a `;`-joined string on 5.0, unsetting the variable first so a scalar
+  assignment cannot leave stale array elements behind. The 5.1+ array form is
+  kept where available because a syntax error in one entry cannot then break
+  its neighbours.
+- Prevention: assert the *effect*, not the installation. A hook installed into
+  a representation the running interpreter ignores is indistinguishable from no
+  hook at all, and only an assertion about the resulting prompt can tell them
+  apart. Any version-gated language feature used in the integration layer needs
+  the oldest supported release in CI before the feature is relied upon.
+- Evidence: `bash/hooks.bash`; `tests/bash/smoke.bash` now asserts a rendered
+  `PS1` and compares the joined `PROMPT_COMMAND` rather than an element count.
+  With the fix reverted, the suite fails on Bash 5.0 with "existing
+  PROMPT_COMMAND did not receive the command status" and passes with it, run
+  against a from-source Bash 5.0 placed first in `PATH` so the inner shells are
+  genuinely 5.0.

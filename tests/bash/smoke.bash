@@ -111,16 +111,44 @@ EOF
 )
 [[ $recovery_state == *'RECOVERY:alive:engine=0'* ]] || fail 'helper exit did not degrade to the per-call renderer'
 
+# Idempotence, asserted without pinning the representation: `PROMPT_COMMAND` is
+# an array on Bash 5.1+ and must be a plain string on 5.0, which has no array
+# support for it (M-076). Comparing the joined value before and after covers
+# both, and catches an entry being appended twice the way a length check did.
 idempotence_state=$(env MBX_TEST_ROOT="$ROOT" MBX_BIN="$MBX_TEST_BIN" TERM=dumb \
     bash --noprofile --norc -i 2>/dev/null <<'EOF'
 source "$MBX_TEST_ROOT/bash/init.bash"
-first_len=${#PROMPT_COMMAND[@]}
+first_repr="${PROMPT_COMMAND[*]}"
 source "$MBX_TEST_ROOT/bash/init.bash"
-printf 'IDEM:%s:%s:%s\n' "${_MBX_INITIALIZED:-missing}" "$first_len" "${#PROMPT_COMMAND[@]}"
+if [[ ${PROMPT_COMMAND[*]} == "$first_repr" ]]; then
+    repeat=same
+else
+    repeat=changed
+fi
+printf 'IDEM:%s:%s:%s\n' "${_MBX_INITIALIZED:-missing}" "$repeat" "${PROMPT_COMMAND[*]}"
 exit
 EOF
 )
-[[ $idempotence_state == *'IDEM:1:2:2'* ]] || fail "re-sourcing init.bash was not idempotent: $idempotence_state"
+[[ $idempotence_state == *'IDEM:1:same:'* ]] || \
+    fail "re-sourcing init.bash was not idempotent: $idempotence_state"
+[[ $idempotence_state == *'_mbx_capture_status'*'_mbx_render_prompt'* ]] || \
+    fail "init.bash did not install both prompt hooks in order: $idempotence_state"
+
+# The prompt hooks must actually *run*. Installing them into a representation
+# the running Bash ignores is a silent no-op: on Bash 5.0 an array
+# `PROMPT_COMMAND` left the shell with its stock prompt and MBX doing nothing
+# at all, and every existing assertion still passed because they only
+# inspected the variable, never the effect (M-076).
+rendered_ps1=$(env MBX_TEST_ROOT="$ROOT" MBX_BIN="$MBX_TEST_BIN" MBX_COLOR=never \
+    MBX_ICONS=never MBX_DISABLE_GIT=1 TERM=dumb \
+    bash --noprofile --norc -i 2>/dev/null <<'EOF'
+source "$MBX_TEST_ROOT/bash/init.bash"
+printf 'RENDERED_PS1:[%s]\n' "$PS1"
+exit
+EOF
+)
+[[ $rendered_ps1 == *'RENDERED_PS1:['*'> ]'* ]] || \
+    fail "the prompt hook never ran, so PS1 was never rendered: $rendered_ps1"
 
 [[ $(<"$ROOT/scripts/dev-setup.bash") == *'does not modify ~/.bashrc'* ]] || \
     fail 'dev-setup.bash must state that it does not modify ~/.bashrc'
