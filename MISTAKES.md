@@ -1619,3 +1619,41 @@ to prevent recurrence, not to assign blame.
 - Evidence: `tests/bash/modules.bash` (`measure_near_limit_prompt` and its two
   assertions); all three Bash suites pass on a from-source Bash 5.0 build and
   on Bash 5.2.
+
+## M-073 — The Bash compatibility corpus compared echoed input as if it were program output
+
+- Discovered: 2026-08-30
+- Status: Fixed
+- Failed assumption: `tests/bash/smoke.bash` proves MBX does not change Bash's
+  semantics by running `tests/bash/corpus.bash` under a plain `bash -i` and
+  again under an MBX-initialized one, then comparing every `MBX_TEST:` marker
+  with `grep -o`. The assumption was that those markers are program output.
+  They were not only that. `bash -i` reading a script from a file echoes input
+  lines into the same stream as output, and because the corpus wrote the
+  marker prefix as a literal in its own source, `grep -o` captured the echoed
+  source lines too — e.g. both `MBX_TEST:subshell=/tmp` (real output) and
+  `MBX_TEST:subshell=%s\n' "$PWD")` (the echo of the line that produced it).
+- Impact: the comparison silently asserted something it does not name and
+  cannot legitimately require — that MBX leaves Bash's *input echo*
+  byte-identical — when changing `PS1`/`PS2` and Readline state is precisely
+  what MBX is for. It also made the outcome depend on the Readline build: echo
+  matched on a vanilla Bash 5.0 and 5.2, and diverged on Ubuntu 20.04's Bash
+  5.0, where the MBX run dropped the echo of two corpus lines. CI failed there
+  with "Bash corpus semantics changed after MBX initialization" while every
+  real result — `process-substitution=test`, `array=alpha,beta`, `status=1` —
+  matched exactly. The alarm was on the one invariant this project most needs
+  to be trustworthy, and it was false.
+- Correction: the corpus now holds its marker prefix in a variable (`M`) and
+  interpolates it, so the literal string the suite greps for never appears in
+  the corpus source. Echoed input can no longer match the pattern on any
+  Readline build, which removes the entire class rather than patching the one
+  observed difference. Every construct the corpus covered before is unchanged.
+- Prevention: when a test extracts evidence from a captured stream, make the
+  evidence impossible to forge from the input that produced it. A marker
+  written literally in the script that emits it cannot distinguish "the shell
+  echoed my command" from "the program printed this".
+- Evidence: `tests/bash/corpus.bash`. The baseline marker set is now 15 lines
+  of pure program output on Bash 5.0 with no echoed source; the suite passes
+  on a from-source Bash 5.0 and on 5.2; and injecting a real semantic change
+  (an rc that alters `HOME` after sourcing `init.bash`) is still caught as
+  `-MBX_TEST:variable=/root` / `+MBX_TEST:variable=/hijacked-by-mbx`.
