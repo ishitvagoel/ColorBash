@@ -1,9 +1,24 @@
 name: CI
 
 on:
+  # `push` is scoped to the default branch on purpose. A bare `push:` fires on
+  # every branch push as well, so each commit on a PR branch ran the whole
+  # matrix twice, concurrently — two canonical suites, two MSRV jobs, and two
+  # Bash matrices competing for runners at once. The PTY suites drive real
+  # interactive shells against wall-clock deadlines, so that self-inflicted
+  # contention is what makes them flaky: on commit 8684622 the canonical suite
+  # passed in one of the two concurrent runs while MSRV failed the same ghost
+  # test in the other. Pull requests are covered by the `pull_request` trigger.
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
+
+# A new push supersedes the run in flight for the same ref; letting the old one
+# finish only adds load that slows the run whose result anyone will read.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

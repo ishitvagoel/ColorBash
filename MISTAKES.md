@@ -1657,3 +1657,35 @@ to prevent recurrence, not to assign blame.
   on a from-source Bash 5.0 and on 5.2; and injecting a real semantic change
   (an rc that alters `HOME` after sourcing `init.bash`) is still caught as
   `-MBX_TEST:variable=/root` / `+MBX_TEST:variable=/hijacked-by-mbx`.
+
+## M-074 — CI ran the whole matrix twice concurrently on every PR commit
+
+- Discovered: 2026-08-30
+- Status: Fixed
+- Failed assumption: the CI workflow rewritten for `T0-3` kept a bare `push:`
+  trigger alongside `pull_request:`, on the assumption that this simply covers
+  both cases. A bare `push:` fires on every branch push, so once a branch has
+  an open pull request each commit triggers two complete, concurrent workflow
+  runs — two canonical suites, two MSRV jobs, two Bash matrices — competing
+  for runners at the same moment. Widening that workflow from one job to six
+  in this same change multiplied the cost of the mistake without anyone
+  noticing it was there.
+- Impact: this repository's PTY suites drive real interactive Bash sessions
+  against wall-clock deadlines (`wait_for_count` allows 8 s; `read_until`
+  deadlines are similar), so runner contention is not a cosmetic cost — it is
+  the thing that makes them fail. On commit `8684622` the two concurrent runs
+  disagreed: the canonical suite passed in one while MSRV failed
+  `ctrl_p_loads_history_after_dismissing_suffix` in the other, with
+  `last=0` — nothing recorded at all in eight seconds, on identical code.
+  Superseded runs from earlier pushes were also left running, adding still
+  more load to the run whose result anyone would actually read.
+- Correction: scoped `push` to the default branch, so pull requests are
+  covered once by `pull_request`, and added a `concurrency` group keyed on
+  workflow and ref with `cancel-in-progress`, so a new push supersedes the run
+  in flight.
+- Prevention: `on: push` plus `on: pull_request` is a double-run by default,
+  not a belt-and-braces pair. Any repository whose tests are timing-sensitive
+  should treat concurrent duplicate runs as a correctness problem rather than
+  a billing one, and should set a concurrency group from the start.
+- Evidence: `.github/workflows/ci.yml`; the disagreeing pair of runs
+  33291533211 and 33291535294 on commit `8684622`.
