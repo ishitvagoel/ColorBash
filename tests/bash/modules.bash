@@ -502,16 +502,67 @@ near_limit_size=$((_MBX_PROTOCOL_MAX_MESSAGE_BYTES - \
     ${#request_prefix} - ${#request_suffix}))
 printf -v near_limit_logical_pwd '%*s' "$near_limit_size" ''
 serve_prompt_marker=${TMPDIR:-/tmp}/colorbash-serve-prompt-$BASHPID-$RANDOM
-rm -f -- "$marker" "$serve_prompt_marker"
 export MBX_STALL_SERVE_PROMPT_MARKER=$serve_prompt_marker
-MBX_RENDER_TIMEOUT=.10
-_mbx_engine_start || fail 'the near-limit-PWD fixture did not complete its handshake'
-_mbx_clock_now_us
-started_us=$REPLY
-PWD=$near_limit_logical_pwd _mbx_update_prompt 0 -
-_mbx_clock_now_us
-elapsed_us=$((REPLY - started_us))
-((elapsed_us < 200000)) || fail 'near-limit request encoding escaped the render deadline'
+
+# What must hold is that the render *deadline* governs how long a near-limit
+# request against a stalled coprocess can take. A single run against a
+# hardcoded wall-clock ceiling cannot test that, because the run also carries a
+# fixed per-version cost outside the deadline-governed section, and that cost
+# differs several-fold across the Bash releases this project supports. Measured
+# on one host at render timeouts of 50/100/200 ms, elapsed minus timeout was a
+# flat ~121 ms on Bash 5.0 and a flat ~32 ms on Bash 5.2 — the deadline is
+# honored exactly on both, but a fixed 200 ms ceiling (100 ms timeout plus
+# 100 ms of allowance) fits only the faster one. That made the old assertion a
+# benchmark of the host's Bash build rather than a check of the deadline, and
+# it failed the Bash 5.0 CI leg for that reason alone.
+#
+# So measure the deadline directly: run the same stalled request at two
+# timeouts and require the elapsed times to differ by the timeout difference.
+# The per-version fixed cost is identical in both runs and cancels out. A
+# deadline that is not honored cannot produce that difference — the stall is
+# indefinite, so a broken deadline hangs for seconds, which the absolute
+# ceiling below also catches.
+measure_near_limit_prompt() {
+    local timeout=$1
+    rm -f -- "$marker" "$serve_prompt_marker"
+    MBX_RENDER_TIMEOUT=$timeout
+    _mbx_engine_start || fail 'the near-limit-PWD fixture did not complete its handshake'
+    _mbx_clock_now_us
+    local started=$REPLY
+    PWD=$near_limit_logical_pwd _mbx_update_prompt 0 -
+    _mbx_clock_now_us
+    REPLY=$((REPLY - started))
+}
+
+# The shorter of the two runs stays at the original .10, never below it: the
+# request is a full 64 KiB and on the slowest supported Bash in a container it
+# needs that long just to reach the stalled peer. A .05 run measured the
+# deadline correctly but never sent, which is a different case than this one is
+# for.
+measure_near_limit_prompt .10
+near_limit_fast_us=$REPLY
+# The stalled peer must be reachable and the deadline must not have been
+# refreshed per call, on this run as much as the next.
+[[ -e $serve_prompt_marker ]] || fail 'the fitting near-limit request was not sent'
+[[ ! -e $marker ]] || fail 'near-limit rendering granted per-call a second budget'
+wait_for_deferred_reap
+
+measure_near_limit_prompt .20
+near_limit_slow_us=$REPLY
+near_limit_delta_us=$((near_limit_slow_us - near_limit_fast_us))
+# Window measured, not guessed: the difference lands near the nominal 100000us
+# on an idle host and compressed to ~68000us with every core saturated, so the
+# lower bound has to clear that. A deadline that does not govern produces a
+# delta of roughly zero (confirmed at -364us by sabotaging the fixture so both
+# runs share one budget), which stays far outside this window.
+((near_limit_delta_us > 30000 && near_limit_delta_us < 250000)) || \
+    fail "the render deadline did not govern the near-limit request: a 100000us larger timeout changed elapsed time by ${near_limit_delta_us}us (${near_limit_fast_us}us then ${near_limit_slow_us}us)"
+# Absolute ceiling: the stall never returns, so a deadline that fails to fire
+# leaves this in the seconds. Generous enough for the slowest supported Bash,
+# tight enough that an unbounded wait cannot pass.
+((near_limit_fast_us < 1000000)) || \
+    fail "near-limit request against a stalled coprocess was not bounded: ${near_limit_fast_us}us"
+elapsed_us=$near_limit_slow_us
 [[ -e $serve_prompt_marker ]] || fail 'the fitting near-limit request was not sent'
 [[ ! -e $marker ]] || fail 'near-limit rendering granted per-call a second budget'
 assert_eq 0 "${_MBX_ENGINE_READY:-missing}" \
@@ -663,6 +714,89 @@ declare -F mbx_configure >/dev/null 2>&1 || fail 'mbx_configure should be define
 _MBX_ROOT=
 mbx_configure --help >/dev/null 2>&1 && \
     fail 'mbx_configure without _MBX_ROOT should fail'
+
+# D-1: mbx doctor reports every section and fails closed on a missing helper.
+declare -F mbx_doctor >/dev/null 2>&1 || fail 'mbx_doctor should be defined'
+MBX_BIN=/nonexistent/mbx
+doctor_status=0
+doctor_out=$(mbx_doctor) || doctor_status=$?
+[[ $doctor_out == *'[FAIL]'*'MBX_BIN is unset or not executable'* ]] || \
+    fail "mbx doctor should fail closed on a missing helper: $doctor_out"
+((doctor_status != 0)) || fail 'mbx doctor must exit nonzero when a FAIL line was printed'
+for doctor_section in Shell 'Terminal capability' Helper Configuration \
+    'Keybinding collisions' 'History store'; do
+    [[ $doctor_out == *"$doctor_section"* ]] || \
+        fail "mbx doctor should print a $doctor_section section: $doctor_out"
+done
+
+# D-2: with a working helper, doctor reports OK for every helper check. The
+# harness sources modules non-interactively, so the shell-interactivity FAIL
+# is expected here and is not what this case is checking.
+MBX_BIN=$MBX_TEST_BIN
+doctor_out=$(mbx_doctor) || true
+[[ $doctor_out == *'[OK]   live handshake: mbx/'* ]] || \
+    fail "mbx doctor should report a live handshake: $doctor_out"
+[[ $doctor_out == *'[OK]'*'is executable'* ]] || \
+    fail "mbx doctor should report the helper as executable: $doctor_out"
+[[ $doctor_out == *'[OK]   version: mbx '* ]] || \
+    fail "mbx doctor should report the helper version: $doctor_out"
+
+# D-3: MBX_GHOST=1 and MBX_HIGHLIGHT=1 together must be reported as a FAIL.
+MBX_GHOST=1
+MBX_HIGHLIGHT=1
+doctor_status=0
+doctor_out=$(mbx_doctor) || doctor_status=$?
+[[ $doctor_out == *'[FAIL]'*'mutually exclusive'* ]] || \
+    fail "mbx doctor should flag ghost+highlight as mutually exclusive: $doctor_out"
+((doctor_status != 0)) || fail 'mbx doctor must exit nonzero when ghost+highlight collide'
+unset MBX_GHOST MBX_HIGHLIGHT
+
+# D-4: the collision report covers every chord MBX installs, not only the
+# three opt-in features. An always-on installer that declined an occupied
+# chord must be named along with its own override variable.
+_MBX_SEARCH_BOUND=0
+_MBX_SEARCH_RESTORE_BOUND=1
+_MBX_EDITOR_INSERT_BOUND=0
+_MBX_COMP_ACCEPT_BOUND=1
+_MBX_COMP_CYCLE_NEXT_BOUND=1
+_MBX_COMP_CYCLE_PREV_BOUND=1
+doctor_out=$(mbx_doctor) || true
+[[ $doctor_out == *'history-search insert (Ctrl-X h)'* ]] || \
+    fail "mbx doctor should report the history-search chord: $doctor_out"
+[[ $doctor_out == *'MBX_SEARCH_OVERRIDE=1'* ]] || \
+    fail "mbx doctor should name MBX_SEARCH_OVERRIDE for a declined search chord: $doctor_out"
+[[ $doctor_out == *'MBX_EDITOR_OVERRIDE=1'* ]] || \
+    fail "mbx doctor should name MBX_EDITOR_OVERRIDE for a declined insert-token chord: $doctor_out"
+[[ $doctor_out == *'[OK]   history-search restore (Ctrl-X l): chord bound'* ]] || \
+    fail "mbx doctor should report a bound restore chord as OK: $doctor_out"
+[[ $doctor_out != *'no MBX keystroke feature is installed'* ]] || \
+    fail "mbx doctor must not claim nothing is installed when chords are bound: $doctor_out"
+unset _MBX_SEARCH_BOUND _MBX_SEARCH_RESTORE_BOUND _MBX_EDITOR_INSERT_BOUND \
+    _MBX_COMP_ACCEPT_BOUND _MBX_COMP_CYCLE_NEXT_BOUND _MBX_COMP_CYCLE_PREV_BOUND
+
+# D-5: MBX_HISTORY=1 with a store whose path resolves but whose count fails is
+# an unusable store and must be a FAIL, not a silently omitted row count.
+doctor_stub_dir=$(mktemp -d)
+cat >"$doctor_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+case "$1 $2" in
+    "history path") printf '%s\n' "/nonexistent/store.sqlite3" ;;
+    "history count") exit 1 ;;
+    *) printf 'mbx 0.0.0-test\n' ;;
+esac
+EOF
+chmod +x "$doctor_stub_dir/mbx"
+MBX_BIN=$doctor_stub_dir/mbx
+MBX_HISTORY=1
+doctor_status=0
+doctor_out=$(mbx_doctor) || doctor_status=$?
+[[ $doctor_out == *'[FAIL]'*'could not be read'* ]] || \
+    fail "mbx doctor should fail when the history store cannot be read: $doctor_out"
+((doctor_status != 0)) || \
+    fail 'mbx doctor must exit nonzero when the history store is unreadable'
+unset MBX_HISTORY
+rm -rf "$doctor_stub_dir"
+
 unset _MBX_ROOT MBX_CONFIG MBX_HISTORY MBX_GHOST
 _MBX_USER_CONFIG_LOADED=1
 rm -f "$mbx_cfg_dir/config.bash"
@@ -1492,6 +1626,70 @@ assert_eq 'cwd-hit' "$READLINE_LINE" \
 unset MBX_SEARCH_FAILED
 _mbx_search_clear
 
+# R-1: MBX_SEARCH_REPO=1 resolves the root via `mbx repo root`, then prefers
+# repo-scoped rows over cwd (PTY evidence in
+# crates/pty/tests/history_search.rs: empty_line_inserts_repo_when_opt_in).
+cat >"$search_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+case " $* " in
+    *" repo root "*) printf '%s\n' "/fake/repo/root" ;;
+    *" search repo "*) printf '%s\n' "repo-hit" ;;
+    *" search cwd "*) printf '%s\n' "cwd-hit" ;;
+    *" search recent "*) printf '%s\n' "recent-hit" ;;
+    *) printf '%s\n' "other-hit" ;;
+esac
+EOF
+MBX_SEARCH_REPO=1
+READLINE_LINE=
+READLINE_POINT=0
+_mbx_search_insert
+assert_eq 'repo-hit' "$READLINE_LINE" \
+    'MBX_SEARCH_REPO=1 empty-line search should prefer repo-scoped rows'
+unset MBX_SEARCH_REPO
+_mbx_search_clear
+
+# R-2: a resolvable-but-empty or failed repo root falls through to cwd
+# rather than failing the whole lookup closed.
+cat >"$search_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+case " $* " in
+    *" repo root "*) exit 1 ;;
+    *" search cwd "*) printf '%s\n' "cwd-hit" ;;
+    *" search recent "*) printf '%s\n' "recent-hit" ;;
+    *) printf '%s\n' "other-hit" ;;
+esac
+EOF
+MBX_SEARCH_REPO=1
+READLINE_LINE=
+READLINE_POINT=0
+_mbx_search_insert
+assert_eq 'cwd-hit' "$READLINE_LINE" \
+    'MBX_SEARCH_REPO=1 with no repo root should fall through to cwd'
+unset MBX_SEARCH_REPO
+_mbx_search_clear
+
+# R-3: a helper that prints a plausible root but exits nonzero (a killed or
+# timed-out child can leave a partial first line behind) must not be trusted;
+# the lookup falls through to cwd rather than scoping to a half-read path.
+cat >"$search_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+case " $* " in
+    *" repo root "*) printf '%s\n' "/fake/repo/root"; exit 1 ;;
+    *" search repo "*) printf '%s\n' "repo-hit" ;;
+    *" search cwd "*) printf '%s\n' "cwd-hit" ;;
+    *" search recent "*) printf '%s\n' "recent-hit" ;;
+    *) printf '%s\n' "other-hit" ;;
+esac
+EOF
+MBX_SEARCH_REPO=1
+READLINE_LINE=
+READLINE_POINT=0
+_mbx_search_insert
+assert_eq 'cwd-hit' "$READLINE_LINE" \
+    'a repo root printed by a failing helper must not be used'
+unset MBX_SEARCH_REPO
+_mbx_search_clear
+
 MBX_HISTORY=0
 READLINE_LINE='keep-me'
 READLINE_POINT=7
@@ -1534,6 +1732,7 @@ if [ "$1" = highlight ]; then
     while [ $# -gt 0 ]; do
         case "$1" in
             --point) point=$2; shift 2 ;;
+            --color) shift 2 ;;
             *) plain="$plain${plain:+ }$1"; shift ;;
         esac
     done
@@ -1625,6 +1824,39 @@ _MBX_HIGHLIGHT_ACTIVE=0
 _mbx_highlight_self_insert $'\x01'
 assert_eq 'echo keep' "$_MBX_HIGHLIGHT_PLAIN" \
     'highlight self-insert must refuse C0 bytes'
+
+# H-6: MBX_HIGHLIGHT=1 and MBX_HISTORY=1 can both be on (only ghost and
+# highlight are mutually exclusive), so a history RECORD's ACK can still be
+# queued on the shared coprocess fd when a keystroke lands mid-cycle. The wire
+# path must skip it and keep reading for its own STYLED frame, the way ghost's
+# identical loop already does, instead of tearing down a healthy helper.
+_MBX_TEST_ENGINE_STOPPED=0
+_mbx_engine_write() { return 0; }
+_mbx_engine_stop() { _MBX_TEST_ENGINE_STOPPED=1; }
+exec {highlight_wire_fd}< <(printf '%s\n%s\n' \
+    $'MBX2\t90\tACK' $'MBX2\t91\tSTYLED\t1\t4\techo')
+_MBX_ENGINE_OUT_FD=$highlight_wire_fd
+_mbx_highlight_refresh_wire 'echo' 4 1 "$(_mbx_deadline_after 2 && printf '%s' "$REPLY")" || \
+    fail 'highlight wire path should skip a queued ACK and accept its own STYLED frame'
+assert_eq 'echo' "$REPLY" 'highlight wire path should return the STYLED line after skipping an ACK'
+assert_eq 4 "$_MBX_HIGHLIGHT_STYLED_POINT" \
+    'highlight wire path should return the STYLED point after skipping an ACK'
+assert_eq 0 "$_MBX_TEST_ENGINE_STOPPED" \
+    'a queued ACK must not stop the coprocess on the highlight wire path'
+exec {highlight_wire_fd}<&-
+
+# H-7: an unrelated frame that is not an ACK is still a hard desync and must
+# stop the engine, so the fix above does not widen into "ignore everything".
+exec {highlight_wire_fd}< <(printf '%s\n' $'MBX2\t92\tPONG')
+_MBX_ENGINE_OUT_FD=$highlight_wire_fd
+_MBX_TEST_ENGINE_STOPPED=0
+_mbx_highlight_refresh_wire 'echo' 4 1 "$(_mbx_deadline_after 2 && printf '%s' "$REPLY")" && \
+    fail 'highlight wire path should fail on an unexpected non-ACK frame'
+assert_eq 1 "$_MBX_TEST_ENGINE_STOPPED" \
+    'an unexpected non-ACK frame must stop the coprocess on the highlight wire path'
+exec {highlight_wire_fd}<&-
+unset -f _mbx_engine_write _mbx_engine_stop
+unset _MBX_ENGINE_OUT_FD _MBX_TEST_ENGINE_STOPPED
 
 unset MBX_BIN MBX_HIGHLIGHT _MBX_HIGHLIGHT_PLAIN _MBX_HIGHLIGHT_POINT \
     _MBX_HIGHLIGHT_ACTIVE _MBX_HIGHLIGHT_INSTALLED _MBX_HIGHLIGHT_BOUND READLINE_LINE READLINE_POINT

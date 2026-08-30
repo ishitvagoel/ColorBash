@@ -1,0 +1,86 @@
+name: Release
+
+# Builds and publishes prebuilt mbx binaries when a version tag is pushed.
+# This is the mechanism half of DIAG's install-path work (GAP-1 in
+# docs/repo-review-2026-08-29.md): it does not, by itself, cut a release —
+# that still requires a maintainer to push a tag matching v*, which is a
+# deliberate, human decision this workflow does not make on its own.
+#
+# Untested end-to-end as written (no tag has been pushed yet to exercise
+# it); validate the first real tag push and fix forward rather than assume
+# it is correct. The x86_64 and aarch64 legs use native GitHub-hosted
+# runners for each architecture specifically to avoid cross-compiling
+# rusqlite's bundled C sources, which would need a configured cross
+# toolchain neither leg currently has.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runs-on: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            runs-on: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust 1.85.0
+        run: |
+          rustup toolchain install 1.85.0 --profile minimal
+          rustup default 1.85.0
+      - name: Build the release binary
+        run: cargo build --release --workspace
+      - name: Package
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          stage="mbx-${version}-${{ matrix.target }}"
+          mkdir -p "$stage"
+          cp target/release/mbx "$stage/"
+          cp README.md LICENSE-MIT LICENSE-APACHE "$stage/"
+          tar -czf "${stage}.tar.gz" "$stage"
+          sha256sum "${stage}.tar.gz" > "${stage}.tar.gz.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mbx-${{ matrix.target }}
+          path: |
+            mbx-*.tar.gz
+            mbx-*.tar.gz.sha256
+
+  publish:
+    name: Publish release
+    needs: build
+    # Tag pushes only. On a `workflow_dispatch` from a branch `GITHUB_REF_NAME`
+    # is the branch name, so this job would run `gh release create main` — and
+    # `gh release create` creates a missing tag from the default branch's
+    # latest state, so a manual run would publish a bogus release *and* an
+    # unintended tag whose commit need not match the uploaded binaries. Gating
+    # here keeps `workflow_dispatch` useful as a build-only smoke test of the
+    # matrix, which is what an untested pipeline actually needs.
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create the GitHub release and upload assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            dist/*.tar.gz dist/*.tar.gz.sha256

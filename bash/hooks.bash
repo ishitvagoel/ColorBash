@@ -79,11 +79,30 @@ _mbx_install_hooks() {
     elif [[ -n ${PROMPT_COMMAND:-} ]]; then
         existing_prompt_commands=("$PROMPT_COMMAND")
     fi
-    PROMPT_COMMAND=(
+    local -a chained=(
         _mbx_capture_status
         "${existing_prompt_commands[@]}"
         _mbx_render_prompt
     )
+    # An *array* `PROMPT_COMMAND` is a Bash 5.1 feature. Bash 5.0 treats the
+    # variable as a plain string, so an array assignment there leaves the
+    # prompt running only element 0: MBX's own `_mbx_render_prompt` never runs
+    # (PS1 is never set, the shell keeps its stock prompt) and any
+    # pre-existing PROMPT_COMMAND is silently dropped. That made the whole
+    # integration a no-op on a Bash release `docs/bash-compatibility.md` names
+    # as supported, while destroying another framework's hook on the way
+    # (M-076). Join into a single string there instead; 5.1+ keeps the array,
+    # which isolates each entry from a syntax error in its neighbours.
+    if ((BASH_VERSINFO[0] > 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] >= 1))); then
+        PROMPT_COMMAND=("${chained[@]}")
+    else
+        local joined
+        printf -v joined '%s; ' "${chained[@]}"
+        # `unset` first: if PROMPT_COMMAND is already an array, a scalar
+        # assignment would only replace element 0 and leave the rest in place.
+        unset -v PROMPT_COMMAND
+        PROMPT_COMMAND=${joined%'; '}
+    fi
 
     # Bash does not expose a pre-existing DEBUG trap from within a sourced file
     # without changing context. Correctness wins: timing is explicit opt-in so

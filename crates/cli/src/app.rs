@@ -1,5 +1,5 @@
 use crate::VERSION;
-use crate::cli::{self, CliCommand, HighlightCommand, HistoryCommand, ServeTarget};
+use crate::cli::{self, CliCommand, HighlightCommand, HistoryCommand, RepoCommand, ServeTarget};
 use crate::environment;
 use crate::history::{HistoryControl, HistoryError, HistoryPolicy, HistorySearch};
 use crate::prompt::PromptRendering;
@@ -44,10 +44,17 @@ pub fn execute(command: CliCommand, renderer: &dyn PromptRendering) -> Result<()
                     Box::new(policy),
                 )))
             };
+            // Highlighting has no privacy or storage contract and does not
+            // require MBX_HISTORY=1 (ADR 0014), so the handler is always
+            // present; Bash decides whether to ever send a HIGHLIGHT frame.
+            let highlight_handler: Option<Box<dyn crate::highlight_service::HighlightHandler>> =
+                Some(Box::new(crate::highlight_service::HighlightService));
             match target {
-                ServeTarget::Stdio => transport::serve_stdio(&service, history_handler),
+                ServeTarget::Stdio => {
+                    transport::serve_stdio(&service, history_handler, highlight_handler)
+                }
                 ServeTarget::Socket(path) => {
-                    transport::serve_socket(&path, &service, history_handler)
+                    transport::serve_socket(&path, &service, history_handler, highlight_handler)
                 }
             }
         }
@@ -55,6 +62,7 @@ pub fn execute(command: CliCommand, renderer: &dyn PromptRendering) -> Result<()
         CliCommand::BenchmarkClient { socket, iterations } => benchmark_client(&socket, iterations),
         CliCommand::History(history) => execute_history(history),
         CliCommand::Highlight(highlight) => execute_highlight(highlight),
+        CliCommand::Repo(repo) => execute_repo(repo),
         CliCommand::Version => {
             println!("mbx {VERSION}");
             Ok(())
@@ -162,13 +170,42 @@ fn execute_highlight(command: HighlightCommand) -> Result<(), String> {
             text,
             point,
             no_color,
+            color,
         } => {
-            let color = !no_color && !environment::color_disabled_for_stdout();
+            let color = match color {
+                Some(explicit) => explicit,
+                None => !no_color && !environment::color_disabled_for_stdout(),
+            };
             let rendered = crate::highlight::highlight_line(&text, point, color)
                 .ok_or_else(|| "highlight input was rejected".to_owned())?;
             println!("{}", rendered.0);
             println!("{}", rendered.1);
             Ok(())
+        }
+    }
+}
+
+/// `mbx repo root` — the same ADR 0007 Git adapter history's writer already
+/// uses for repository-root enrichment, exposed as a direct CLI command so
+/// Bash never calls `git` itself (`_mbx_search_repo_root`, `MBX_SEARCH_REPO`).
+fn execute_repo(command: RepoCommand) -> Result<(), String> {
+    match command {
+        RepoCommand::Root { cwd } => {
+            if environment::git_discovery_disabled() {
+                return Err("git discovery is disabled (MBX_DISABLE_GIT=1)".to_owned());
+            }
+            let cwd = match cwd {
+                Some(path) => path,
+                None => std::env::current_dir().map_err(|error| error.to_string())?,
+            };
+            let provider = GitRepositoryStatusProvider::default();
+            match provider.context(&cwd).map_err(|error| error.to_string())? {
+                Some(context) => {
+                    println!("{}", context.root);
+                    Ok(())
+                }
+                None => Err("not inside a Git repository".to_owned()),
+            }
         }
     }
 }

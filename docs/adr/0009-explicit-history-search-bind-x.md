@@ -35,7 +35,14 @@ user presses a dedicated chord does not.
    snapshot entry. An empty line prefers cwd-scoped rows (`history search cwd
    "$PWD"`) and falls back to newest sidecar rows (`history search recent`).
    When `MBX_SEARCH_FAILED=1`, an empty line prefers `history search failed`
-   first and falls through to cwd/recent when that query is empty. A
+   first and falls through to cwd/recent when that query is empty. When
+   `MBX_SEARCH_REPO=1`, an empty line resolves the current Git worktree root
+   via `mbx repo root --cwd "$PWD"` (Bash never calls `git` itself; the same
+   ADR 0007 adapter the history writer already uses for enrichment) and, when
+   a root resolves, prefers `history search repo ROOT`, falling through to
+   cwd/recent when the root cannot be resolved (not a worktree, helper
+   failure, or timeout) or the repo query returns no rows. `MBX_SEARCH_FAILED`
+   is checked first when both are set. A
    non-empty line prefers prefix then fuzzy with `--cwd "$PWD"`, then the same
    queries globally. Results are
    bounded (`MBX_SEARCH_LIMIT`, default 8, max 16). The selected command text
@@ -76,13 +83,15 @@ leftovers remain `deferred` (G5 revisit). Do not treat this ADR as still
 blocking ghost. Default search chord is `\C-xh` after stock `\C-x\C-r`
 (`re-read-init-file`) was found occupied (same inspect-`bind -p` prevention as
 M-040). Restore is `\C-xl`. `SRCH-003` Strategy A filters + signal are
-complete (`docs/srch-003-failed-filter-plan.md`); overlay and 100k interactive
+complete (`docs/srch-003-failed-filter-plan.md`,
+`docs/srch-003-repo-filter-plan.md`); overlay and 100k interactive
 percentiles stay `deferred`.
 
 ## Validation
 
-PTY evidence in `crates/pty/tests/history_search.rs` and module contracts in
-`tests/bash/modules.bash`. Plans: `docs/srch-001-history-search-plan.md`,
-`docs/srch-001-result-view-plan.md`, `docs/srch-002-cancel-restore-plan.md`,
-`docs/srch-003-cwd-filter-plan.md`, `docs/srch-003-cwd-prefix-plan.md`,
-`docs/srch-003-signal-plan.md`, `docs/srch-003-failed-filter-plan.md`.
+PTY evidence in `crates/pty/tests/history_search.rs` (including R-1/R-2 for
+`MBX_SEARCH_REPO`) and module contracts in `tests/bash/modules.bash`. Plans:
+`docs/srch-001-history-search-plan.md`, `docs/srch-001-result-view-plan.md`,
+`docs/srch-002-cancel-restore-plan.md`, `docs/srch-003-cwd-filter-plan.md`,
+`docs/srch-003-cwd-prefix-plan.md`, `docs/srch-003-signal-plan.md`,
+`docs/srch-003-failed-filter-plan.md`, `docs/srch-003-repo-filter-plan.md`.

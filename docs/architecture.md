@@ -80,8 +80,10 @@ crates/cli/src/
   environment.rs     one-time process environment capture
   app.rs             top-level command/use-case dispatch
   service.rs         transport-independent MBX1 request handling
+  highlight.rs       tolerant Bash lexer and terminal-safe styling (HLT-001)
+  highlight_service.rs MBX2 HIGHLIGHT/STYLED handling behind HighlightHandler (ADR 0014)
   history.rs         history ports, entry type, and drop-rule validation
-  history_service.rs MBX2 RECORD/PING handling behind HistoryHandler
+  history_service.rs MBX2 RECORD/PING/QUERY/CANCEL handling behind HistoryHandler
   policy.rs          opt-in and exclusion policy from the environment
   prompt.rs          prompt policy, segments, theme, and sanitization
   provider.rs        repository-status port and current Git adapter
@@ -187,7 +189,8 @@ The main extension and test seams are:
 | history record | `HistoryRecorder` | `QueuedHistoryStore` or recording substitutes |
 | history search | `HistorySearch` | SQLite reader or in-memory substitutes |
 | history controls | `HistoryControl` | path/count/clear/delete on the same store |
-| MBX2 handling | `HistoryHandler` | `HistoryService`; transport injects it only when history is enabled |
+| MBX2 history handling | `HistoryHandler` | `HistoryService`; transport injects it only when history is enabled |
+| MBX2 highlight handling | `HighlightHandler` | `HighlightService`; always injected (no privacy/storage contract; ADR 0014) |
 | stream exchange | generic `BufRead`/`Write` in `ClientSession` | Unix streams or in-memory cursors |
 | CLI defaults | injected lazy defaults resolver | captured environment or explicit test values |
 | Bash adapters | arguments plus `REPLY` result | real engine/fallback or focused function tests |
@@ -381,8 +384,14 @@ This slice does not enable dim paint or a type-to-filter overlay. Strategy A
 ghost is implemented (ADR 0010); Strategy A search insert, cycling, restore,
 cwd preference, and opt-in failed empty-line insert are recorded (ADR 0009).
 Opt-in syntax highlighting (`MBX_HIGHLIGHT=1`) and completion overlay
-(`MBX_COMP_OVERLAY=1`) are in `validation` (ADR 0013;
-`docs/hlt-comp-review-close-plan.md`). Invariance and admission-parity
+(`MBX_COMP_OVERLAY=1`) are in `validation` (ADR 0013/0014;
+`docs/hlt-comp-review-close-plan.md`). Highlighting's live refresh routes over
+the coprocess (`HLT-004`, ADR 0014) via an MBX2 `HIGHLIGHT`/`STYLED` frame
+dispatched by an independent `HighlightHandler`, falling back to a
+process-substitution spawn only when no coprocess is attached; it currently
+sends `color=0` unconditionally because Readline caret-renders Bash's
+`\001`/`\002` markers inside `READLINE_LINE` instead of hiding them as it does
+in `PS1` (`M-064`, open). Invariance and admission-parity
 PTY evidence is in `crates/pty/tests/history_invariance.rs`. 100k query p95 and
 hostile inertness evidence is in `docs/benchmarks/2026-08-16-history-queries.md`
 and `crates/cli/src/corpus.rs`. Prompt-boundary write-ack PTY and release

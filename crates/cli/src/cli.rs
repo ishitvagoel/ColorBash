@@ -60,7 +60,19 @@ pub enum HighlightCommand {
         text: String,
         point: usize,
         no_color: bool,
+        /// An explicit color decision from a caller that already knows the
+        /// terminal capability (Bash, via `_mbx_color_capable`). When
+        /// present it wins over `no_color` and over this process's own
+        /// stdout, which is meaningless here: direct CLI use aside, both the
+        /// coprocess and the process-substitution spawn path never have the
+        /// interactive shell's terminal on their own stdout (M-062).
+        color: Option<bool>,
     },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RepoCommand {
+    Root { cwd: Option<PathBuf> },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -75,6 +87,7 @@ pub enum CliCommand {
     },
     History(HistoryCommand),
     Highlight(HighlightCommand),
+    Repo(RepoCommand),
     Version,
     Help,
 }
@@ -93,6 +106,7 @@ pub fn parse(
         Some("benchmark-client") => parse_benchmark(&args[1..]),
         Some("history") => parse_history(&args[1..]).map(CliCommand::History),
         Some("highlight") => parse_highlight(&args[1..]).map(CliCommand::Highlight),
+        Some("repo") => parse_repo(&args[1..]).map(CliCommand::Repo),
         Some("--version" | "-V") => Ok(CliCommand::Version),
         Some("--help" | "-h") | None => Ok(CliCommand::Help),
         Some(command) => Err(format!("unknown command: {command}")),
@@ -114,7 +128,8 @@ pub fn help_text(version: &str) -> String {
          mbx history search branch NAME [--limit N]\n  \
          mbx history search fuzzy TEXT [--cwd PATH] [--limit N]\n  \
          mbx history search failed [--limit N]\n  \
-         mbx highlight TEXT [--point N] [--no-color]\n\n\
+         mbx highlight TEXT [--point N] [--no-color] [--color 0|1]\n  \
+         mbx repo root [--cwd PATH]\n\n\
          PROMPT OPTIONS:\n  --cwd PATH  --status N  --duration-ms N  --flags BITS\n  \
          --no-color  --ascii  --nerd-font  --ssh  --production  --disable-git"
     )
@@ -190,6 +205,7 @@ fn parse_highlight(args: &[String]) -> Result<HighlightCommand, String> {
     let text = args.first().cloned().ok_or("highlight requires TEXT")?;
     let mut point = text.len();
     let mut no_color = false;
+    let mut color = None;
     let mut index = 1;
     while index < args.len() {
         match args[index].as_str() {
@@ -202,15 +218,50 @@ fn parse_highlight(args: &[String]) -> Result<HighlightCommand, String> {
                     .map_err(|_| "--point must be an unsigned integer")?;
             }
             "--no-color" => no_color = true,
+            "--color" => {
+                index += 1;
+                color = Some(match args.get(index).map(String::as_str) {
+                    Some("0") => false,
+                    Some("1") => true,
+                    _ => return Err("--color requires 0 or 1".to_owned()),
+                });
+            }
             unknown => return Err(format!("unknown highlight option: {unknown}")),
         }
         index += 1;
+    }
+    if no_color && color == Some(true) {
+        return Err("--no-color conflicts with --color 1".to_owned());
     }
     Ok(HighlightCommand::Line {
         text,
         point,
         no_color,
+        color,
     })
+}
+
+fn parse_repo(args: &[String]) -> Result<RepoCommand, String> {
+    match args.first().map(String::as_str) {
+        Some("root") => {
+            let mut cwd = None;
+            let mut index = 1;
+            while index < args.len() {
+                match args[index].as_str() {
+                    "--cwd" => {
+                        index += 1;
+                        let value = args.get(index).ok_or("--cwd requires a value")?;
+                        cwd = Some(PathBuf::from(value));
+                    }
+                    unknown => return Err(format!("unknown repo root option: {unknown}")),
+                }
+                index += 1;
+            }
+            Ok(RepoCommand::Root { cwd })
+        }
+        Some(unknown) => Err(format!("unknown repo subcommand: {unknown}")),
+        None => Err("repo requires a subcommand (root)".to_owned()),
+    }
 }
 
 fn parse_history(args: &[String]) -> Result<HistoryCommand, String> {
@@ -589,6 +640,58 @@ mod tests {
             ),)
             .unwrap_err(),
             "unknown search option: git"
+        );
+    }
+
+    #[test]
+    fn repo_root_parses_with_and_without_cwd() {
+        let command = parse(&args(&["repo", "root"]), || {
+            panic!("repo must not resolve prompt defaults")
+        })
+        .unwrap();
+        assert_eq!(command, CliCommand::Repo(RepoCommand::Root { cwd: None }));
+
+        let command = parse(&args(&["repo", "root", "--cwd", "/work"]), || {
+            panic!("repo must not resolve prompt defaults")
+        })
+        .unwrap();
+        assert_eq!(
+            command,
+            CliCommand::Repo(RepoCommand::Root {
+                cwd: Some(PathBuf::from("/work"))
+            })
+        );
+    }
+
+    #[test]
+    fn repo_root_rejects_unknown_option_and_missing_cwd_value() {
+        assert_eq!(
+            parse(&args(&["repo", "root", "--bogus"]), || panic!(
+                "repo must not resolve prompt defaults"
+            ))
+            .unwrap_err(),
+            "unknown repo root option: --bogus"
+        );
+        assert_eq!(
+            parse(&args(&["repo", "root", "--cwd"]), || panic!(
+                "repo must not resolve prompt defaults"
+            ))
+            .unwrap_err(),
+            "--cwd requires a value"
+        );
+        assert_eq!(
+            parse(&args(&["repo"]), || panic!(
+                "repo must not resolve prompt defaults"
+            ))
+            .unwrap_err(),
+            "repo requires a subcommand (root)"
+        );
+        assert_eq!(
+            parse(&args(&["repo", "branches"]), || panic!(
+                "repo must not resolve prompt defaults"
+            ))
+            .unwrap_err(),
+            "unknown repo subcommand: branches"
         );
     }
 }

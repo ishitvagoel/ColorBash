@@ -791,3 +791,89 @@ fn empty_line_failed_falls_back_when_no_failed_rows() {
     wait_all(&mut session, &["\nMBX_SRCH:failed_fallback", "> "]);
     exit_and_wait(&mut session);
 }
+
+#[test]
+fn empty_line_inserts_repo_when_opt_in() {
+    // R-1: a row recorded elsewhere in the same repository (a different
+    // subdirectory, so an exact-cwd match would miss it) outranks a newer
+    // row recorded entirely outside the repository, proving MBX_SEARCH_REPO
+    // resolves the real Git root via `mbx repo root` rather than falling
+    // through to plain recency.
+    let home = TempHome::new("srch-r1");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let repo_root = home.path().join("proj");
+    let repo_sub = repo_root.join("sub");
+    std::fs::create_dir_all(&repo_sub).expect("repo sub dir");
+    let outside = home.path().join("elsewhere");
+    std::fs::create_dir(&outside).expect("outside dir");
+
+    let mut session = spawn_history_shell(
+        home.path(),
+        &enabled_env(
+            data_home_s,
+            histfile_s,
+            &[
+                ("MBX_DISABLE_GIT", "0"),
+                ("MBX_SEARCH_REPO", "1"),
+                ("MBX_SEARCH_CWD", "0"),
+                ("MBX_HISTORY_EXCLUDE", "cd *:git *"),
+            ],
+        ),
+    );
+    wait_for(&mut session, "> ");
+    type_line(&mut session, &format!("cd '{}'", repo_root.display()));
+    wait_for(&mut session, "> ");
+    type_line(&mut session, "git init -q");
+    wait_for(&mut session, "> ");
+    type_line(&mut session, "echo MBX_SRCH:repo-row");
+    wait_all(&mut session, &["\nMBX_SRCH:repo-row", "> "]);
+    type_line(&mut session, &format!("cd '{}'", outside.display()));
+    wait_for(&mut session, "> ");
+    type_line(&mut session, "echo MBX_SRCH:outside-row");
+    wait_all(&mut session, &["\nMBX_SRCH:outside-row", "> "]);
+    wait_for_count(&mbx_bin(), &data_home, 2);
+    type_line(&mut session, &format!("cd '{}'", repo_sub.display()));
+    wait_for(&mut session, "> ");
+
+    send_keyseq(&mut session, DEFAULT_KEYSEQ);
+    assert_no_marker(&mut session, "\nMBX_SRCH:outside-row");
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["MBX_SRCH:repo-row\n", "> "]);
+    exit_and_wait(&mut session);
+}
+
+#[test]
+fn empty_line_repo_falls_back_when_not_in_a_repository() {
+    // R-2: outside any Git worktree, MBX_SEARCH_REPO=1 must not error the
+    // whole lookup closed; it falls through to recent, same as any other
+    // opt-in filter that finds nothing.
+    let home = TempHome::new("srch-r2");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let mut session = spawn_history_shell(
+        home.path(),
+        &enabled_env(
+            data_home_s,
+            histfile_s,
+            &[
+                ("MBX_DISABLE_GIT", "0"),
+                ("MBX_SEARCH_REPO", "1"),
+                ("MBX_SEARCH_CWD", "0"),
+            ],
+        ),
+    );
+    wait_for(&mut session, "> ");
+    record_printf(&mut session, "no-repo-row");
+    wait_for_count(&mbx_bin(), &data_home, 1);
+
+    send_keyseq(&mut session, DEFAULT_KEYSEQ);
+    assert_no_marker(&mut session, "\nMBX_SRCH:ok");
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["\nMBX_SRCH:no-repo-row", "> "]);
+    exit_and_wait(&mut session);
+}

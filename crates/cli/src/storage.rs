@@ -2049,18 +2049,29 @@ mod tests {
 
     #[test]
     fn unreadable_store_fails_closed_without_widening() {
+        // A privileged caller (CAP_DAC_OVERRIDE, e.g. root in a container) can
+        // open a mode-0000 file despite the denied bits; a non-privileged
+        // caller must see the open fail. Either way the mode must never be
+        // widened by our own code (M-060). Assert only what both callers can
+        // rely on, exactly as `restrictive_file_is_not_made_more_permissive`
+        // already does for mode 0400.
         let (dir, path) = temp_store("p4");
         commit_perm_sentinel(&path);
         let original_len = std::fs::metadata(&path).unwrap().len();
         chmod(&path, 0o000);
-        let error = match QueuedHistoryStore::open(&path, 8) {
-            Err(error) => error,
-            Ok(_) => panic!("mode 0000 store must not open"),
-        };
-        assert_closed_perm_error(&error);
-        assert_eq!(mode_of(&path), 0o000);
-        assert!(path.exists());
-        assert_eq!(std::fs::metadata(&path).unwrap().len(), original_len);
+        match QueuedHistoryStore::open(&path, 8) {
+            Ok(store) => {
+                assert_eq!(mode_of(&path), 0o000);
+                assert_eq!(store.count().unwrap(), 1);
+                drop(store);
+            }
+            Err(error) => {
+                assert_closed_perm_error(&error);
+                assert_eq!(mode_of(&path), 0o000);
+                assert!(path.exists());
+                assert_eq!(std::fs::metadata(&path).unwrap().len(), original_len);
+            }
+        }
         drop(dir);
     }
 

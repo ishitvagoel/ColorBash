@@ -14,6 +14,15 @@ crash/corrupt recovery, WAL/SHM `0600` never-more-permissive, many-match prefix
 covering-index, writer idle-flush for live reader visibility, and 100k-row
 v1→v2 migration evidence are recorded.
 
+`HIGHLIGHT`/`STYLED` (ADR 0014) extend MBX2 with the same generation and
+stale-skip discipline for opt-in syntax highlighting, dispatched by an
+independent `HighlightHandler` so `MBX_HIGHLIGHT=1` does not require
+`MBX_HISTORY=1`. The interactive Bash path currently always sends `color=0`
+pending `M-064` (Readline caret-renders `\001`/`\002` inside `READLINE_LINE`
+rather than treating them as zero-width, unlike their documented behavior in
+`PS1`); the field exists so a future fix changes only what Bash sends, not the
+wire format.
+
 ## Purpose
 
 MBX2 carries history records from the Bash recorder to the helper's writer port,
@@ -100,6 +109,45 @@ MBX2<TAB>request-id<TAB>ERROR<TAB>kind
 - Typed ERROR kinds include `invalid`, `unsupported`, `unsupported query mode`,
   and storage kinds; never command text.
 
+### HIGHLIGHT / STYLED (ADR 0014)
+
+Request:
+
+```text
+MBX2<TAB>request-id<TAB>HIGHLIGHT<TAB>generation<TAB>color<TAB>point<TAB>text
+```
+
+- `generation` is a decimal u64 chosen by the client; every STYLED echoes it,
+  with the same stale-generation-skip contract as `QUERY`/`RESULT` (ADR 0011):
+  an older generation is dropped, a newer one fails the request.
+- `color` is `0` or `1`. It exists so the caller — the only side that can see
+  the real terminal — decides colorability; the helper never infers it from
+  its own stdout (fixing that inference was the un-fixed half of `M-062`,
+  itself blocked by `M-064`). Any other value is `ERROR invalid`.
+- `point` is the plain-buffer cursor position (decimal usize).
+- `text` is the plain command text, percent-escaped; bounded to a few KiB by
+  the same limit `mbx highlight` enforces on the CLI.
+
+Response:
+
+```text
+MBX2<TAB>request-id<TAB>STYLED<TAB>generation<TAB>point<TAB>line
+MBX2<TAB>request-id<TAB>ERROR<TAB>kind
+```
+
+- `point` is the styled-buffer cursor position; `line` is the styled (or, at
+  `color=0`, plain) text, percent-escaped. One `STYLED` frame answers one
+  `HIGHLIGHT` request.
+- `HIGHLIGHT` has no `CANCEL`: unlike ghost's background QUERY, a highlight
+  request is synchronous from Bash's perspective (the keystroke handler
+  blocks on it up to `MBX_HIGHLIGHT_TIMEOUT`), so there is no in-flight
+  request to cancel — the generation-skip rule alone is enough to discard a
+  reply that arrives after a newer keystroke superseded it.
+- `HIGHLIGHT` is dispatched by an independent `HighlightHandler`, never by
+  `HistoryHandler`; it is present regardless of `MBX_HISTORY`, and returns
+  `ERROR unsupported` only if the composition root did not wire a
+  `HighlightHandler` at all.
+
 ## Bounds and safety
 
 - Bash enqueues RECORD with its own bounded deadline; a full queue or expired
@@ -114,7 +162,7 @@ MBX2<TAB>request-id<TAB>ERROR<TAB>kind
 
 ## Versioning
 
-The magic `MBX2` is fixed. RECORD and QUERY share framing. Exact layouts above
-are the contract for the `GHST-001` wire slice. Ghost coprocess QUERY with
-generation checks and overlapping delayed-RESULT skip are recorded. Not an
-MBX1 change.
+The magic `MBX2` is fixed. RECORD, QUERY, and HIGHLIGHT share framing. Exact
+layouts above are the contract for the `GHST-001` wire slice and, for
+HIGHLIGHT/STYLED, ADR 0014. Ghost coprocess QUERY with generation checks and
+overlapping delayed-RESULT skip are recorded. Not an MBX1 change.

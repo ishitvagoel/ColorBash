@@ -1,8 +1,13 @@
 # HLT-003: hostile-input and exact-byte stripping gates
 
-Status: `in-progress` (2026-08-27). Slices 1–2 assert evidence is recorded;
-p99 percentiles stay `deferred` per `docs/latency-budget-deferral.md`. Do not
-mark `HLT-003` or Phase 6 `complete` until the roadmap exit condition is met.
+Status: `in-progress` (2026-08-27; reviewed 2026-08-29). Slices 1–2 assert
+evidence is recorded; p99 percentiles stay `deferred` per
+`docs/latency-budget-deferral.md`. Do not mark `HLT-003` or Phase 6
+`complete` until the roadmap exit condition is met — which now also requires
+resolving `M-064` (Readline caret-renders `\001`/`\002` inside
+`READLINE_LINE`, so live color has never rendered correctly), a correctness
+gap discovered while implementing `HLT-004` (ADR 0014). `M-064` blocks
+Phase 6 independently of this plan's own remaining rank-3 item.
 
 ## Why this plan
 

@@ -10,7 +10,9 @@ presentation; it may not reinterpret a command.
 
 1. `bash/init.bash` returns immediately when `$-` does not contain `i`.
 2. Re-sourcing is idempotent.
-3. Existing scalar or array `PROMPT_COMMAND` entries remain in order.
+3. Existing scalar or array `PROMPT_COMMAND` entries remain in order, in
+   whichever representation the running Bash actually honours (see
+   "`PROMPT_COMMAND` representation" below).
 4. The status entering the prompt cycle is captured first and returned after MBX
    callbacks.
 5. A pre-existing DEBUG trap is untouched by default; duration timing is opt-in.
@@ -21,6 +23,26 @@ presentation; it may not reinterpret a command.
    `MBX_HISTORY=1` and never writes, truncates, or rewrites `.bash_history`.
 9. No suggestion or generated text is executed by this foundation.
 10. Prompt data from paths, Git, environment, or IPC is treated as untrusted.
+
+## `PROMPT_COMMAND` representation
+
+An **array** `PROMPT_COMMAND` is a Bash 5.1 feature. Bash 5.0 treats the
+variable as an ordinary string, and an array assignment there leaves the prompt
+running element 0 only — silently. `_mbx_install_hooks` therefore builds the
+chain once and installs it as an array on 5.1+ and as a `;`-joined string on
+5.0.
+
+This is not a stylistic preference. Before it was handled, MBX was a complete
+no-op on Bash 5.0 — `_mbx_render_prompt` never ran, `PS1` was never set, and
+the shell kept its stock prompt — while *also* discarding any pre-existing
+`PROMPT_COMMAND`, so a user with another framework installed lost that hook and
+gained nothing. Every existing assertion still passed, because they inspected
+the variable rather than its effect. `tests/bash/smoke.bash` now asserts that
+`PS1` is actually rendered, and its idempotence check compares the joined value
+rather than an element count so it holds for both representations (`M-076`).
+
+The 5.1+ array form is preferred where available: each entry is a separate
+command, so a syntax error in one does not break its neighbours.
 
 ## Hook findings
 

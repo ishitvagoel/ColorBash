@@ -415,3 +415,67 @@ _mbx_protocol_decode_history_error() {
         ${fields[2]} == ERROR ]] || return 1
     _mbx_unescape_field "${fields[3]}"
 }
+
+# HIGHLIGHT: request_id generation color point text → REPLY wire line.
+# Shares the MBX2 magic and generation/stale-skip discipline with QUERY
+# (ADR 0011); the frame is independent of the history handler (ADR 0014) so
+# it works whether or not MBX_HISTORY=1.
+_mbx_protocol_encode_highlight() {
+    (($# == 5)) || return 2
+
+    local request_id=$1
+    local generation=$2
+    local color=$3
+    local point=$4
+    local text=$5
+    local escaped_generation escaped_color escaped_point escaped_text
+
+    REPLY=
+    _mbx_escape_field "$generation" || return 1
+    escaped_generation=$REPLY
+    _mbx_escape_field "$color" || return 1
+    escaped_color=$REPLY
+    _mbx_escape_field "$point" || return 1
+    escaped_point=$REPLY
+    _mbx_escape_field "$text" || return 1
+    escaped_text=$REPLY
+    printf -v REPLY '%s\t%s\tHIGHLIGHT\t%s\t%s\t%s\t%s' \
+        "$_MBX_PROTOCOL_MAGIC_HISTORY" "$request_id" \
+        "$escaped_generation" "$escaped_color" "$escaped_point" "$escaped_text"
+    ((${#REPLY} <= _MBX_PROTOCOL_MAX_MESSAGE_BYTES)) || {
+        REPLY=
+        return 1
+    }
+}
+
+# STYLED frame: line → REPLY=generation; _MBX_PROTOCOL_STYLED_POINT and
+# _MBX_PROTOCOL_STYLED_LINE filled. Does not require a request-id match so a
+# delayed stale STYLED reply can be skipped the same way RESULT is.
+_MBX_PROTOCOL_STYLED_POINT=
+_MBX_PROTOCOL_STYLED_LINE=
+_mbx_protocol_parse_highlight_styled() {
+    (($# == 1)) || return 2
+
+    local line=$1
+    local -a fields=()
+    local decoded
+
+    REPLY=
+    _MBX_PROTOCOL_STYLED_POINT=
+    _MBX_PROTOCOL_STYLED_LINE=
+    _mbx_protocol_validate_line "$line" || return 1
+    _mbx_protocol_split_fields "$line" fields
+    ((${#fields[@]} == 6)) || return 1
+    [[ ${fields[0]} == "$_MBX_PROTOCOL_MAGIC_HISTORY" && \
+        ${fields[2]} == STYLED ]] || return 1
+    _mbx_unescape_field "${fields[3]}" || return 1
+    decoded=$REPLY
+    [[ $decoded =~ ^[0-9]+$ ]] || return 1
+    REPLY=$decoded
+    _mbx_unescape_field "${fields[4]}" || return 1
+    [[ $REPLY =~ ^[0-9]+$ ]] || return 1
+    _MBX_PROTOCOL_STYLED_POINT=$REPLY
+    _mbx_unescape_field "${fields[5]}" || return 1
+    _MBX_PROTOCOL_STYLED_LINE=$REPLY
+    REPLY=$decoded
+}

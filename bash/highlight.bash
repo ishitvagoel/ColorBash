@@ -13,6 +13,7 @@ _MBX_HIGHLIGHT_ENTER_ARMED=0
 _MBX_HIGHLIGHT_WRAP_CTRL_J=0
 _MBX_HIGHLIGHT_VI_WRAP_CTRL_J=0
 _MBX_HIGHLIGHT_ACCEPT_KEYSEQ=$_MBX_HIGHLIGHT_ACCEPT_DEFAULT_KEYSEQ
+_MBX_HIGHLIGHT_GENERATION=0
 
 _mbx_highlight_strip_line() {
     local line=$1
@@ -215,9 +216,110 @@ _mbx_highlight_fallback_plain() {
     _mbx_highlight_disarm_enter || true
 }
 
+# Spawn fallback: one helper process per call. Used only when no coprocess is
+# attached (MBX_IPC_MODE=off/per-call, or the coprocess died this cycle).
+_mbx_highlight_refresh_cli() {
+    (($# == 3)) || return 2
+
+    local plain=$1 point=$2 deadline=$3
+    local output_fd child_pid color styled_line styled_point
+
+    # Always 0: see the comment in _mbx_highlight_refresh_wire (M-064).
+    color=0
+    exec {output_fd}< <(exec "$MBX_BIN" highlight "$plain" --point "$point" \
+        --color "$color" 2>/dev/null)
+    child_pid=$!
+    if ! _mbx_highlight_read_two_lines "$output_fd" "$deadline"; then
+        exec {output_fd}<&-
+        _mbx_wait_child_until "$child_pid" "$deadline" >/dev/null || \
+            _mbx_terminate_child "$child_pid"
+        return 1
+    fi
+    # Copy the payload out of REPLY/_MBX_HIGHLIGHT_STYLED_POINT before
+    # _mbx_wait_child_until, which overwrites REPLY with an exit status
+    # (M-049/M-055).
+    styled_line=$REPLY
+    styled_point=${_MBX_HIGHLIGHT_STYLED_POINT:-0}
+    exec {output_fd}<&-
+    _mbx_wait_child_until "$child_pid" "$deadline" >/dev/null || \
+        _mbx_terminate_child "$child_pid"
+    REPLY=$styled_line
+    _MBX_HIGHLIGHT_STYLED_POINT=$styled_point
+    return 0
+}
+
+# Coprocess path: one HIGHLIGHT/STYLED round trip over the already-warm
+# transport, matching ghost's QUERY/RESULT shape (ADR 0011 generation and
+# stale-reply skip; ADR 0014 extends the same discipline to highlighting). A
+# delayed STYLED reply for an older generation is skipped rather than treated
+# as a hard failure, so a backed-up coprocess cannot desync the line buffer.
+_mbx_highlight_refresh_wire() {
+    (($# == 4)) || return 2
+
+    local plain=$1 point=$2 generation=$3 deadline=$4
+    local request_id response result_gen color
+    local -a fields=()
+
+    # Always 0: Bash's own Readline redisplay renders \001/\002 using its
+    # standard unprintable-control-character convention (caret notation, e.g.
+    # `^A^[[35m^B`) when they appear inside READLINE_LINE, unlike their
+    # documented zero-width behavior inside PS1. Passing a real color
+    # decision here would replace plain typed text with visibly garbled
+    # output on every keystroke. See M-064; fixing this needs a follow-up ADR
+    # on a rendering technique Readline actually hides within the edit
+    # buffer, not just a wire-protocol change.
+    color=0
+    ((_MBX_REQUEST_ID += 1))
+    request_id=$_MBX_REQUEST_ID
+    _mbx_protocol_encode_highlight "$request_id" "$generation" "$color" "$point" "$plain" || \
+        return 1
+    if ! _mbx_engine_write "$REPLY" "$deadline"; then
+        # A failed write can leave the coprocess desynced; stop so the prompt
+        # path starts a clean helper next cycle (matches the ghost wire path).
+        _mbx_engine_stop
+        return 1
+    fi
+    while _mbx_deadline_remaining "$deadline" >/dev/null; do
+        if ! _mbx_engine_read_line "$_MBX_ENGINE_OUT_FD" "$deadline"; then
+            return 1
+        fi
+        response=$REPLY
+        if _mbx_protocol_parse_highlight_styled "$response"; then
+            result_gen=$REPLY
+            if ((result_gen == generation)); then
+                REPLY=$_MBX_PROTOCOL_STYLED_LINE
+                _MBX_HIGHLIGHT_STYLED_POINT=$_MBX_PROTOCOL_STYLED_POINT
+                return 0
+            fi
+            if ((result_gen < generation)); then
+                continue
+            fi
+            return 1
+        fi
+        fields=()
+        _mbx_protocol_split_fields "$response" fields || {
+            _mbx_engine_stop
+            return 1
+        }
+        # A history RECORD's ACK can still be queued on the shared fd when a
+        # keystroke lands mid-cycle: MBX_HIGHLIGHT=1 and MBX_HISTORY=1 are not
+        # mutually exclusive (only ghost and highlight are), and both features
+        # read the one coprocess. Skip it the way ghost's identical loop does
+        # rather than tearing down a healthy helper.
+        if ((${#fields[@]} == 3)) && \
+            [[ ${fields[0]} == "$_MBX_PROTOCOL_MAGIC_HISTORY" && \
+                ${fields[2]} == ACK ]]; then
+            continue
+        fi
+        _mbx_engine_stop
+        return 1
+    done
+    return 1
+}
+
 _mbx_highlight_refresh() {
-    local deadline output_fd child_pid plain=${_MBX_HIGHLIGHT_PLAIN-} point=${_MBX_HIGHLIGHT_POINT:-0}
-    local styled_line styled_point
+    local deadline plain=${_MBX_HIGHLIGHT_PLAIN-} point=${_MBX_HIGHLIGHT_POINT:-0}
+    local styled_line styled_point status=1
 
     [[ -x ${MBX_BIN:-} ]] || return 1
     [[ ${MBX_HIGHLIGHT:-} == 1 ]] || return 1
@@ -229,21 +331,18 @@ _mbx_highlight_refresh() {
     [[ $- == *b* ]] && _MBX_HIGHLIGHT_SAVED_NOTIFY=1
     set +m
     set +b
-    exec {output_fd}< <(exec "$MBX_BIN" highlight "$plain" --point "$point" 2>/dev/null)
-    child_pid=$!
-    if ! _mbx_highlight_read_two_lines "$output_fd" "$deadline"; then
-        exec {output_fd}<&-
-        _mbx_wait_child_until "$child_pid" "$deadline" >/dev/null || \
-            _mbx_terminate_child "$child_pid"
-        _mbx_highlight_restore_jobs
-        return 1
+    ((_MBX_HIGHLIGHT_GENERATION += 1))
+    if [[ ${_MBX_ENGINE_READY:-0} == 1 ]] && \
+        declare -F _mbx_engine_write >/dev/null 2>&1; then
+        _mbx_highlight_refresh_wire "$plain" "$point" "$_MBX_HIGHLIGHT_GENERATION" \
+            "$deadline" && status=0
+    else
+        _mbx_highlight_refresh_cli "$plain" "$point" "$deadline" && status=0
     fi
+    _mbx_highlight_restore_jobs
+    ((status == 0)) || return 1
     styled_line=$REPLY
     styled_point=${_MBX_HIGHLIGHT_STYLED_POINT:-0}
-    exec {output_fd}<&-
-    _mbx_wait_child_until "$child_pid" "$deadline" >/dev/null || \
-        _mbx_terminate_child "$child_pid"
-    _mbx_highlight_restore_jobs
     _mbx_highlight_validate_styled "$styled_line" || return 1
     READLINE_LINE=$styled_line
     READLINE_POINT=$styled_point

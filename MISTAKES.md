@@ -1153,3 +1153,633 @@ to prevent recurrence, not to assign blame.
 - Evidence: `maybe_build` in `scripts/configure.bash`; smoke
   `--build` without cargo.
 
+
+## M-060 — A permission test assumed CAP_DAC_OVERRIDE could not be present
+
+- Discovered: 2026-08-29
+- Status: Fixed
+- Failed assumption: `unreadable_store_fails_closed_without_widening` treated
+  a successful open of a mode-`0000` file as impossible, so it panicked
+  instead of asserting an invariant.
+- Impact: root (or any caller with `CAP_DAC_OVERRIDE`, the default uid in many
+  container images) bypasses the mode-`0000` denial at the kernel level, so
+  `QueuedHistoryStore::open` succeeds there. `bash tests/run.bash` failed at
+  `cargo test --workspace` on such a host, before Clippy or any Bash suite
+  ran, so the canonical suite could not be completed in that environment at
+  all.
+- Correction: the test now mirrors its sibling
+  `restrictive_file_is_not_made_more_permissive` — it accepts either outcome
+  and asserts the invariant that actually holds under both: the on-disk mode
+  is never widened by our own code.
+- Prevention: a test that asserts an OS-level permission denial must accept
+  a privileged caller's outcome too, and assert the narrower invariant (no
+  widening) rather than the open's success or failure.
+- Evidence: `crates/cli/src/storage.rs`
+  (`unreadable_store_fails_closed_without_widening`); passes identically as
+  uid 0 and as a non-root user.
+
+## M-061 — A relative helper path stopped resolving after an intentional `cd`
+
+- Discovered: 2026-08-29
+- Status: Fixed
+- Failed assumption: a `$MBX_TEST_BIN` argument could stay relative for the
+  whole script, because most callers only used the absolute default.
+- Impact: `tests/integration/protocol.bash target/debug/mbx`, the exact
+  invocation `README.md` documents, failed with "No such file or directory"
+  — one case in the script `cd`s into a directory it then deletes, and a
+  relative path no longer resolves from there. Only `tests/run.bash`, which
+  always passes an absolute path, had ever exercised this script.
+- Correction: the script resolves a relative `$MBX_TEST_BIN` against the
+  invocation `$PWD` immediately after reading it, before any `cd`.
+- Prevention: a test harness that both accepts a relative path argument and
+  changes directory mid-run must resolve that argument to an absolute path
+  first, and the documented invocation must itself be run as a regression
+  case.
+- Evidence: `tests/integration/protocol.bash`; passes with both a relative
+  and an absolute `target/debug/mbx` argument.
+
+## M-062 — Highlight color was decided from the helper's own stdout, which is never a terminal
+
+- Discovered: 2026-08-29
+- Status: Mitigated
+- Failed assumption: `crate::environment::color_disabled_for_stdout()`
+  (an `io::stdout().is_terminal()` check on the `mbx` process itself) was a
+  valid way to decide whether to style `mbx highlight`'s output.
+- Impact: every production caller of `mbx highlight` — the process
+  substitution spawn (`exec {fd}< <(exec "$MBX_BIN" highlight ...)`) and the
+  MBX2 coprocess added by ADR 0014 alike — has the mbx process's own stdout
+  connected to a pipe, never the interactive terminal. `color_disabled_for_stdout()`
+  therefore always returned true in real use, so `MBX_HIGHLIGHT=1` silently
+  never styled anything in a live session, despite passing every existing
+  test (none asserted color was actually present) and being carried as
+  `validation` in the roadmap. Only a user manually running
+  `"$MBX_BIN" highlight ...` directly at their own terminal (the README's
+  demo invocation) ever saw real color, because that invocation's stdout
+  genuinely is the terminal.
+- Correction: `mbx highlight` gained an explicit `--color 0|1` (and the
+  MBX2 `HIGHLIGHT` frame an explicit `color` field) that a caller who can see
+  the real terminal — Bash, via the single `_mbx_color_capable` predicate
+  already used for prompt flags — passes explicitly, instead of the helper
+  guessing from its own stdout. `_mbx_color_capable` was factored out of
+  `_mbx_prompt_flags` in `bash/config.bash` as the one place this decision is
+  made. The pre-existing stdout-tty check remains only as the *default* for a
+  direct manual CLI invocation with no `--color` given.
+- Why `Mitigated` and not `Fixed`: the plumbing is correct and tested, but
+  `bash/highlight.bash`'s live interactive refresh (`_mbx_highlight_refresh_wire`
+  and `_mbx_highlight_refresh_cli`) still passes `color=0` unconditionally,
+  because enabling it exposed a second, deeper defect — M-064 — that must be
+  resolved first. Do not flip these to a real color decision without also
+  resolving M-064; doing so alone would replace plain typed text with visibly
+  garbled terminal output on every keystroke.
+- Prevention: a capability decision (terminal color, width, TTY-ness) must
+  come from whichever side of an IPC boundary can actually observe it, passed
+  explicitly as data — never re-derived by inspecting the other side's own
+  process state. This is the same rule ADR 0007/`PRM-007` already apply to
+  prompt rendering; highlighting had quietly violated it.
+- Evidence: `crates/cli/src/cli.rs` (`--color` parsing),
+  `crates/cli/src/app.rs::execute_highlight`, `bash/config.bash`
+  (`_mbx_color_capable`), `docs/adr/0014-highlight-over-coprocess.md`.
+
+## M-063 — `set +m` does not suppress a background job's start announcement from a keystroke callback
+
+- Discovered: 2026-08-29
+- Status: Fixed
+- Failed assumption: `_mbx_engine_write`'s and `_mbx_engine_exchange`'s
+  `( trap '' PIPE; printf ... ) &` background write was adequately silenced
+  for an interactive session because the caller (ghost, and now highlight)
+  already wraps the whole call in `set +m; ...; set -m`.
+- Impact: confirmed with a minimal reproduction (`set +m; ( sleep 0.2 ) &`
+  under a real PTY) that Bash still prints `[N] PID` for a backgrounded job
+  regardless of monitor mode, when the backgrounding happens inside a
+  `bind -x` self-insert callback — the announcement goes to the shell's own
+  stderr, not the command's. The same call from `PROMPT_COMMAND` does not
+  print it; only the keystroke-callback context does. Every wire-path
+  keystroke therefore leaked a `[N] PID` line into the terminal, corrupting
+  the redraw and, in one PTY test, cascading into repeated redraws that blew
+  through the test's timeout. This affected ghost's existing wire path too,
+  not only highlighting's new one — it had simply never been exercised
+  densely enough (or checked for this specific artifact) to be caught.
+- Correction: wrap the whole backgrounding statement's stderr, not rely on
+  job-control mode: `{ ( trap '' PIPE; printf ... ) & } 2>/dev/null`. `$!`
+  still resolves to the correct PID through the group. Applied identically in
+  `_mbx_engine_write` and `_mbx_engine_exchange`.
+- Prevention: `set +m` suppresses job-control *behavior* (SIGTSTP handling,
+  foreground/background switching), not the interactive shell's `[N] PID`
+  start announcement for a bare `&`; suppressing that announcement requires
+  redirecting the backgrounding statement's own stderr. Any future background
+  job started from a `bind -x` callback must be checked under a PTY with
+  monitor mode considered untrustworthy for this purpose.
+- Evidence: `bash/engine.bash` (`_mbx_engine_write`, `_mbx_engine_exchange`);
+  `crates/pty/tests/ghost.rs` full suite green and faster afterward (65.18s →
+  21.61s, consistent with removing spurious redraw cascades);
+  `crates/pty/tests/highlight.rs` full suite.
+
+## M-064 — Readline does not treat `\001`/`\002` as invisible inside `READLINE_LINE`
+
+- Discovered: 2026-08-29
+- Status: Open
+- Failed assumption: ADR 0013 assumed Readline's non-printing markers
+  (`RL_PROMPT_START_IGNORE`/`_END_IGNORE`, `\001`/`\002`) make an enclosed SGR
+  run zero-width and invisible wherever they appear, because that is their
+  documented behavior inside `PS1`.
+- Impact: they do not have that effect when they appear inside the *edit
+  buffer* (`READLINE_LINE`, as `bind -x` highlighting and ghost both use).
+  Confirmed empirically and at the byte level (not merely inferred): once
+  M-062's color-detection bug was fixed enough to let real styled bytes reach
+  `READLINE_LINE`, Bash's own redisplay rendered the markers and the CSI
+  escape they wrap using its ordinary unprintable-control-character
+  convention — literal, visible `^A`, `^[`, `^B` two-character sequences —
+  instead of hiding them. This means opt-in syntax highlighting's live
+  interactive path has never displayed real color correctly since its
+  original implementation; the defect was masked by M-062 (color was always
+  off in practice) and by every existing test asserting only byte-exactness
+  or plain-mode round-tripping, never that genuine color rendered
+  correctly on screen.
+- Current state: `bash/highlight.bash`'s live refresh paths
+  (`_mbx_highlight_refresh_wire`, `_mbx_highlight_refresh_cli`) deliberately
+  pass `color=0` unconditionally, so the interactive feature stays in its
+  long-standing safe (uncolored, non-garbled) state. `mbx highlight`'s direct
+  CLI output is unaffected (it never goes through Readline's buffer
+  redisplay) and does render real color, matching the README's manual demo.
+- Prevention: a technique's documented behavior for one call site (`PS1`)
+  must not be assumed to transfer to a structurally different call site
+  (`READLINE_LINE`) without a PTY test that actually captures and asserts the
+  rendered bytes contain no leftover control characters — not just that they
+  round-trip back to the plain buffer.
+- Next step (not done here): research whether any Readline-recognized
+  technique makes styling genuinely invisible within the edit buffer, or
+  whether the whole marker-based design in ADR 0013 needs a superseding
+  decision. This needs its own ADR and PTY evidence, not a wire-protocol
+  change; see `docs/adr/0014-highlight-over-coprocess.md`.
+- Evidence: byte-level capture and analysis over a live PTY session (raw
+  `0x01`/`0x1b`/`0x02` confirmed present via `od -c` on `mbx highlight`'s own
+  output, contrasted with the literal two-character `^A`/`^[`/`^B` sequences
+  Bash's redisplay produced for the same bytes once inserted into
+  `READLINE_LINE`); `crates/pty/src/session.rs`
+  (`visible_text_strips_readline_markers_around_styled_run`, added so the PTY
+  test harness can correctly strip real markers once this is fixed).
+
+## M-065 — Completion overlay's DECSC/DECRC save is invalidated by its own scroll
+
+- Discovered: 2026-08-29
+- Status: Open
+- Failed assumption: ADR 0013's completion overlay assumed `\e7` (DECSC,
+  save cursor) before drawing up to eight rows below the prompt, then `\e8`
+  (DECRC, restore) and `\e[J` (erase to end of screen) to hide it, was
+  terminal-safe. DECSC/DECRC save an *absolute* screen position.
+- Impact: reproduced with a genuine PTY session and a purpose-built VT
+  screen model (`crates/pty/src/screen.rs`, added for this evidence): at a
+  6-row terminal with the prompt a couple of lines down (an entirely
+  ordinary state, not a contrived edge case), showing an eight-candidate
+  overlay draws enough lines to scroll the screen. `\e8` then restores the
+  *pre-scroll* absolute coordinates, which no longer correspond to the
+  prompt after the scroll shifted every row up. The subsequent `\e[J` erases
+  from that stale, wrong position — the entire prompt and all prior output
+  are gone; the screen shows only the tail of the overlay itself. The
+  existing overlay PTY suite (`crates/pty/tests/completion_harness.rs`)
+  never caught this because every existing case runs at a fixed 24-row
+  window with the prompt near the top, so the draw never scrolls.
+- Why not fixed here: a correct fix needs to know the cursor's actual
+  current row, which this codebase cannot query today (no DSR — Device
+  Status Report, `\e[6n` — round trip exists; adding one means raw-mode
+  `/dev/tty` manipulation, a bounded read of the terminal's reply, and
+  restoring the caller's `stty` state, none of which is free of its own
+  correctness risk). A naive substitute — replacing the absolute restore
+  with a relative cursor-up by the known drawn-row count — fixes the row but
+  not the column (the cursor is left wherever the last overlay line's text
+  ended, not the prompt's own column), and a subsequent blind `\e[J` from
+  that column would then corrupt the *prompt line itself* instead of the
+  overlay — trading one screen-destroying bug for a different one. Shipping
+  either the known-broken behavior's twin or an unverified guess is worse
+  than shipping the evidence alone.
+- Current state: the reproducing test
+  (`overlay_near_the_bottom_of_a_short_terminal_leaves_the_prompt_intact` in
+  `crates/pty/tests/overlay_screen.rs`) is marked `#[ignore]` with this ID so
+  it documents the defect and stays reproducible on demand
+  (`cargo test -p mbx-pty --test overlay_screen -- --ignored`) without
+  failing the canonical suite for a known, already-shipped gap the review
+  found rather than introduced. A sibling test in the same file
+  (`resize_while_overlay_is_visible_leaves_a_usable_prompt`) confirms a
+  `SIGWINCH` while the overlay is visible is *not* affected — the defect is
+  specifically the scroll-during-draw case.
+- Prevention: DECSC/DECRC (or any other technique that captures an absolute
+  screen position) must not be used to bracket output whose own length can
+  push the cursor's row past the bottom of the terminal — that is exactly
+  the condition that invalidates the saved position. Any future terminal
+  overlay must first establish it will not scroll (e.g., cap drawn rows to
+  the space actually available, which requires knowing the cursor's current
+  row) or use a bracketing technique immune to scrolling.
+- Next step (not done here): either add a bounded DSR cursor-row query as
+  its own reviewed slice, or choose a different overlay rendering strategy,
+  before `COMP-004` can be marked `complete`. See
+  `docs/comp-004-overlay-plan.md` and `docs/roadmap.md`.
+- Evidence: `crates/pty/src/screen.rs` (the VT model used to observe this);
+  `crates/pty/tests/overlay_screen.rs`.
+
+## M-066 — Highlight's coprocess loop dropped the ACK tolerance its ghost twin has
+
+- Discovered: 2026-08-30
+- Status: Fixed
+- Failed assumption: `_mbx_highlight_refresh_wire` (added for `HLT-004`, ADR
+  0014) was written as a deliberate mirror of `_mbx_ghost_query_wire`, and
+  the mirroring was assumed complete because both loops implement the same
+  ADR 0011 generation and stale-reply skip. They did not match: ghost's loop
+  skips an intervening three-field `ACK` frame and keeps reading, and the
+  highlight copy omitted that branch, so any frame that was not a `STYLED`
+  fell straight through to `_mbx_engine_stop`.
+- Impact: `MBX_GHOST` and `MBX_HIGHLIGHT` are mutually exclusive, but
+  `MBX_HIGHLIGHT` and `MBX_HISTORY` are not — both features read the one
+  coprocess fd. A history `RECORD` whose `ACK` was still queued when a
+  keystroke landed mid-cycle would be read by the highlight loop, fail to
+  parse as `STYLED`, and tear down a perfectly healthy helper. The visible
+  result is highlighting silently degrading to plain text and the next
+  prompt cycle paying a fresh helper spawn, for a condition the transport
+  was explicitly designed to tolerate.
+- Correction: added the same ACK-skip branch ghost uses, with a comment
+  naming why the two features share the fd. The non-ACK case still stops the
+  engine, so the fix does not widen into "ignore every unexpected frame".
+- Prevention: when a new feature copies an existing wire loop, diff the two
+  loops rather than re-deriving them — the branches that look like defensive
+  padding (ACK tolerance here) are the ones that encode a real, already-paid
+  lesson. Two loops reading the same fd must agree about every frame kind
+  that can appear on it.
+- Evidence: `bash/highlight.bash` (`_mbx_highlight_refresh_wire`);
+  `tests/bash/modules.bash` H-6 (a queued ACK is skipped and does not stop
+  the engine) and H-7 (an unexpected non-ACK frame still stops it). Both
+  were confirmed to fail against the unfixed code before the fix landed.
+
+## M-067 — `mbx repo root` output was trusted without checking the child's exit status
+
+- Discovered: 2026-08-30
+- Status: Fixed
+- Failed assumption: `_mbx_search_repo_root` (added for the `SRCH-003` repo
+  filter) assumed a non-empty first line of output was sufficient evidence
+  that the helper had resolved a repository root, because `mbx repo root`
+  prints nothing and exits nonzero outside a repository. The function did
+  capture the child's exit status into a local, then never read it.
+- Impact: the guarded case — no repository — happened to work, because the
+  helper writes nothing there. The unguarded case is a child that is killed
+  or times out after emitting a partial first line: `_mbx_search_read_line`
+  returns that fragment, and the search would then scope history to a
+  truncated path, silently returning the wrong rows instead of falling
+  through to the cwd and recent tiers. A `status` local that is assigned and
+  never read is the tell.
+- Correction: gate acceptance on `((status == 0))` before the non-empty
+  check, so only a helper that actually exited cleanly can scope the search.
+- Prevention: a spawned helper's exit status is part of its answer, not
+  optional metadata — read it, or do not capture it. Treat an assigned-but-
+  unread status variable in a Bash helper wrapper as a defect, not lint
+  noise.
+- Evidence: `bash/search.bash` (`_mbx_search_repo_root`);
+  `tests/bash/modules.bash` R-3 (a helper that prints a plausible root but
+  exits nonzero must fall through to cwd), confirmed to fail against the
+  unfixed code.
+
+## M-068 — A declared workspace license shipped with no license text in the tree
+
+- Discovered: 2026-08-30
+- Status: Fixed
+- Failed assumption: `Cargo.toml` has declared `license = "MIT OR
+  Apache-2.0"` since the workspace was created, and `.github/workflows/
+  release.yml` (added for `REL-001`) was written to package `LICENSE-MIT`
+  and `LICENSE-APACHE` into every release tarball on the assumption those
+  files existed. Neither file was ever in the repository.
+- Impact: the packaging step used `cp ... 2>/dev/null || true`, so the
+  missing files were swallowed and the release tarball would have shipped
+  binaries under a declared dual license with no license text — a real
+  distribution defect that the workflow's own error suppression was hiding.
+  Nothing would have failed loudly at tag time.
+- Correction: added `LICENSE-MIT` and `LICENSE-APACHE` matching the license
+  already declared in `Cargo.toml`, and removed the error suppression from
+  the packaging `cp` so a future missing file fails the release build
+  instead of silently producing an incomplete tarball. The copyright line
+  reads "The ColorBash Authors"; the repository owner should replace it if
+  they want a different holder named.
+- Prevention: `2>/dev/null || true` on a packaging step converts a missing
+  deliverable into a silent one. Suppress errors only where the failure is
+  genuinely expected and harmless, and never on the step that assembles what
+  ships.
+- Evidence: `LICENSE-MIT`, `LICENSE-APACHE`,
+  `.github/workflows/release.yml`.
+
+## M-069 — A parsing test was gated on a 50 ms wall-clock budget it could not control
+
+- Discovered: 2026-08-30
+- Status: Fixed
+- Failed assumption: `provider::tests::context_returns_root_and_branch_for_a_worktree`
+  (and two sibling tests that also drive the real `git` binary) asserted that
+  `GitRepositoryStatusProvider` reads back the right repository root and
+  branch. Because the provider hard-clamps every Git acquisition to
+  `MAX_GIT_DEADLINE` (50 ms) — a product invariant that
+  `configured_deadline_is_clamped_to_fifty_milliseconds` asserts on purpose,
+  and that no caller can raise — each of these tests was *also*, silently,
+  an assertion that the machine running it can fork and exec `git` twice
+  inside 50 ms. That held on every developer machine it was written on.
+- Impact: it does not hold on a shared CI runner. On the first push of this
+  branch the test timed out in the `Canonical suite (stable)` job and passed
+  in the `MSRV (Rust 1.85.0)` job — same commit, same runner image, opposite
+  results, which is direct evidence the failure is machine-speed dependent
+  and not a code regression. Left alone this would have made the canonical
+  suite intermittently red for reasons unrelated to any change under review,
+  which is the fastest way to teach a team to ignore a red suite.
+- Correction: added a `retry_while_timed_out` test helper that retries **only**
+  `ProviderErrorKind::Timeout`, bounded at 20 attempts with a 10 ms pause, and
+  applied it at the three sites that spawn the real `git`. The product
+  deadline is untouched — loosening it was never an option and would have
+  destroyed the invariant these tests exist to protect.
+- Why this is not "just retrying a flake": the retry is scoped to the single
+  error kind that expresses "this machine was slow", and to nothing else. A
+  genuine regression — a wrong root, a wrong branch, a malformed-output or
+  spawn error — still fails on the first attempt.
+  `timeout_retry_helper_retries_only_timeouts` asserts exactly that, so the
+  narrowness is evidenced rather than merely intended.
+- Prevention: a test whose subject is parsing or correctness must not also be
+  an unstated benchmark. When the code under test carries a wall-clock
+  deadline, decide explicitly which of the two properties each test is
+  measuring, and isolate the timing assertion into a test that says so in its
+  name.
+- Evidence: `crates/cli/src/provider.rs` (`retry_while_timed_out` and its
+  contract test); the diverging stable/MSRV results on commit `57c5957`
+  (`actions/runs/33290559060`).
+
+## M-070 — `mbx doctor` reported three of the ten chords MBX installs
+
+- Discovered: 2026-08-30
+- Status: Fixed
+- Failed assumption: `DIAG-001` advertised per-feature keybinding-collision
+  coverage, and the implementation's feature table listed only the three
+  opt-in features (`MBX_GHOST`, `MBX_HIGHLIGHT`, `MBX_COMP_OVERLAY`). The
+  assumption was that those are the only installers that can decline a chord.
+  They are not: history-search insert and restore, insert token, ranked accept,
+  and ranked cycle all install whenever the shell is interactive, all decline
+  an already-bound chord, and all have their own `*_OVERRIDE` escape hatch.
+- Impact: the most likely collisions were invisible. With `\C-xh` already
+  bound, `_mbx_search_install` leaves `_MBX_SEARCH_BOUND=0` and doctor printed
+  "no opt-in keystroke feature is enabled" — actively misleading, in the one
+  command whose entire purpose is to explain why something is not working.
+  Two further defects sat in the same section: a feature whose chord was
+  declined was attributed to "stdout is not a tty" even for features that
+  never test a tty, and the installers that do test one test *stdin*
+  (`-t 0`), not stdout, so the explanation named the wrong file descriptor.
+  Separately, `MBX_HISTORY=1` with a store whose path resolves but whose row
+  count fails printed no diagnostic at all, letting doctor exit zero while
+  history capture was unusable.
+- Correction: widened the table to all ten chords, added a per-row flag so the
+  tty explanation is offered only by the two features that actually gate on
+  one and now asks about stdin to match them, distinguished "installer has not
+  run" from "chord declined", and made an unreadable history store a `[FAIL]`
+  with a fix line.
+- Prevention: a diagnostic command's coverage claim is a contract like any
+  other and needs a test that enumerates what it must cover. "Reports every
+  collision" is not evidenced by a test that only exercises the features the
+  author happened to think of.
+- Evidence: `bash/config.bash` (`mbx_doctor`); `tests/bash/modules.bash` D-4
+  (an always-on installer that declined its chord is named along with its
+  override variable) and D-5 (an unreadable store is a `[FAIL]` and a nonzero
+  exit). Reported by an automated reviewer on PR #52 and confirmed against the
+  installers before fixing.
+
+## M-071 — The release workflow would publish a release from a manual branch run
+
+- Discovered: 2026-08-30
+- Status: Fixed
+- Failed assumption: `.github/workflows/release.yml` (added for `REL-001`)
+  carried `workflow_dispatch` so the pipeline could be smoke-tested without
+  cutting a tag, on the assumption that a manual run would exercise the build
+  and stop there.
+- Impact: both jobs ran. On a `workflow_dispatch` from a branch,
+  `GITHUB_REF_NAME` is the branch name, so the publish step would have run
+  `gh release create main` — and `gh release create` creates a missing tag
+  from the default branch's latest state, so a single manual run would have
+  published a bogus release *and* an unintended tag whose commit need not
+  match the uploaded binaries. The one action the workflow's own header
+  comment promised required "a deliberate, human decision" was reachable by
+  the button meant for testing.
+- Correction: gated the `publish` job on
+  `startsWith(github.ref, 'refs/tags/v')`. `workflow_dispatch` now does what
+  it was meant to do — build the matrix and stop — which is exactly what an
+  untested pipeline needs.
+- Prevention: a workflow with both a tag trigger and a manual trigger must
+  state, per job, which triggers that job is for. Any job with an external
+  side effect defaults to the narrower trigger.
+- Evidence: `.github/workflows/release.yml`. Reported by an automated reviewer
+  on PR #52.
+
+## M-072 — A Bash render-deadline test was a benchmark of the host's Bash build
+
+- Discovered: 2026-08-30
+- Status: Fixed
+- Failed assumption: `tests/bash/modules.bash` asserted that a near-64 KiB
+  prompt request against a deliberately stalled coprocess completes in under
+  200 000 us, with `MBX_RENDER_TIMEOUT=.10`. The assumption behind that
+  constant was that the fixed cost outside the deadline-governed section fits
+  in the remaining 100 ms on every supported Bash.
+- Impact: the Bash 5.0 CI leg — added by this same branch, so this had never
+  been observed before — failed on it, while 5.1 and 5.2 passed. Reproduced
+  locally against a from-source Bash 5.0 build. Measuring elapsed minus
+  timeout at render timeouts of 50/100/200 ms gave a flat ~121 ms on Bash 5.0
+  and a flat ~32 ms on Bash 5.2. The flatness is the finding: **the deadline is
+  honored exactly on both versions**, and what differs is only a fixed
+  per-version cost that the deadline never governed. The test was failing a
+  supported configuration for a property it was not trying to assert, and no
+  product defect existed.
+- Correction: replaced the single-run wall-clock ceiling with a differential
+  measurement — the same stalled request is run at two render timeouts and the
+  elapsed times must differ by the timeout difference. The per-version fixed
+  cost is identical in both runs and cancels. A generous absolute ceiling still
+  catches an unbounded wait, which is what a genuinely broken deadline
+  produces, since the stall never returns.
+- Why this is not loosening the test: the new form asserts something the old
+  one could not — that elapsed time *tracks the deadline*. Sabotaging the
+  fixture so the timeout no longer governs (both runs at one budget) makes it
+  fail with a delta of -364 us, confirmed before landing.
+- Prevention: when a test's subject is that a deadline is honored, assert
+  against the deadline, not against a wall-clock constant that also has to
+  cover unrelated fixed costs. If a constant is unavoidable, derive it from a
+  measurement taken on the same host in the same run.
+- Follow-up correction, same day: the first version of the differential ran
+  the shorter leg at a 50 ms timeout, below the original 100 ms. That measured
+  the deadline correctly but was too short for a 64 KiB request to reach the
+  stalled peer at all on Bash 5.0 in a container, so `the fitting near-limit
+  request was not sent` failed instead. Both legs now sit at or above the
+  original timeout (100 ms and 200 ms). The tolerance window is measured
+  rather than guessed: the delta lands near the nominal 100 000 us idle and
+  compressed to ~68 000 us with every core saturated, so the window is
+  30 000-250 000 us, still far from the ~0 a non-governing deadline produces.
+- Known remaining exposure, not fixed here: `tests/bash/modules.bash` contains
+  nine hardcoded wall-clock ceilings of this same shape (lines ~364, 419, 438,
+  458, 474, 489, 583, 607, 628). Only the near-limit one has ever failed in
+  CI, and the rest pass on Bash 5.0, 5.1, and 5.2 there, so they are left
+  alone rather than rewritten inside an already-large change. Under
+  deliberately induced full-core saturation — harsher than this CI runs — the
+  `oversized request fallback escaped the render deadline` assertion at line
+  489 also fails, which is evidence the pattern is systemic rather than
+  specific to the one case fixed here. Converting the remainder to
+  deadline-relative assertions deserves its own slice.
+- Evidence: `tests/bash/modules.bash` (`measure_near_limit_prompt` and its two
+  assertions); all three Bash suites pass on a from-source Bash 5.0 build and
+  on Bash 5.2.
+
+## M-073 — The Bash compatibility corpus compared echoed input as if it were program output
+
+- Discovered: 2026-08-30
+- Status: Fixed
+- Failed assumption: `tests/bash/smoke.bash` proves MBX does not change Bash's
+  semantics by running `tests/bash/corpus.bash` under a plain `bash -i` and
+  again under an MBX-initialized one, then comparing every `MBX_TEST:` marker
+  with `grep -o`. The assumption was that those markers are program output.
+  They were not only that. `bash -i` reading a script from a file echoes input
+  lines into the same stream as output, and because the corpus wrote the
+  marker prefix as a literal in its own source, `grep -o` captured the echoed
+  source lines too — e.g. both `MBX_TEST:subshell=/tmp` (real output) and
+  `MBX_TEST:subshell=%s\n' "$PWD")` (the echo of the line that produced it).
+- Impact: the comparison silently asserted something it does not name and
+  cannot legitimately require — that MBX leaves Bash's *input echo*
+  byte-identical — when changing `PS1`/`PS2` and Readline state is precisely
+  what MBX is for. It also made the outcome depend on the Readline build: echo
+  matched on a vanilla Bash 5.0 and 5.2, and diverged on Ubuntu 20.04's Bash
+  5.0, where the MBX run dropped the echo of two corpus lines. CI failed there
+  with "Bash corpus semantics changed after MBX initialization" while every
+  real result — `process-substitution=test`, `array=alpha,beta`, `status=1` —
+  matched exactly. The alarm was on the one invariant this project most needs
+  to be trustworthy, and it was false.
+- Correction: the corpus now holds its marker prefix in a variable (`M`) and
+  interpolates it, so the literal string the suite greps for never appears in
+  the corpus source. Echoed input can no longer match the pattern on any
+  Readline build, which removes the entire class rather than patching the one
+  observed difference. Every construct the corpus covered before is unchanged.
+- Prevention: when a test extracts evidence from a captured stream, make the
+  evidence impossible to forge from the input that produced it. A marker
+  written literally in the script that emits it cannot distinguish "the shell
+  echoed my command" from "the program printed this".
+- Evidence: `tests/bash/corpus.bash`. The baseline marker set is now 15 lines
+  of pure program output on Bash 5.0 with no echoed source; the suite passes
+  on a from-source Bash 5.0 and on 5.2; and injecting a real semantic change
+  (an rc that alters `HOME` after sourcing `init.bash`) is still caught as
+  `-MBX_TEST:variable=/root` / `+MBX_TEST:variable=/hijacked-by-mbx`.
+
+## M-074 — CI ran the whole matrix twice concurrently on every PR commit
+
+- Discovered: 2026-08-30
+- Status: Fixed
+- Failed assumption: the CI workflow rewritten for `T0-3` kept a bare `push:`
+  trigger alongside `pull_request:`, on the assumption that this simply covers
+  both cases. A bare `push:` fires on every branch push, so once a branch has
+  an open pull request each commit triggers two complete, concurrent workflow
+  runs — two canonical suites, two MSRV jobs, two Bash matrices — competing
+  for runners at the same moment. Widening that workflow from one job to six
+  in this same change multiplied the cost of the mistake without anyone
+  noticing it was there.
+- Impact: this repository's PTY suites drive real interactive Bash sessions
+  against wall-clock deadlines (`wait_for_count` allows 8 s; `read_until`
+  deadlines are similar), so runner contention is not a cosmetic cost — it is
+  the thing that makes them fail. On commit `8684622` the two concurrent runs
+  disagreed: the canonical suite passed in one while MSRV failed
+  `ctrl_p_loads_history_after_dismissing_suffix` in the other, with
+  `last=0` — nothing recorded at all in eight seconds, on identical code.
+  Superseded runs from earlier pushes were also left running, adding still
+  more load to the run whose result anyone would actually read.
+- Correction: scoped `push` to the default branch, so pull requests are
+  covered once by `pull_request`, and added a `concurrency` group keyed on
+  workflow and ref with `cancel-in-progress`, so a new push supersedes the run
+  in flight.
+- Prevention: `on: push` plus `on: pull_request` is a double-run by default,
+  not a belt-and-braces pair. Any repository whose tests are timing-sensitive
+  should treat concurrent duplicate runs as a correctness problem rather than
+  a billing one, and should set a concurrency group from the start.
+- Evidence: `.github/workflows/ci.yml`; the disagreeing pair of runs
+  33291533211 and 33291535294 on commit `8684622`.
+
+## M-075 — PTY history cases raced the very budget MBX is designed to abandon
+
+- Discovered: 2026-08-30
+- Status: Mitigated (not Fixed — see "What is not established" below)
+- Failed assumption: the PTY suites that assert "this command was recorded"
+  (`wait_for_count`) treated recording as guaranteed once the prompt returned.
+  It is not. MBX deliberately drops a history record rather than let a slow
+  helper stall the prompt, so every such case is implicitly racing
+  `MBX_HISTORY_TIMEOUT`. The harness already knew this in part — its comment
+  says these cases are "tolerant of heavily parallel CI load" and had raised
+  the budget from the production 0.10 s to 1.0 s — but 1.0 s is still a race
+  when many PTY binaries run at once, which is exactly what
+  `cargo test --workspace` does.
+- Impact: intermittent red on tests that assert history semantics, for a
+  reason that is not a defect in what they assert. Observed twice: in CI on
+  commit `8684622` (`ctrl_p_loads_history_after_dismissing_suffix`, `last=0`)
+  and locally during a full-suite run
+  (`space_separated_prefix_shows_suffix_and_enter_runs_typed_bytes`, same
+  helper). The CI instance is doubly informative: the two concurrent runs of
+  that same commit disagreed, one passing the canonical suite while the other
+  failed this test — see `M-074` for the duplicate-run contention that made it
+  likelier.
+- Mitigation: raised the tolerant PTY default from 1.0 s to 5.0 s for both
+  `MBX_IPC_TIMEOUT` and `MBX_HISTORY_TIMEOUT`. This cannot hide a regression in
+  deadline behavior, because deadline behavior is asserted in
+  `tests/bash/modules.bash` and in the dedicated production-timeout case
+  (`spawn_history_shell_production_timeouts`, still 0.10 s), never here.
+- Instrumentation: `wait_for_count`'s failure now reports poll count and
+  elapsed time, the store's files with byte sizes, the exit status, stdout and
+  stderr of both `history count` and `history search recent`, and any live
+  helper process matching the binary under test. The previous message —
+  "count never reached 2; last=0" — could not distinguish records dropped on a
+  slow exchange, a coprocess that never started, a store never written, and a
+  query that itself failed. The next occurrence will say which.
+- What is not established: the root cause. `last=0` means *neither* of two
+  records landed, which fits a severe stall but not a marginal one, so the
+  timeout may be a contributing factor rather than the whole story. This is
+  recorded as `Mitigated` rather than `Fixed` because the failure could not be
+  reproduced in roughly 22 deliberate attempts — the ghost suite alone 6/6 and
+  4/4 under full CPU saturation, every PTY binary concurrently 5/5, the full
+  canonical suite 3/3 idle and 2/2 saturated. A fix that cannot be validated
+  against a reproduction is a guess; widening a budget that is documented as
+  deliberately wide here, and making the next failure legible, is not.
+- Prevention: a test that asserts an outcome the product is explicitly
+  permitted to abandon under load must either take that permission away for
+  the duration of the test or assert the abandonment instead. Decide which,
+  rather than inheriting a budget from production and hoping.
+- Evidence: `crates/pty/tests/common/mod.rs` (`spawn_history_shell`,
+  `wait_for_count`, `store_diagnostics`); CI runs 33291533211 and 33291535294
+  on commit `8684622`.
+
+## M-076 — MBX was a complete no-op on Bash 5.0, and destroyed the user's PROMPT_COMMAND doing it
+
+- Discovered: 2026-08-30
+- Status: Fixed
+- Failed assumption: `_mbx_install_hooks` installed its prompt chain as
+  `PROMPT_COMMAND=(_mbx_capture_status "${existing[@]}" _mbx_render_prompt)`,
+  assuming an array `PROMPT_COMMAND` works on every Bash the project supports.
+  An array `PROMPT_COMMAND` is a **Bash 5.1** feature. Bash 5.0 treats the
+  variable as an ordinary string and runs element 0 only.
+- Impact: on Bash 5.0 — named as supported by `README.md` ("Bash 5.x"),
+  `docs/bash-compatibility.md`, and the `HRD-001` roadmap entry — MBX did
+  nothing at all. Only `_mbx_capture_status` ran each prompt;
+  `_mbx_render_prompt` never did, so `PS1` was never set and the shell kept its
+  stock prompt (verified: `PS1` remained `\s-\v\$ `). At the same time the
+  assignment discarded any pre-existing `PROMPT_COMMAND`, so a user who had
+  another framework installed lost that hook and gained nothing in exchange.
+  Silent in both directions.
+- Why it was invisible: every assertion about the hooks inspected the
+  *variable* rather than its *effect* — `${#PROMPT_COMMAND[@]}` was 2, which
+  looks correct and says nothing about whether Bash will run it. Local
+  development is Bash 5.2, no CI ran 5.0 before this branch added the leg, and
+  `tests/bash/smoke.bash` spawns plain `bash` for its inner shells, so running
+  the suite *with* a 5.0 interpreter still exercised 5.2 inside. Correcting an
+  earlier claim of mine in this same session: "all three Bash suites pass on a
+  from-source Bash 5.0 build" was wrong for `smoke.bash` for exactly that
+  reason — only a `bash` shim earlier in `PATH` actually tests it.
+- Correction: build the chain once, then install it as an array on Bash 5.1+
+  and as a `;`-joined string on 5.0, unsetting the variable first so a scalar
+  assignment cannot leave stale array elements behind. The 5.1+ array form is
+  kept where available because a syntax error in one entry cannot then break
+  its neighbours.
+- Prevention: assert the *effect*, not the installation. A hook installed into
+  a representation the running interpreter ignores is indistinguishable from no
+  hook at all, and only an assertion about the resulting prompt can tell them
+  apart. Any version-gated language feature used in the integration layer needs
+  the oldest supported release in CI before the feature is relied upon.
+- Evidence: `bash/hooks.bash`; `tests/bash/smoke.bash` now asserts a rendered
+  `PS1` and compares the joined `PROMPT_COMMAND` rather than an element count.
+  With the fix reverted, the suite fails on Bash 5.0 with "existing
+  PROMPT_COMMAND did not receive the command status" and passes with it, run
+  against a from-source Bash 5.0 placed first in `PATH` so the inner shells are
+  genuinely 5.0.

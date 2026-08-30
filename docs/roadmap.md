@@ -5,10 +5,10 @@
 > brief remains `CODEX_MODERN_BASH_ARCHITECTURE.md`; its checkboxes describe the
 > intended program and are not a status tracker.
 
-- Last reviewed: 2026-08-28 UTC
-- Current milestone: Strategy A MVP is `complete` on Linux (`G5` 2026-08-27); Phase 9 `complete`; macOS `HRD-001` `deferred` (ADR 0012); `HRD-003` `deferred`; ADR 0013 overlay/highlighting in `validation`
-- Active workstream: `HLT-003` hostile corpus (`docs/hlt-003-hostile-gate-plan.md`); G5 revisit macOS PTY; dim paint; percentile benches `deferred`
-- Next decision gate: G5 revisit (macOS matrix, `HLT-003` p99, `HRD-003`, dim paint). ADR 0013 review-close (H-1–H-6, O-1–O-5, M-1) is recorded; `HLT-003` hostile corpus slices 1–2 recorded
+- Last reviewed: 2026-08-29 UTC
+- Current milestone: Strategy A MVP is `complete` on Linux (`G5` 2026-08-27); Phase 9 `complete`; macOS `HRD-001` `deferred` (ADR 0012); `HRD-003` `deferred`; ADR 0013/0014 overlay/highlighting in `validation`
+- Active workstream: `M-064` (Readline does not hide `\001`/`\002` inside `READLINE_LINE`; blocks live highlight color, `HLT-002`); `M-065` (overlay DECSC/DECRC corrupted by its own scroll; blocks `COMP-004`); `HLT-003` hostile corpus (`docs/hlt-003-hostile-gate-plan.md`); G5 revisit macOS PTY; dim paint; percentile benches `deferred`
+- Next decision gate: resolve or explicitly descope `M-064` and `M-065` (each needs a new ADR + PTY evidence before Phase 6 / `COMP-004` can close); G5 revisit (macOS matrix, `HLT-003` p99, `HRD-003`, dim paint). ADR 0013 review-close (H-1–H-6, O-1–O-5, M-1) is recorded; `HLT-003` hostile corpus slices 1–2 recorded; `HLT-004` coprocess transport recorded (ADR 0014)
 - Editor-facing work: opt-in ghost suffix is on main (ADR 0010). Async QUERY with stale-generation skip is recorded (ADR 0011). Explicit history-search insert (`\C-xh`), cycling, restore (`\C-xl`), cwd preference, and opt-in failed empty-line insert are recorded (ADR 0009). Opt-in syntax highlighting (`MBX_HIGHLIGHT=1`) and completion overlay (`MBX_COMP_OVERLAY=1`) are in `validation` (ADR 0013; `docs/hlt-comp-review-close-plan.md`). Dim paint and type-to-filter overlays are `deferred` from this MVP (G5 revisit)
 - Timing policy: unmet percentile targets are `deferred` and do not block
   product development (`docs/latency-budget-deferral.md`)
@@ -33,6 +33,12 @@ Status values have precise meanings:
 Do not use percentages or an ambiguous `partial` status. Code existing is not
 enough for `complete`. Record UTC dates and a commit or PR when one exists. Move
 removed work to `deferred` or `superseded` instead of silently deleting it.
+
+The "Change log" section at the end of this file keeps only its most recent
+entries; the complete history lives in
+[`docs/archive/roadmap-history.md`](archive/roadmap-history.md). Append a new
+entry to both, in the same change, most-recent last — never edit or reorder a
+past entry in either file.
 
 Continuous after-every-key decoration is unproven (ADR 0003 B-5). That leftover
 **defers** live highlighting and GUI-like overlays; it must not mark Strategy A
@@ -336,10 +342,10 @@ targets stay `deferred` and are not a pass/fail requirement for this close.
 | 2 | Prompt | `complete` | `PRM-001`/`PRM-009` complete; capability/width/wrap recorded; `PRM-004` percentiles `deferred` |
 | 3 | History | `complete` | Phase 3A / `G2` complete; `HIST-009` and `HIST-010` complete; write-ack percentiles `deferred` |
 | 4 | Ghost suggestions | `complete` | ADR 0010 suffix; ADR 0011 QUERY + generation skip + overlapping delayed-RESULT PTY; `GHST-004` functional PTY recorded; dim paint `deferred`; latency percentiles `deferred` |
-| 5 | Completion | `complete` | Strategy A insert/fallthrough (`COMP-005`); `G4` / `COMP-001`–`COMP-003` / `GIT-004` complete; ranked-cycle `\C-xn` / `\C-xp`; `COMP-004` overlay slice `validation` (ADR 0013) |
-| 6 | Syntax highlighting | `validation` | ADR 0013; `HLT-001`/`HLT-002` implemented; `HLT-003` hostile gates `in-progress` (slices 1–2); p99 `deferred` |
+| 5 | Completion | `complete` | Strategy A insert/fallthrough (`COMP-005`); `G4` / `COMP-001`–`COMP-003` / `GIT-004` complete; ranked-cycle `\C-xn` / `\C-xp`; `COMP-004` overlay slice `blocked` on `M-065` (ADR 0013) |
+| 6 | Syntax highlighting | `validation` | ADR 0013/0014; `HLT-004` coprocess transport `complete`; `HLT-002` `blocked` on `M-064` (Readline caret-renders markers inside `READLINE_LINE`, so live color stays off); `HLT-003` hostile gates `in-progress` (slices 1–2); p99 `deferred` |
 | 7 | Git/provider expansion | `complete` | MVP exits `GIT-002` / `GIT-004` (`docs/git-phase7-mvp-close-plan.md`); `GIT-005` SDK `deferred`; upstream/remotes/tags unauthorized |
-| 8 | Enhanced Ctrl+R | `complete` | `SRCH-001`–`SRCH-003` complete (ADR 0009); cwd/signal/opt-in failed insert recorded; 100k interactive leftover `deferred`; overlay `deferred`; interactive repo insert unauthorized |
+| 8 | Enhanced Ctrl+R | `complete` | `SRCH-001`–`SRCH-003` complete (ADR 0009); cwd/signal/opt-in failed/opt-in repo insert recorded (`docs/srch-003-repo-filter-plan.md`); 100k interactive leftover `deferred`; overlay `deferred` |
 | 9 | Release hardening | `complete` | `HRD-002` and `HRD-004` complete; Linux `HRD-001` L-1–L-5 recorded; macOS `HRD-001` `deferred` (ADR 0012); `HRD-003` `deferred`; `G5` closed (`docs/g5-strategy-a-close-plan.md`) |
 
 ## Phase details
@@ -502,19 +508,32 @@ live-state and `compopt` parity are demonstrated. Do not start a GUI overlay.
 | `COMP-001` | Build a non-popup stock-completion adapter harness | `complete` | `docs/comp-001-harness-plan.md`; H-1–H-4; `G4` complete; 5 ms leftover `deferred` |
 | `COMP-002` | Prove file and one `-F` function's exact insertion parity | `complete` | `docs/comp-002-parity-plan.md`; P-1–P-4, F-1–F-4, L-1–L-4, N-1–N-2, S-1–S-4; `docs/g4-gate-close-plan.md`; 5 ms leftover `deferred` |
 | `COMP-003` | Add typed candidate metadata and bounded ranking | `complete` | `docs/comp-003-metadata-plan.md` K-1–K-4; `docs/comp-003-ranking-plan.md` R-1–R-4 in `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs` |
-| `COMP-004` | Add popup navigation and terminal-safe rendering | `validation` | Popup policy P-1–P-4 (`docs/comp-004-popup-plan.md`); ranked-accept A-1–A-6; ranked-cycle C-1–C-6; overlay slice OV-1 + PTY (`docs/comp-004-overlay-plan.md`, ADR 0013); type-to-filter GUI menu `deferred` |
+| `COMP-004` | Add popup navigation and terminal-safe rendering | `blocked` | Popup policy P-1–P-4 (`docs/comp-004-popup-plan.md`); ranked-accept A-1–A-6; ranked-cycle C-1–C-6; overlay slice OV-1 + PTY (`docs/comp-004-overlay-plan.md`, ADR 0013); **blocked on `M-065`** (confirmed, not merely unproven: DECSC/DECRC save is invalidated by the overlay's own scroll, corrupting the prompt — `crates/pty/tests/overlay_screen.rs`); type-to-filter GUI menu `deferred` |
 | `COMP-005` | Insert/fall through exactly and pass the parity/PTY matrix | `complete` | `docs/comp-005-strategy-a-close-plan.md`; G4/COMP-002 P-1–P-4, L-1–L-4, N-1–N-2, S-1–S-4; ranked-accept A-1–A-6; ranked-cycle C-1–C-6 (`\C-xn` / `\C-xp`); `GIT-004` kinds; overlay `deferred`; 5 ms leftover `deferred` |
 
 Exit condition: `G4` for the adapter slice; `COMP-005` for the Strategy A
-completion feature. Overlay slice awaits `HLT-003`-class hostile/latency evidence
-before `COMP-004` moves to `complete`. Type-to-filter GUI menus remain
-`deferred`.
+completion feature. Overlay slice needed `HLT-003`-class hostile/latency
+evidence before `COMP-004` could move to `complete`; that evidence-gathering
+found `M-065`, a confirmed terminal-corruption defect, not just an unproven
+claim. `COMP-004` cannot close until `M-065` is resolved by its own reviewed
+slice (a bounded DSR cursor-row query, or a different rendering strategy) or
+an accepted descope. Type-to-filter GUI menus remain `deferred`.
 
 ### Phase 6 — Syntax highlighting
 
-Status: `validation` (ADR 0013; owner **G5 revisit**). Strategy A highlighting
-is implemented; hostile-input and latency exit gates remain open.
-IDs are kept. Do not idle product development on percentile leftovers.
+Status: `validation` (ADR 0013/0014; owner **G5 revisit**). The coprocess
+transport slice (`HLT-004`) is `complete`. A more fundamental defect than the
+open hostile-input/latency gates was found while closing it: **real color has
+never rendered correctly in the live interactive path** (`M-064` — Readline
+caret-renders `\001`/`\002` inside `READLINE_LINE` instead of treating them as
+zero-width, unlike their documented `PS1` behavior). This was previously
+masked by a second, now-fixed bug (`M-062`) that kept color silently off in
+every real session. `bash/highlight.bash`'s interactive refresh currently
+sends `color=0` unconditionally as a deliberate, evidenced safe state, not a
+regression. Do not mark `HLT-002`, `HLT-003`, or Phase 6 `complete` until
+`M-064` is resolved by a follow-up ADR and PTY evidence, or the live-color
+goal is explicitly descoped with an accepted decision — a percentile leftover
+never blocked this phase and still does not; a correctness gap does.
 
 Define a tolerant token taxonomy only after Readline redraw feasibility is known.
 The highlighter must accept incomplete Bash, never execute or expand input, bound
@@ -524,11 +543,13 @@ and strip back to the exact original bytes.
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
 | `HLT-001` | Define token taxonomy and tolerant incomplete-input lexer | `validation` | `docs/hlt-001-lexer-plan.md`; `crates/cli/src/highlight.rs`; `cargo test -p mbx highlight::` |
-| `HLT-002` | Integrate terminal-safe styling without taking execution ownership | `validation` | `docs/hlt-002-integration-plan.md`; `bash/highlight.bash`; `tests/bash/modules.bash`; `crates/pty/tests/highlight.rs` |
-| `HLT-003` | Pass exact-byte stripping, hostile-input, PTY, and latency gates | `in-progress` | `docs/hlt-003-hostile-gate-plan.md`; slices 1–2 S-1–S-4 and P-1–P-2 recorded; p99 `deferred` |
+| `HLT-002` | Integrate terminal-safe styling without taking execution ownership | `blocked` | `docs/hlt-002-integration-plan.md`; `bash/highlight.bash`; `tests/bash/modules.bash`; `crates/pty/tests/highlight.rs`; blocked on `M-064` — styling is not terminal-safe in `READLINE_LINE` today |
+| `HLT-003` | Pass exact-byte stripping, hostile-input, PTY, and latency gates | `in-progress` | `docs/hlt-003-hostile-gate-plan.md`; slices 1–2 S-1–S-4 and P-1–P-2 recorded; p99 `deferred`; slice 3 (if any) should incorporate `M-064` evidence once a rendering fix exists |
+| `HLT-004` | Route HIGHLIGHT over the coprocess instead of forking per keystroke | `complete` | `docs/adr/0014-highlight-over-coprocess.md`; `crates/cli/src/highlight_service.rs`; `docs/protocol-mbx2.md` HIGHLIGHT/STYLED; `crates/pty/tests/highlight.rs` (`wire_highlight_forks_no_helper_process_per_keystroke`, `cli_fallback_highlight_does_fork_the_helper_per_keystroke`) |
 
-Exit condition: `HLT-003` if G5 keeps highlighting in scope; otherwise remain
-`deferred` with an ADR or roadmap note. Do not delete these IDs.
+Exit condition: `HLT-003` if G5 keeps highlighting in scope, **and** `M-064`
+resolved (or an accepted descope of live color), before Phase 6 can be
+`complete`. `HLT-004` does not close Phase 6 alone. Do not delete these IDs.
 
 ### Phase 7 — Git and provider expansion
 
@@ -561,18 +582,19 @@ metadata; bounded filtering; safe cancellation; exact insertion without
 execution; and terminal restoration. Age/cwd/status columns stay overlay
 `deferred`. CLI `search repo` / `search branch` / `search failed` exist on
 main (`HIST-010`). Interactive empty-line `\C-xh` uses cwd, then recent;
-`MBX_SEARCH_FAILED=1` prefers `search failed` first. Interactive `search repo`
-insert stays unauthorized (needs a trusted repo root in Bash).
+`MBX_SEARCH_FAILED=1` prefers `search failed` first;
+`MBX_SEARCH_REPO=1` prefers `search repo` at the root `mbx repo root`
+resolves (`docs/srch-003-repo-filter-plan.md`).
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
 | `SRCH-001` | Configurable bounded history-search action and result view | `complete` | insert S-1–S-7 and cycling V-1–V-4 in `bash/search.bash`, `crates/pty/tests/history_search.rs`, `tests/bash/modules.bash`; ADR 0009; `docs/srch-001-history-search-plan.md`; `docs/srch-001-result-view-plan.md`. Overlay is not required |
 | `SRCH-002` | Cancel restoration and exact insertion without execution | `complete` | restore R-1–R-4 in `bash/search.bash`, `crates/pty/tests/history_search.rs`, `tests/bash/modules.bash`; ADR 0009; `docs/srch-002-cancel-restore-plan.md`. Overlay is not required |
-| `SRCH-003` | Metadata filters, 100k-row latency, signal, and terminal-state evidence | `complete` | cwd empty-line C-1–C-4, prefix/fuzzy cwd, signal/terminal-state T-1–T-4, and opt-in failed insert F-1–F-3 in `bash/search.bash`, `crates/pty/tests/history_search.rs`, `tests/bash/modules.bash`; `docs/srch-003-cwd-filter-plan.md`; `docs/srch-003-cwd-prefix-plan.md`; `docs/srch-003-signal-plan.md`; `docs/srch-003-failed-filter-plan.md`. Overlay `deferred`; 100k interactive leftover `deferred`; interactive repo insert unauthorized. CLI `search failed` / `search repo` / `search branch` are on main |
+| `SRCH-003` | Metadata filters, 100k-row latency, signal, and terminal-state evidence | `complete` | cwd empty-line C-1–C-4, prefix/fuzzy cwd, signal/terminal-state T-1–T-4, opt-in failed insert F-1–F-3, and opt-in repo insert R-1–R-3 in `bash/search.bash`, `crates/cli/src/cli.rs` (`mbx repo root`), `crates/pty/tests/history_search.rs`, `tests/bash/modules.bash`; `docs/srch-003-cwd-filter-plan.md`; `docs/srch-003-cwd-prefix-plan.md`; `docs/srch-003-signal-plan.md`; `docs/srch-003-failed-filter-plan.md`; `docs/srch-003-repo-filter-plan.md`. Overlay `deferred`; 100k interactive leftover `deferred`. CLI `search failed` / `search repo` / `search branch` are on main; interactive repo insert (`MBX_SEARCH_REPO=1`) is also on main |
 
 Exit condition: `SRCH-003`. Overlay leftover stays `deferred`. 100k interactive
 percentiles stay `deferred` (`docs/latency-budget-deferral.md`) and do not
-block this Strategy A exit. Interactive repo insert stays unauthorized.
+block this Strategy A exit.
 
 ### Phase 9 — Release hardening
 
@@ -590,10 +612,12 @@ combinations are impractical.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `HRD-001` | Supported Bash/OS/terminal pairwise PTY matrix | `complete` | Linux L-1–L-5 recorded (`docs/hrd-001-linux-pairwise-plan.md`; `crates/pty/tests/hrd001_linux.rs`); Darwin PTY constants D-1–D-3 recorded; macOS pairwise leg **`deferred`** (ADR 0012) |
+| `HRD-001` | Supported Bash/OS/terminal pairwise PTY matrix | `complete` | Linux L-1–L-5 recorded (`docs/hrd-001-linux-pairwise-plan.md`; `crates/pty/tests/hrd001_linux.rs`); Darwin PTY constants D-1–D-3 recorded; macOS pairwise leg **`deferred`** (ADR 0012); Bash 5.0/5.1/5.2 (`ubuntu:20.04`/`22.04`/`24.04`) legs now run the three Bash suites in CI (`.github/workflows/ci.yml` `bash-matrix`); a manual `workflow_dispatch` macOS job exists so the deferred leg has somewhere to run once a host is available |
 | `HRD-002` | Hostile input, protocol bounds, privacy, and no-execution audit | `complete` | `docs/hrd-002-hostile-audit-plan.md` H-1–H-11; C0/DEL insert gate on search/editor; ghost suffix gate; protocol/PS1/privacy/Git evidence; `G5` leftover tmux/SSH/fullscreen stays `HRD-001` |
 | `HRD-003` | Release-mode end-to-end latency and resource evidence | `deferred` | existing warm-Git / history-query / write-ack records; remaining matrix `deferred` (`docs/latency-budget-deferral.md`); do not chase product-code latency |
 | `HRD-004` | Install, upgrade, disable, removal, crash, and recovery evidence | `complete` | `docs/hrd-004-lifecycle-plan.md` L-1–L-6; setup/init never write `~/.bashrc`; helper crash and WAL recovery recorded; no package-manager installer |
+| `DIAG-001` | `mbx doctor` diagnostic command (`CODEX_MODERN_BASH_ARCHITECTURE.md` §41) | `complete` | `mbx_doctor` in `bash/config.bash`: Bash version, interactivity/tty, color/locale/icon capability, helper path/version/live handshake, IPC mode, config resolution, per-feature keybinding-collision report with the matching `*_OVERRIDE` fix, ghost/highlight exclusion check, history store path/permissions/row count; module contracts D-1–D-3 in `tests/bash/modules.bash`; README §"Check it is installed" points here instead of per-feature manual recipes |
+| `REL-001` | Prebuilt-binary release pipeline (GAP-1, `docs/repo-review-2026-08-29.md`) | `in-progress` | `.github/workflows/release.yml`: on a `v*` tag, builds `mbx` for `x86_64`/`aarch64` Linux on native GitHub-hosted runners (avoids cross-compiling `rusqlite`'s bundled C sources), packages a checksummed tarball, and publishes a GitHub release. **Untested end-to-end**: no tag has been pushed to exercise it, and cutting the first tag is a maintainer decision this workflow does not make on its own. `scripts/install.bash` preferring a verified download over `cargo build` is deliberately deferred until a real release exists to point at, rather than writing installer logic against a release that does not yet exist |
 
 Exit condition: `G5` after every non-deferred `HRD-*` item is complete.
 macOS `HRD-001` is explicitly `deferred` (ADR 0012).
@@ -604,16 +628,25 @@ Strategy A MVP on Linux is `complete` (`G5` 2026-08-27). Capture stays
 disabled by default. Unmet percentile leftovers are `deferred` and must not
 block product slices (`docs/latency-budget-deferral.md`).
 
-1. **G5 revisit** when a macOS host is available: run the `HRD-001` pairwise
+1. **`M-064`** (new, highest priority for Phase 6): determine whether any
+   Readline-recognized technique makes styling genuinely invisible inside
+   `READLINE_LINE`, or whether ADR 0013's marker-based design needs a
+   superseding ADR. This blocks `HLT-002` and Phase 6 `complete`; it is a
+   correctness gap, not a deferrable percentile. Until resolved, the
+   interactive refresh correctly stays at `color=0`; do not flip that without
+   this evidence.
+2. **G5 revisit** when a macOS host is available: run the `HRD-001` pairwise
    matrix per ADR 0012. Do not fake it on Linux.
-2. **`HLT-003`** hostile corpus and highlight p99 on Linux (`docs/latency-budget-deferral.md`
+3. **`HLT-003`** hostile corpus and highlight p99 on Linux (`docs/latency-budget-deferral.md`
    defers percentiles; do not block on them). ADR 0013 review-close slices 1–3
-   (H-1–H-6, O-1–O-5, M-1) are implemented; do not mark `HLT-002`, `COMP-004`,
-   or Phase 6 `complete` without gate evidence beyond the review asserts.
-3. `HRD-003` / `PRM-004` percentiles stay `deferred` unless an ADR ratifies new
+   (H-1–H-6, O-1–O-5, M-1) are implemented; `HLT-004` coprocess transport is
+   complete (ADR 0014). Do not mark `HLT-002`, `COMP-004`, or Phase 6
+   `complete` without gate evidence beyond the review asserts, and not before
+   `M-064` above.
+4. `HRD-003` / `PRM-004` percentiles stay `deferred` unless an ADR ratifies new
    numbers or a functional prompt-path defect is proven.
-4. `GIT-005` provider SDK stays post-MVP `deferred`.
-5. Do not enable capture by default. Do not combine `MBX_GHOST=1` with
+5. `GIT-005` provider SDK stays post-MVP `deferred`.
+6. Do not enable capture by default. Do not combine `MBX_GHOST=1` with
    `MBX_HIGHLIGHT=1`.
 
 ## Provisional performance and safety budgets
@@ -676,121 +709,18 @@ Also `deferred` from this **Strategy A MVP** (owner G5 revisit; IDs kept):
 Do not leave those items `blocked` with no next action. Revisit at G5 or with
 an accepted decoration/ownership ADR.
 
+
 ## Change log
+
+Full history (135 entries as of 2026-08-30; the 126 present at the trim are
+byte-identical to what was here before it) lives in
+[`docs/archive/roadmap-history.md`](archive/roadmap-history.md). Append new
+entries to *both* this table and that file, most-recent last, exactly as the
+maintenance contract above requires; this table keeps only the most recent
+entries for at-a-glance context.
 
 | Date (UTC) | Change |
 | --- | --- |
-| 2026-08-15 | Created the canonical roadmap from the architecture brief, current repository audit, SOLID refactor review, and explicit reassessment gates. |
-| 2026-08-15 | Removed circular Phase 0/completion gates; split Phase 3A from full Phase 3; added privacy, packaging, durability, and future-phase deliverables after independent review. |
-| 2026-08-15 | Added the post-refactor SOLID contract audit: response-envelope ownership, bounded/terminator-independent framing, port-contract evidence, fallback safety, and additive-flag parity. |
-| 2026-08-15 | Started the bounded SOLID hardening checklist and paused PTY, history, and later roadmap work by explicit user direction. |
-| 2026-08-15 | Completed the bounded SOLID hardening checklist: transport owns envelopes, MBX1 acquisition is capped across terminators, prompt adapters share one context/deadline/safety contract, Git refresh is capped/cached, and focused/canonical/release evidence is recorded. `FND-001`/`G0` remain validation; no later phase was started. |
-| 2026-08-15 | Completed `PTY-001`: std-only POSIX PTY driver with bounded read/write, resize, signal, and termios/`stty` probes, plus foundation coverage for prompt lifecycle, helper failure, Ctrl+C, Ctrl+Z, resize, and terminal restoration. `FND-001`/`G0` remain validation. |
-| 2026-08-15 | Completed the history groundwork slice: `HIST-002` PTY admission characterization (HISTCONTROL/HISTIGNORE/history-off/`history -s`/multiline folding/renumbering/exit flush), `RSH-004` multiline/width/resize PTY validation, `PRM-005` completion, expanded ADR 0005 to the full `G1` contract, drafted the `HIST-003` Phase 3A contract and `HIST-004` benchmark budgets. `G1` acceptance and `G0` baseline review remain open. |
-| 2026-08-15 | Review fixes: corrected the not-implemented list after `RSH-004` completion (arbitrary key injection remains open), recorded the PTY driver macOS constants as `HRD-001` pre-work, removed dead driver API surface, and fixed the `visible_text` CSI/OSC terminator handling. |
-| 2026-08-15 | Second review fixes: corrected the history-off `HISTCMD` evidence, clarified per-session writer topology, hardened parent PTY opening with `O_NOCTTY`, strengthened PS2/`history -a` regression evidence, and right-sized the exact near-limit Bash transport fixture budget. |
-| 2026-08-15 | Accepted `G1` (ADR 0005) and approved the `HIST-003` Phase 3A contract; implemented the full UI-free history slice: bundled SQLite linkage with measured size evidence, storage schema v1 with WAL/`0700`/`0600`/retention, narrow ports, exclusions/disable/clear/delete controls, deterministic queries, MBX2 RECORD ingestion, and opt-in Bash observation with PTY end-to-end tests. `G2` evidence remains. |
-| 2026-08-15 | Reconciled architecture, README, protocol, and gate status with that implemented slice: `G2` is `validation` rather than blocked by completed `G1`; MBX2 RECORD is specified as implemented; capture remains default-off until `G2` evidence. |
-| 2026-08-15 | Started the `HIST-007` `.bash_history` invariance and recorder admission-parity PTY slice; plan in `docs/history-g2-invariance-plan.md`. `G2` budgets/contention remain. |
-| 2026-08-15 | Completed the invariance/admission-parity PTY slice: paired `HISTFILE` comparisons for enable/disable/clear/delete/exit-flush, recorder parity with the `HIST-002` matrix, and recorder fixes for first-prompt skip, `history 1` parsing, and list-number drop keys (`M-026`–`M-028`). `G2` budgets/contention remain. |
-| 2026-08-16 | Corrected ADR 0005/`history_number` to the `history 1` list number, not `HISTCMD`. Completed the `HIST-004` corpus, hostile-inertness, and 100k query-percentile slice (`docs/history-g2-corpus-plan.md`, `docs/benchmarks/2026-08-16-history-queries.md`). Writer batching and under-cap prune skips (`M-029`, `M-030`). `G2` contention, prompt-boundary write, many-match prefix, and extra permission checks remain. |
-| 2026-08-16 | Identified the next `HIST-007` slice as concurrent-writer contention cases 1–3 and 6; plan in `docs/history-g2-contention-plan.md`. Prompt-boundary write-ack, WAL crash/corrupt, many-match prefix, and extra permission checks remain. |
-| 2026-08-16 | Completed concurrent-writer contention storage tests (C-1–C-4, C-6) and hardened concurrent migrate, read-only query opens, and writer lock retries (`M-032`) in `crates/cli/src/storage.rs`. Prompt-boundary write-ack, WAL crash/corrupt, many-match prefix, and extra permission checks remain. |
-| 2026-08-16 | Identified the next `HIST-007` slice as prompt-boundary write acknowledgement PTY; plan in `docs/history-g2-write-ack-plan.md`. WAL crash/corrupt, many-match prefix, and extra permission checks remain. |
-| 2026-08-16 | Completed prompt-boundary write-ack PTY correctness (W-1–W-4) and recorded release percentile evidence (`docs/benchmarks/2026-08-16-history-write-ack.md`; budget miss on development WSL). Write-ack budget, WAL crash/corrupt, many-match prefix, and extra permission checks remain. |
-| 2026-08-16 | Identified the next `HIST-007` slice as WAL crash/corrupt (cases 4–5); plan in `docs/history-g2-wal-crash-plan.md`. Permission beyond mode bits, many-match prefix, and write-ack budget remain. Do not chase write-ack product-code optimization unless a test proves SQLite is on the prompt path. |
-| 2026-08-16 | Completed WAL crash/corrupt storage tests (K-1–K-4) in `crates/cli/src/storage.rs` (`docs/history-g2-wal-crash-plan.md`). Write-ack budget, permission beyond mode bits, and many-match prefix remain. |
-| 2026-08-16 | Identified the next `HIST-007` slice as WAL/SHM `0600` plus never-more-permissive chmod; plan in `docs/history-g2-permission-plan.md`. Foreign-user open, many-match prefix, and write-ack budget remain. Do not chase write-ack product-code optimization unless a test proves SQLite is on the prompt path. |
-| 2026-08-16 | Completed WAL/SHM `0600` and never-more-permissive storage tests (P-1–P-4) plus tighten-only chmod in `crates/cli/src/storage.rs` (`docs/history-g2-permission-plan.md`; `M-033`). Foreign-user open, many-match prefix, and write-ack budget remain. |
-| 2026-08-16 | Identified the next `HIST-007` slice as many-match exact-prefix latency (covering index, schema v2, ADR 0008); plan in `docs/history-g2-prefix-plan.md`. Foreign-user open and write-ack budget remain. Do not chase write-ack product-code optimization unless a test proves SQLite is on the prompt path. |
-| 2026-08-16 | Completed many-match exact-prefix covering index (schema v2, ADR 0008, Q-A–Q-C in `crates/cli/src/storage.rs`; release percentiles in `docs/benchmarks/2026-08-16-history-prefix.md`; `docs/history-g2-prefix-plan.md`). Foreign-user open and write-ack budget remain. |
-| 2026-08-16 | Identified the next `HIST-007` slice as writer idle-flush for live reader visibility (PTY `wait_for_count` at `count=0`); plan in `docs/history-g2-idle-commit-plan.md`. Foreign-user open and write-ack budget remain. Do not change `WRITER_BATCH_SIZE` or ACK meaning. Do not fake `seteuid`. |
-| 2026-08-16 | Completed writer idle-flush for live reader visibility (V-1–V-3 in `crates/cli/src/storage.rs`; PTY invariance `wait_for_count`; `docs/history-g2-idle-commit-plan.md`; `M-034`). Foreign-user open and write-ack budget remain. |
-| 2026-08-16 | Identified the next `HIST-007` slice as 100k-row v1→v2 migration (`HIST-004` case 8); plan in `docs/history-g2-migrate-100k-plan.md`. Foreign-user open and write-ack budget remain. Do not fake `seteuid`. Do not chase write-ack product-code optimization unless a test proves SQLite is on the prompt path. |
-| 2026-08-16 | Completed 100k-row v1→v2 migration evidence (M-2 in `crates/cli/src/corpus.rs`; release wall time in `docs/benchmarks/2026-08-16-history-migrate.md`; `docs/history-g2-migrate-100k-plan.md`). Foreign-user open and write-ack budget remain. |
-| 2026-08-16 | Linked green GitHub Actions CI on `origin/main` at `5c077ce` (https://github.com/ishitvagoel/ColorBash/actions/runs/31932933113); completed `FND-001` and `BST-005` (`docs/fnd-001-ci-plan.md`). `G0` validation remains open for platform matrix, `HRD-001` macOS, and `PRM-004` representative percentiles. Foreign-user open and write-ack budget remain. |
-| 2026-08-16 | Completed Darwin PTY constant cfg-split pre-work for `HRD-001` (D-1–D-3 in `crates/pty/src/sys.rs`; `docs/hrd-001-darwin-pty-constants-plan.md`). Linux PTY tests stay green on WSL; full macOS matrix evidence still required. `HRD-001` and `G0` remain open. Foreign-user open and write-ack budget remain. |
-| 2026-08-16 | Refreshed linked green GitHub Actions CI on `origin/main` to `2b98026` (https://github.com/ishitvagoel/ColorBash/actions/runs/31934458862); `FND-001` and `BST-005` remain complete (`docs/fnd-001-ci-plan.md`). `G0` validation remains open for platform matrix, `HRD-001` macOS PTY run, and `PRM-004` representative percentiles. Foreign-user open and write-ack budget remain. |
-| 2026-08-16 | Completed redirected-output color policy for direct `mbx prompt` (R-1–R-4 in `crates/cli/src/environment.rs`; `docs/prm-002-redirected-output-plan.md`; `M-009`). `PRM-002` width model remains discovery. Foreign-user open and write-ack budget remain. |
-| 2026-08-16 | Refreshed linked green GitHub Actions CI on `origin/main` to `8872998` (https://github.com/ishitvagoel/ColorBash/actions/runs/31935135933); `FND-001` and `BST-005` remain complete (`docs/fnd-001-ci-plan.md`). `G0` validation remains open for platform matrix, `HRD-001` macOS PTY run, and `PRM-004` representative percentiles. Foreign-user open and write-ack budget remain. |
-| 2026-08-16 | Completed display-width path compaction helper for `PRM-002` (W-1–W-6 in `crates/cli/src/prompt.rs`; `docs/prm-002-width-plan.md`). `PRM-002` stays `discovery` for 16/256/truecolor and wrap-column PTY probes. Foreign-user open and write-ack budget remain. |
-| 2026-08-16 | Completed color capability negotiation for `PRM-002` (T-1–T-6 in `crates/cli/src/environment.rs`, `crates/cli/src/prompt.rs`, `bash/config.bash`, `bash/fallback.bash`; `docs/prm-002-color-capability-plan.md`). `PRM-002` stays `discovery` for wrap-column PTY probes. Foreign-user open and write-ack budget remain. |
-| 2026-08-16 | Refreshed linked green GitHub Actions CI on `origin/main` to `2ea3be4` (https://github.com/ishitvagoel/ColorBash/actions/runs/31935853161); `FND-001` and `BST-005` remain complete (`docs/fnd-001-ci-plan.md`). `G0` validation remains open for platform matrix, `HRD-001` macOS PTY run, and `PRM-004` representative percentiles. Remaining `G2` is still foreign-user open and write-ack budget. |
-| 2026-08-16 | Completed foreign-user open evidence for `HIST-007` (F-1–F-4 in `crates/cli/src/storage.rs`; `docs/history-g2-foreign-user-plan.md`; `sudo -n -u nobody` uid 65534). `G2` and `HIST-007` stay `validation` for write-ack budget. `PRM-002` stays `discovery` for wrap-column PTY probes. |
-| 2026-08-16 | Cloud remeasure of prompt-boundary write-ack percentiles (`docs/history-g2-write-ack-cloud-plan.md`; `docs/benchmarks/2026-08-16-history-write-ack-cloud.md`): p50=2412, p95=2546, p99=2752 µs — p95 misses the provisional budget. `G2` and `HIST-007` stay `validation`; write-ack budget remains. No product-code changes. |
-| 2026-08-16 | Refreshed linked green GitHub Actions CI on `origin/main` to `2a829ba` (https://github.com/ishitvagoel/ColorBash/actions/runs/31936945807); `FND-001` and `BST-005` remain complete (`docs/fnd-001-ci-plan.md`). `G0` validation remains open for platform matrix, `HRD-001` macOS PTY run, and `PRM-004` representative percentiles. Write-ack budget remains. |
-| 2026-08-16 | Completed non-DSR wrap-column PTY discovery for `PRM-002` (W-C-1–W-C-4 in `crates/pty/tests/multiline_width.rs`; `docs/prm-002-wrap-column-plan.md`; CPR/DSR waits forbidden on raw PTY). `PRM-002` moves to `validation` for representative `PRM-004` percentiles. `G0` stays `validation`. `G2` / `HIST-007` stay `validation` for write-ack budget. |
-| 2026-08-16 | Refreshed linked green GitHub Actions CI on `origin/main` to `da019de` (https://github.com/ishitvagoel/ColorBash/actions/runs/31937322390); `FND-001` and `BST-005` remain complete (`docs/fnd-001-ci-plan.md`). `G0` validation remains open for platform matrix, `HRD-001` macOS PTY run, and `PRM-004` representative percentiles. Write-ack budget remains. |
-| 2026-08-16 | Refreshed linked green GitHub Actions CI on `origin/main` to `8c8dad2` (https://github.com/ishitvagoel/ColorBash/actions/runs/31937499009); `FND-001` and `BST-005` remain complete (`docs/fnd-001-ci-plan.md`). `G0` validation remains open for platform matrix, `HRD-001` macOS PTY run, and `PRM-004` representative percentiles. Write-ack budget remains. |
-| 2026-08-16 | Deferred the prompt-boundary write-ack percentile leftover and marked `G2` / `HIST-007` complete (`docs/history-g2-write-ack-deferral.md`). W-1–W-4 correctness remains; WSL and cloud p95 misses are preserved; the 2 ms / 5 ms budget is not weakened and is not recorded as met. Capture stays default-off. |
-| 2026-08-16 | Identified the next `G0` / `PRM-004` slice as fallback and Git-disabled prompt percentiles; plan in `docs/prm-004-fallback-plan.md`. Do not invent a representative dirty/large repo. Do not mark `PRM-004` or `G0` complete. |
-| 2026-08-16 | Accepted timing-deferral policy (`docs/latency-budget-deferral.md`): unmet percentile targets no longer block development. Marked `G0` complete; `PRM-004` `deferred`; `EDT-001` `ready` (`docs/edt-001-bind-x-plan.md`). `HRD-001` remains release-matrix work. |
-| 2026-08-16 | Completed `EDT-001` E-1–E-4 non-destructive `bind -x` insertion prototype (`bash/editor.bash`, `crates/pty/tests/editor_bind_x.rs`). `EDT-001` moves to `validation`; `G3` stays `discovery` until the remaining matrix bullets have evidence. Default chord `\C-x\C-y`; `MBX_EDITOR_OVERRIDE=1` opts into overwrite. |
-| 2026-08-16 | Completed `EDT-001` G3 matrix M-1–M-4 (`docs/edt-001-g3-matrix-plan.md`): vi-insert `bind -x`, bracketed paste, resize after insert, Ctrl+Z then insert (`bash/editor.bash`, `crates/pty/tests/editor_bind_x.rs`). `G3` stays `discovery`; exact-byte / quoting / multiline insert remains. |
-| 2026-08-16 | Completed `EDT-001` exact-byte / quoting / multiline insert B-1–B-4 (`docs/edt-001-exact-bytes-plan.md`, `crates/pty/tests/editor_bind_x.rs`). B-5 insert-time redraw note recorded; `G3` moves to `validation`; continuous decoration remains unproven. Do not mark `G3` or `EDT-001` complete. |
-| 2026-08-16 | Completed `COMP-001` non-popup stock-completion adapter harness H-1–H-4 (`docs/comp-001-harness-plan.md`; `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`). `COMP-001` moves to `validation`; `G4` stays `discovery`. Do not mark `G4` or `COMP-001` complete. |
-| 2026-08-16 | Completed `COMP-002` core exact-insertion parity P-1–P-4 (`docs/comp-002-parity-plan.md`; `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`). `COMP-002` moves to `validation`; `G4` stays `discovery`. Leftover matrix and latency budget remain. |
-| 2026-08-16 | Gated completion test fixtures behind `MBX_COMP_FIXTURES=1` and added inspect-before-wrap (`_mbx_comp_wrap_existing_f`; F-1–F-4). `COMP-002` stays `validation`; `G4` stays `discovery`. Leftover matrix remains. |
-| 2026-08-16 | Specified `COMP-002` leftover insertion matrix L-1–L-4 in `docs/comp-002-leftover-matrix-plan.md`. `--` / nested / slow fallthrough / latency remain a later leftover. `G4` stays `discovery`. |
-| 2026-08-16 | Completed `COMP-002` leftover insertion matrix L-1–L-4 (`docs/comp-002-leftover-matrix-plan.md`; `crates/pty/tests/completion_harness.rs`). `COMP-002` stays `validation`; `G4` stays `discovery`. Second leftover (`--`, nested, slow fallthrough, latency) remains. |
-| 2026-08-16 | Specified `COMP-002` `--` and nested insertion N-1–N-2 in `docs/comp-002-dash-nested-plan.md`. Slow/stateful fallthrough and latency remain a later leftover. `G4` stays `discovery`. |
-| 2026-08-16 | Completed `COMP-002` `--` and nested insertion N-1–N-2 (`docs/comp-002-dash-nested-plan.md`; `crates/pty/tests/completion_harness.rs`). N-2 observation uses `echo $(printf ...)` because `:` captures printf stdout in substitution. `COMP-002` stays `validation`; `G4` stays `discovery`. Slow/stateful fallthrough remains. |
-| 2026-08-16 | Specified `COMP-002` slow/stateful wrap fallthrough S-1–S-4 in `docs/comp-002-fallthrough-plan.md`. Adapter latency stays `deferred`. `G4` stays `discovery`. |
-| 2026-08-16 | Completed `COMP-002` slow/stateful wrap fallthrough S-1–S-4 (`docs/comp-002-fallthrough-plan.md`; `crates/pty/tests/completion_harness.rs`). `COMP-002` stays `validation`; `G4` stays `discovery`. Deferred 5 ms budget remains. |
-| 2026-08-16 | Specified `G4` decision inventory in `docs/g4-decision-plan.md`. Functional COMP-002 cases are recorded; 5 ms leftover stays `deferred`. Do not mark `G4` complete. |
-| 2026-08-16 | Completed `G4` decision inventory (`docs/g4-decision-plan.md`; `docs/latency-budget-deferral.md`). `G4` moves to `validation`; 5 ms leftover stays `deferred`. `COMP-001` / `COMP-002` stay `validation`. Do not start `COMP-003` or popup. |
-| 2026-08-16 | Specified `G3` decision inventory in `docs/g3-decision-plan.md`. Continuous decoration stays unproven. Do not mark `G3` complete. Do not start ghost, popup, or `COMP-003`. |
-| 2026-08-16 | Completed `G3` decision inventory (`docs/g3-decision-plan.md`). `G3` stays `validation`; continuous decoration stays unproven. Do not start ghost, popup, or `COMP-003`. |
-| 2026-08-16 | Specified `PRM-006` duration policy decision in `docs/prm-006-duration-plan.md`. Remain opt-in; do not compose `DEBUG`. Do not start ghost, popup, or `COMP-003`. |
-| 2026-08-16 | Completed `PRM-006` duration policy decision (`docs/prm-006-duration-plan.md`; `tests/bash/smoke.bash` D-1–D-3). Remain opt-in; do not compose `DEBUG`. `PRM-006` moves to `validation`. Do not start ghost, popup, or `COMP-003`. |
-| 2026-08-16 | Specified `G4` gate-close decision in `docs/g4-gate-close-plan.md`. Functional parity recorded; 5 ms stays `deferred`. Do not start `COMP-003` or popup. |
-| 2026-08-16 | Completed `G4` gate close (`docs/g4-gate-close-plan.md`; `docs/g4-decision-plan.md`). `G4` moves to `complete`; 5 ms leftover stays `deferred`. `COMP-001` / `COMP-002` stay `validation`. `COMP-003` unblocked for planning. Do not start `COMP-003` or popup. |
-| 2026-08-16 | Specified `COMP-003` typed metadata slice in `docs/comp-003-metadata-plan.md`. K-1–K-4; no ranking or popup. |
-| 2026-08-16 | Completed `COMP-003` typed metadata K-1–K-4 (`docs/comp-003-metadata-plan.md`; `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`). `COMP-003` moves to `validation`; ranking leftover remains. Do not start popup or ghost. |
-| 2026-08-16 | Specified `COMP-003` bounded ranking slice in `docs/comp-003-ranking-plan.md`. R-1–R-4; no popup. |
-| 2026-08-16 | Completed `COMP-003` bounded ranking R-1–R-4 (`docs/comp-003-ranking-plan.md`; `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`). `COMP-003` moves to `complete`. Do not start popup or ghost. |
-| 2026-08-16 | Specified `G3` gate-close decision in `docs/g3-gate-close-plan.md`. Explicit `bind -x` evidence recorded; continuous decoration stays unproven. Do not start popup or ghost. |
-| 2026-08-16 | Completed `G3` gate close (`docs/g3-gate-close-plan.md`; `docs/g3-decision-plan.md`). `G3` and `EDT-001` move to `complete`. Continuous decoration leftover still blocks ghost / highlighting. `COMP-004` unblocked for planning. Do not start popup or ghost. |
-| 2026-08-16 | Documented tryable features and remaining MVP leftovers in `README.md` (prompt, duration, history, `bind -x` insert, stock Tab, wrap metadata). |
-| 2026-08-16 | Completed `COMP-004` popup policy decision (`docs/comp-004-popup-plan.md` P-1–P-4). No GUI overlay; Tab stays stock; ranking additive. `COMP-004` moves to `discovery`. Do not start overlay or ghost. |
-| 2026-08-16 | Completed `COMP-004` ranked-accept chord A-1–A-5 (`docs/comp-004-ranked-accept-plan.md`; `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs`). Default `\C-x\C-a`. `COMP-004` stays `discovery`; overlay unproven. |
-| 2026-08-16 | Ranked-accept replaces the current word when it is a prefix of `_MBX_COMP_RANKED_REPLY` (M-039). Stale unrelated words are refused. Snapshot clears at the next prompt. |
-| 2026-08-16 | Completed `GIT-004` Git completion kinds (`docs/git-004-kinds-plan.md`). `COMP-001` / `COMP-002` move to `complete` (G4 evidence; 5 ms `deferred`). |
-| 2026-08-16 | Completed `HIST-009` bounded fuzzy search (`docs/hist-009-fuzzy-plan.md`; `mbx history search fuzzy`). `HIST-010` remains. |
-| 2026-08-16 | Accepted ADR 0009: explicit history-search `bind -x` is Strategy A, not continuous decoration. Implemented `SRCH-001` insert (`bash/search.bash`, default `\C-x\C-r`; S-1–S-6). `SRCH-001` moves to `validation`; result view leftover remains. Do not steal stock `\C-r`. Overlay stays `deferred`. |
-| 2026-08-16 | Completed `HIST-010` / `GIT-003` repository root/branch on history rows (`docs/hist-010-git-003-plan.md`). Schema v3; MBX2 unchanged; writer enrich; `mbx history search repo`. Overlay stays unproven. |
-| 2026-08-16 | Completed HIST-010 CLI filter leftovers and `PRM-006` gate close (`docs/hist-010-cli-filters-plan.md`; `search branch`, `search failed`). `PRM-006` moves to `complete`. Overlay stays unproven. `SRCH-003` stays `blocked`. |
-| 2026-08-17 | Recorded opt-in inline ghost (`docs/ghst-002-inline-ghost-plan.md`; ADR 0010; G-1–G-6). Suffix after `READLINE_POINT`; Enter is a Readline kill-line + accept-line macro while a suffix is active (M-041). Do not mark `GHST-004` complete. Do not start highlighting or overlay. |
-| 2026-08-17 | Recorded ghost word-accept (`docs/ghst-003-word-accept-plan.md`; W-1–W-3). `\ef` / Ctrl-Right advance one alphanumeric word. Cycling remains. Do not mark `GHST-003` or `GHST-004` complete. |
-| 2026-08-17 | Recorded ghost cycling (`docs/ghst-003-cycle-plan.md`; C-1–C-3). `\C-x\C-n` / `\C-x\C-p` cycle prefix matches. `GHST-003` moves to `complete`. Do not mark `GHST-004` complete. Do not start highlighting or overlay. |
-| 2026-08-18 | Recorded remaining ghost printables (`docs/ghst-002-printables-plan.md`; P-1–P-3). ASCII punctuation that is stock `self-insert` is wrapped with Readline quoted keyseqs. vi-insert remains. Do not mark `GHST-004` complete. Do not start highlighting or overlay. |
-| 2026-08-18 | Recorded vi-insert ghost wrapping (`docs/ghst-002-vi-insert-plan.md`; V-1–V-3). Same Enter macro on vi-insert; do not bind `\ef`. Do not mark `GHST-004` complete. Do not start highlighting or overlay. |
-| 2026-08-18 | Recorded ghost Left dismiss (`docs/ghst-002-left-motion-plan.md`; L-1–L-3). Left / `\C-b` strip then backward-char. Home / Up / kill-ring isolation remain. Do not mark `GHST-004` complete. Do not start highlighting or overlay. |
-| 2026-08-18 | Fixed ghost Enter armed-flag / helper-before-printable install (M-044). Do not mark `GHST-004` complete. |
-| 2026-08-19 | Recorded partial ghost `GHST-004` resize/quoted PTY evidence (`docs/ghst-004-multiline-resize-plan.md`; R-1/Q-1). Multiline PS2 and latency matrix remain. Do not mark `GHST-004` complete. |
-| 2026-08-19 | Recorded ghost `GHST-004` no-execution PTY evidence (`docs/ghst-004-no-execution-plan.md`; C-1/B-1). Latency matrix remains `deferred`. Do not mark `GHST-004` complete. |
-| 2026-08-20 | Recorded ghost Down / forward-history dismiss (`docs/ghst-002-down-motion-plan.md`; D-1–D-2). Dim paint and async stale-rejection remain blocked. Do not mark `GHST-004` complete. |
-| 2026-08-20 | Landed `HIST-010` / `GIT-003` + CLI filters onto main after ghost (`docs/hist-010-git-003-plan.md`; `docs/hist-010-cli-filters-plan.md`). Unblocks interactive repo/failed search consumers. |
-| 2026-08-25 | Reclassified blocker taxonomy: continuous decoration **defers** highlighting, dim paint, and GUI overlays (G5 revisit; IDs kept). Strategy A search (`SRCH-001`/`SRCH-002`) is `ready`; `SRCH-003` waits on landing search UI, not decoration. No deliverable marked complete. |
-| 2026-08-25 | Accepted ADR 0011 async feature IPC on MBX2 (`docs/adr/0011-async-feature-ipc.md`). Landed MBX2 QUERY/RESULT/CANCEL wire (`docs/ghst-001-query-wire-plan.md`) and ghost coprocess QUERY with generation checks (`docs/ghst-001-ghost-query-plan.md`). `GHST-001` stays `validation` (overlapping delayed-RESULT PTY remains). Do not mark `GHST-001` complete. |
-| 2026-08-25 | Rebased Strategy A history-search insert onto QUERY-wire (`bash/search.bash`; ADR 0009). Default chord is `\C-xh` so stock `\C-r` and `\C-x\C-r` stay free. Overlay stays `deferred`. |
-| 2026-08-25 | Recorded Strategy A bounded search cycling (`docs/srch-001-result-view-plan.md`; V-1–V-4). `SRCH-001` stays `validation` until PTY evidence is green on this tree. Overlay stays `deferred`. |
-| 2026-08-25 | Recorded Strategy A search restore (`docs/srch-002-cancel-restore-plan.md`; `\C-xl`; R-1–R-4). `SRCH-002` stays `validation` until PTY evidence is green on this tree. Overlay stays `deferred`. |
-| 2026-08-25 | Recorded `SRCH-003` cwd-scoped empty-line search (`docs/srch-003-cwd-filter-plan.md`; C-1–C-4). `MBX_SEARCH_CWD=0` keeps global recent. Do not mark `SRCH-003` complete. Overlay stays `deferred`. |
-| 2026-08-25 | Recorded `SRCH-003` prefix/fuzzy `--cwd` (`docs/srch-003-cwd-prefix-plan.md`). Typed `\C-xh` prefers cwd-scoped prefix then fuzzy before global queries. Do not mark `SRCH-003` complete. Overlay stays `deferred`. |
-| 2026-08-25 | Recorded `SRCH-003` search signal/terminal-state PTY (`docs/srch-003-signal-plan.md`; T-1–T-4). Do not mark `SRCH-003` complete. Overlay stays `deferred`. |
-| 2026-08-25 | History-search PTY is green on this tree (23 cases). `SRCH-001` and `SRCH-002` move to `complete`. `SRCH-003` stays `validation` (100k interactive leftover `deferred`; overlay `deferred`). |
-| 2026-08-25 | Ghost overlapping delayed-RESULT PTY and CANCEL-after-QUERY prompt (`docs/ghst-001-ghost-query-plan.md` W-2/W-4). `GHST-001` and `GHST-002` move to `complete`. `GHST-004` functional editing/safety PTY closes; latency percentiles stay `deferred`. Phase 4 Strategy A ghost is `complete`. Dim paint / overlay stay `deferred`. |
-| 2026-08-25 | `HRD-001` macOS pairwise matrix is `blocked` on a macOS host. Darwin PTY constants (D-1–D-3) remain recorded. Do not fake the matrix on Linux. |
-| 2026-08-25 | Rebased `COMP-004` ranked-cycle onto ghost/search chords. Default cycle is `\C-xn` / `\C-xp` (inspect `bind -p`; do not reuse ghost `\C-x\C-n` / `\C-x\C-p`). C-1–C-6 PTY/module evidence recorded. `COMP-004` stays `discovery` (overlay `deferred`). |
-| 2026-08-25 | Closed `COMP-005` Strategy A insert/fallthrough (`docs/comp-005-strategy-a-close-plan.md`). Existing G4/COMP-002 parity, ranked-accept, ranked-cycle, and `GIT-004` kinds. Overlay leftover stays `COMP-004` `discovery`. Phase 5 Strategy A is `complete`. Do not start highlighting or dim paint. |
-| 2026-08-25 | Closed `BST-002`–`BST-004`, `PRM-001`, and `PRM-009` (`docs/bst-prm-g0-leftover-close-plan.md`). Re-source idempotence and nerd-icon glyph asserts added. Platform matrix leftover stays `HRD-001`. Broader lifecycle tracing stays `deferred`. `SRCH-003` stays `validation`. |
-| 2026-08-25 | Closed Phase 7 MVP Git/provider expansion (`docs/git-phase7-mvp-close-plan.md`). `GIT-001`–`GIT-004` evidenced; `GIT-005` stays `deferred`. Upstream/remotes/tags unauthorized. Do not mark `G5` complete. |
-| 2026-08-25 | Closed `SRCH-003` Strategy A metadata filters + signal (`docs/srch-003-failed-filter-plan.md`; F-1–F-3). Opt-in `MBX_SEARCH_FAILED=1` empty-line insert. Overlay leftover `deferred`. 100k interactive leftover `deferred`. Interactive repo insert unauthorized. Phase 8 Strategy A is `complete`. `HRD-001` / `G5` stay host-blocked. Do not start highlighting or dim paint. |
-| 2026-08-26 | Closed `HRD-002` hostile/privacy/no-execution audit (`docs/hrd-002-hostile-audit-plan.md`). Search and editor refuse C0/DEL inserts; ghost suffix gate reused. Phase 9 is `in-progress`. `HRD-004` is next. Do not mark `G5` complete. |
-| 2026-08-26 | Closed `HRD-004` install/disable/removal/crash/recovery (`docs/hrd-004-lifecycle-plan.md`). Setup and `source init.bash` never write `~/.bashrc`. Deferred `HRD-003` percentiles with other timing leftovers. `HRD-001` / `G5` stay host-blocked. |
-| 2026-08-26 | Recorded `HRD-001` Linux pairwise PTY L-1–L-5 (`docs/hrd-001-linux-pairwise-plan.md`; nested, SSH prompt, login, vim restore, `/usr/bin/tmux`). macOS matrix stays host-blocked. Do not mark `HRD-001` or `G5` complete. |
-| 2026-08-26 | Fixed engine coprocess SIGINT at the prompt (M-051). Ctrl+C no longer kills `mbx serve` or prints coproc job noise. |
 | 2026-08-27 | Accepted ADR 0012 macOS `HRD-001` deferral. Closed `G5` and Phase 9 for Strategy A MVP on Linux (`docs/g5-strategy-a-close-plan.md`). `HRD-001` Linux `complete`; macOS `deferred`. Overlay/highlighting/percentiles stay `deferred`. |
 | 2026-08-27 | Accepted ADR 0013 opt-in continuous decoration. Implemented `MBX_HIGHLIGHT=1` (`bash/highlight.bash`, `mbx highlight`) and `MBX_COMP_OVERLAY=1` (`bash/completion.bash`). `HLT-001`/`HLT-002` and `COMP-004` overlay slice move to `validation`; `HLT-003` hostile/latency gates stay `deferred`. |
 | 2026-08-27 | Review close plan for ADR 0013 (`docs/hlt-comp-review-close-plan.md`). Highlight wrap is a no-op until H-1–H-6; overlay leftover is O-1–O-5. Do not mark `HLT-002` or `COMP-004` complete. |
@@ -801,3 +731,17 @@ an accepted decoration/ownership ADR.
 | 2026-08-28 | Added `scripts/configure.bash` interactive option menu (`install.bash --interactive`, `mbx_configure`). `--answers FILE` covers the same keys without a TTY. Ghost+highlight still cannot combine; persist-in-bashrc stays opt-in. Do not mark `HLT-002`, `COMP-004`, Phase 6, or `HLT-003` complete. |
 | 2026-08-28 | Review fixes for install/configure: isolate `XDG_CONFIG_HOME` in smoke HOME tests (M-057); `--bashrc` follows a HOME-local bashrc symlink and refuses targets outside `$HOME`; wrap copies `-P`/`-S`/`-X` as well as `-o`. Do not mark `HLT-002`, `COMP-004`, Phase 6, or `HLT-003` complete. |
 | 2026-08-28 | Configure re-entry loads the saved file (opening choice 4 / `--from-config`; `mbx_configure` passes `--from-config`). `--build` runs `cargo build --release --workspace`. `mbx_status` prints duration, persist-bashrc, and helper executable/missing. Do not mark `HLT-002`, `COMP-004`, Phase 6, or `HLT-003` complete. |
+| 2026-08-29 | Repository review (`docs/repo-review-2026-08-29.md`) plus its Track 0 fixes: `unreadable_store_fails_closed_without_widening` no longer assumes a non-privileged caller (M-060), so `bash tests/run.bash` now completes as root; `tests/integration/protocol.bash` resolves a relative binary argument before the case that changes directory (M-061); CI (`.github/workflows/ci.yml`) gained an MSRV 1.85.0 job, a release-profile build job, Bash 5.0/5.1/5.2 legs for `HRD-001`, and a manual macOS `workflow_dispatch` job. |
+| 2026-08-29 | `HLT-004` (Track 1 of the review plan): accepted ADR 0014, routing `MBX_HIGHLIGHT=1`'s live refresh over the coprocess via a new independent `HighlightHandler` and MBX2 `HIGHLIGHT`/`STYLED` frame pair, structurally eliminating the per-keystroke helper-process fork (`crates/pty/tests/highlight.rs` proves zero non-serve `mbx` invocations while the coprocess is ready, contrasted with the CLI fallback). Also fixed `M-063` (a `[N] PID` job announcement leaking from `_mbx_engine_write`/`_mbx_engine_exchange` when called from a `bind -x` keystroke callback — affected ghost's existing wire path too; its own PTY suite got noticeably faster once fixed). While fixing highlight's color-detection bug (`M-062`, mitigated: the helper decided color from its own never-a-terminal stdout), found a deeper, previously-undiscovered defect (`M-064`, open): Readline caret-renders `\001`/`\002` inside `READLINE_LINE` rather than hiding them as it does in `PS1`, so the live interactive path has never rendered real color correctly. The interactive refresh deliberately keeps `color=0` until `M-064` is resolved; `HLT-002` moves to `blocked` and Phase 6 stays `validation` pending that work, not the previously-tracked percentile leftover. |
+| 2026-08-29 | `DIAG-001` (Track 4 of the review plan): added `mbx_doctor`, the `mbx doctor` diagnostic command from `CODEX_MODERN_BASH_ARCHITECTURE.md` §41, which the roadmap had never carried an ID for. Reports and explains, with a fix line, every check `mbx_status` only summarized plus several it never covered (keybinding collisions per feature, history store permissions/health, live handshake). README's per-feature "Check it is installed" recipes now point to it instead of duplicating manual `bind -X`/`printf` snippets. |
+| 2026-08-29 | Track 2 of the review plan: added a minimal VT screen model (`crates/pty/src/screen.rs`) so a PTY test can assert what a terminal actually shows, not just that a substring eventually appeared in the raw byte stream. Used it to write the failing case the overlay's terminal-safety claim never had: at a short terminal with the prompt a few lines down, showing an eight-candidate overlay scrolls the screen, which invalidates the overlay's `\e7`/`\e8` (DECSC/DECRC) absolute-position save and makes the following `\e[J` erase the prompt and all prior output from the wrong origin (`M-065`, open). A `SIGWINCH` while the overlay is visible is confirmed unaffected. `COMP-004` moves from `validation` to `blocked` — this was a confirmed defect the review found, not merely an unproven claim; a correct fix needs a cursor-row query this codebase does not have, or a different rendering strategy, so no fix is attempted in this change. The reproducing test stays `#[ignore]`-marked evidence (`crates/pty/tests/overlay_screen.rs`) rather than a permanently red canonical suite. |
+| 2026-08-29 | Track 3 of the review plan: closed the last authorized `SRCH-003` gap. Added `mbx repo root [--cwd PATH]`, a thin CLI wrapper around the existing ADR 0007 Git adapter, so Bash can learn the current Git worktree root without ever calling `git` itself. `MBX_SEARCH_REPO=1` (`bash/search.bash`) resolves that root on an empty-line `\C-xh` and prefers `history search repo ROOT`, falling through to cwd/recent outside a worktree or when the repo has no rows (`docs/srch-003-repo-filter-plan.md`; ADR 0009 decision 4 extended). This also reconciles the roadmap with PR #48 (`ishitvagoel/ColorBash`), an equivalent, independently authored slice that had gone stale and conflicted against main; the three "interactive repo insert unauthorized" statements this depended on are corrected. PTY evidence: `empty_line_inserts_repo_when_opt_in` (a real `git init` worktree; a row recorded elsewhere in the same repository outranks a newer row recorded outside it) and `empty_line_repo_falls_back_when_not_in_a_repository`. |
+| 2026-08-29 | `REL-001` (Track 4 of the review plan): added `.github/workflows/release.yml`, a `v*`-tag-triggered pipeline building `mbx` for `x86_64`/`aarch64` Linux on native runners and publishing a checksummed GitHub release, addressing `GAP-1` (no tag, release, or prebuilt binary existed). `in-progress`, not `complete`: it is untested end-to-end (no tag has been pushed) and cutting the first tag is a maintainer decision. `scripts/install.bash`'s download-preferring half is deliberately deferred until a real release exists to validate against. |
+| 2026-08-29 | Track 4 of the review plan: split `README.md` into a short introduction (install, comfort profile, the six rules that always hold, feature map, `mbx doctor`) and `docs/reference.md` (the ten per-feature walkthroughs, the full environment-variable list, and automated test commands), unchanged in substance. README dropped from ~24 KB / 608 lines to ~8 KB / 144 lines; nothing was deleted, only relocated and cross-linked. |
+| 2026-08-30 | Review fixes for the review-plan branch, each with a test confirmed to fail against the unfixed code: highlight's coprocess loop now skips a queued history `ACK` the way ghost's identical loop already did, instead of tearing down a healthy helper when `MBX_HIGHLIGHT=1` and `MBX_HISTORY=1` share the one coprocess (`M-066`); `_mbx_search_repo_root` gates on the helper's exit status rather than trusting a possibly-partial first line from a killed child (`M-067`); added the `LICENSE-MIT`/`LICENSE-APACHE` texts that `Cargo.toml` has always declared and `release.yml` packaged, and dropped the error suppression that would have shipped a tarball without them (`M-068`). Also resynchronized this change log with `docs/archive/roadmap-history.md`, which was two entries behind the contract that the same commit introduced. No status values change. |
+| 2026-08-30 | Fixed `M-069`: three provider tests that drive the real `git` binary were implicitly asserting the host can fork and exec `git` twice inside the product's hard 50 ms `MAX_GIT_DEADLINE` clamp. CI proved this machine-dependent — `context_returns_root_and_branch_for_a_worktree` timed out in the stable job and passed in the MSRV job on one identical commit. Added a `retry_while_timed_out` test helper scoped to `ProviderErrorKind::Timeout` alone, with its own contract test showing any other error kind and any wrong value still fail on the first attempt. The product deadline and its clamp invariant are unchanged. |
+| 2026-08-30 | Review-feedback fixes on PR #52. `mbx doctor` now reports all ten chords MBX installs rather than only the three opt-in features, attributes a declined chord to a tty only for the two features that gate on one (and asks about stdin, as those installers do), and fails on a history store whose path resolves but whose row count does not (`M-070`). `release.yml` gates its publish job on `refs/tags/v*`, so a `workflow_dispatch` smoke run can no longer publish a release and an unintended tag from a branch (`M-071`). The Bash 5.0 CI leg this branch added caught a near-limit render-deadline assertion that was really a benchmark of the host's Bash build: measured against a from-source Bash 5.0, elapsed minus timeout is a flat ~121ms on 5.0 and ~32ms on 5.2 at every timeout tried, so the deadline is honored on both and only a fixed per-version cost differed. Replaced with a differential measurement across two render timeouts, which cancels that cost and asserts what the case is actually for (`M-072`). All three Bash suites now pass on a real Bash 5.0 build. |
+| 2026-08-30 | Fixed `M-073`, found by the new Bash 5.0 CI leg: `tests/bash/corpus.bash` wrote its `MBX_TEST:` marker prefix as a literal in its own source, so the smoke suite's `grep -o` captured echoed input lines alongside real program output. That made the compatibility comparison silently require MBX to leave Bash's input echo byte-identical — which changing `PS1`/`PS2` and Readline state makes impossible by design — and made the result depend on the Readline build. Ubuntu 20.04's Bash 5.0 failed it while every real corpus result matched exactly. The prefix now lives in a variable, so echoed source can no longer match on any build. Verified the suite still catches a genuine semantic change. |
+| 2026-08-30 | Fixed `M-074`: the CI workflow's bare `push:` trigger meant every commit on a PR branch ran the whole matrix twice concurrently, and superseded runs were never cancelled. Because the PTY suites drive real interactive shells against wall-clock deadlines, that self-inflicted contention is what makes them flaky — on commit 8684622 the two concurrent runs disagreed, the canonical suite passing while MSRV failed the same ghost test with nothing recorded in eight seconds. `push` is now scoped to `main` and a `concurrency` group cancels superseded runs. |
+| 2026-08-30 | `M-075`: the PTY cases that assert a command was recorded were racing `MBX_HISTORY_TIMEOUT`, the budget MBX is designed to abandon rather than stall the prompt. Raised the tolerant PTY default from 1.0s to 5.0s (production deadline behavior stays asserted in `tests/bash/modules.bash` and in the dedicated 0.10s case), and rebuilt `wait_for_count`'s failure report to name which of the plausible causes actually occurred. Recorded as `Mitigated`, not `Fixed`: the failure did not reproduce in ~22 deliberate attempts across CPU saturation, concurrent PTY binaries, and full-suite runs, so the root cause is not established and a validated fix was not possible. |
+| 2026-08-30 | **`M-076`: MBX was a complete no-op on Bash 5.0.** An array `PROMPT_COMMAND` is a Bash 5.1 feature; 5.0 treats the variable as a string and runs element 0 only, so `_mbx_render_prompt` never ran, `PS1` was never set, and the shell kept its stock prompt — while the same assignment silently discarded any pre-existing `PROMPT_COMMAND`, costing users of other frameworks their hook for nothing. Invisible because every assertion inspected the variable rather than its effect, local development is 5.2, and no CI ran 5.0 until this branch added the leg. `_mbx_install_hooks` now installs an array on 5.1+ and a `;`-joined string on 5.0; `tests/bash/smoke.bash` asserts a rendered `PS1` and compares the joined value instead of an element count. Note `smoke.bash` spawns plain `bash` for its inner shells, so testing 5.0 requires a `bash` shim first in `PATH`, not merely running the suite under a 5.0 interpreter. This is what the `HRD-001` Bash matrix was added to find. |

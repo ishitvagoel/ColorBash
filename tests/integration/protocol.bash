@@ -3,6 +3,12 @@ set -euo pipefail
 
 ROOT=$(cd -- "${BASH_SOURCE[0]%/*}/../.." && pwd -P)
 MBX_TEST_BIN=${1:-"$ROOT/target/debug/mbx"}
+# Resolve a relative binary argument against the invocation directory now: a
+# later case intentionally cd's into a directory it then deletes, and a
+# relative path would stop resolving from there (M-061).
+if [[ $MBX_TEST_BIN != /* ]]; then
+    MBX_TEST_BIN="$PWD/$MBX_TEST_BIN"
+fi
 
 fail() {
     printf 'FAIL: %s\n' "$1" >&2

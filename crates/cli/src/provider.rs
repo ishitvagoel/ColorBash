@@ -841,6 +841,38 @@ mod tests {
     use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
 
+    /// Retries only a `Timeout` from a real-`git` provider call.
+    ///
+    /// `MAX_GIT_DEADLINE` is a hard 50 ms clamp that the product deliberately
+    /// enforces and that `configured_deadline_is_clamped_to_fifty_milliseconds`
+    /// asserts, so a test cannot ask for a longer budget — and should not: the
+    /// clamp is the behavior under test everywhere else. But a test whose
+    /// subject is *parsing* (does the provider read back the right root and
+    /// branch?) must not also be an assertion that this machine can fork and
+    /// exec `git` twice inside 50 ms. On a shared CI runner it sometimes
+    /// cannot: the same test passed in the MSRV job and timed out in the
+    /// stable job on one identical commit.
+    ///
+    /// Only `Timeout` is retried. Any other error kind, and any successful but
+    /// wrong value, still fails on the first attempt — so this tolerates slow
+    /// scheduling without weakening what the test actually checks.
+    fn retry_while_timed_out<T>(
+        mut attempt: impl FnMut() -> Result<T, ProviderError>,
+    ) -> Result<T, ProviderError> {
+        const ATTEMPTS: usize = 20;
+        let mut last = attempt();
+        for _ in 1..ATTEMPTS {
+            match last {
+                Err(ref error) if error.kind() == ProviderErrorKind::Timeout => {
+                    std::thread::sleep(Duration::from_millis(10));
+                    last = attempt();
+                }
+                _ => return last,
+            }
+        }
+        last
+    }
+
     #[derive(Clone)]
     struct StubRunner {
         calls: Arc<AtomicUsize>,
@@ -1052,10 +1084,11 @@ mod tests {
         );
         fs::remove_file(&marker).unwrap();
 
-        let status = GitRepositoryStatusProvider::default()
-            .status(directory.path())
-            .unwrap()
-            .expect("the temporary repository should be detected");
+        let status = retry_while_timed_out(|| {
+            GitRepositoryStatusProvider::default().status(directory.path())
+        })
+        .unwrap()
+        .expect("the temporary repository should be detected");
         assert!(!status.branch.is_empty());
         assert!(
             !marker.exists(),
@@ -1068,9 +1101,10 @@ mod tests {
         let directory = TestDirectory::new();
 
         assert_eq!(
-            GitRepositoryStatusProvider::default()
-                .status(directory.path())
-                .unwrap(),
+            retry_while_timed_out(|| {
+                GitRepositoryStatusProvider::default().status(directory.path())
+            })
+            .unwrap(),
             None
         );
     }
@@ -1156,10 +1190,11 @@ mod tests {
                 .unwrap()
                 .success()
         );
-        let context = GitRepositoryStatusProvider::default()
-            .context(directory.path())
-            .unwrap()
-            .expect("the temporary repository should be detected");
+        let context = retry_while_timed_out(|| {
+            GitRepositoryStatusProvider::default().context(directory.path())
+        })
+        .unwrap()
+        .expect("the temporary repository should be detected");
         let expected = directory.path().canonicalize().unwrap();
         assert_eq!(Path::new(&context.root), expected.as_path());
         assert_eq!(context.branch.as_deref(), Some("hist-branch"));
@@ -1266,6 +1301,50 @@ mod tests {
             descendant_exists,
             "the background process must still hold stdout when the runner returns"
         );
+    }
+
+    #[test]
+    fn timeout_retry_helper_retries_only_timeouts() {
+        // A timeout followed by success is retried through to the success.
+        let calls = Cell::new(0);
+        let value = retry_while_timed_out(|| {
+            calls.set(calls.get() + 1);
+            if calls.get() < 3 {
+                Err(ProviderError::typed(
+                    ProviderErrorKind::Timeout,
+                    "Git inspection exceeded its deadline",
+                ))
+            } else {
+                Ok(7)
+            }
+        })
+        .unwrap();
+        assert_eq!(value, 7);
+        assert_eq!(calls.get(), 3);
+
+        // Any other error kind must surface on the first attempt: the helper
+        // must not paper over a real provider failure.
+        let calls = Cell::new(0);
+        let error = retry_while_timed_out(|| {
+            calls.set(calls.get() + 1);
+            Err::<(), _>(ProviderError::typed(
+                ProviderErrorKind::MalformedOutput,
+                "bad output",
+            ))
+        })
+        .unwrap_err();
+        assert_eq!(error.kind(), ProviderErrorKind::MalformedOutput);
+        assert_eq!(calls.get(), 1, "a non-timeout error must not be retried");
+
+        // A success is returned without a second call.
+        let calls = Cell::new(0);
+        let value = retry_while_timed_out(|| {
+            calls.set(calls.get() + 1);
+            Ok::<_, ProviderError>(1)
+        })
+        .unwrap();
+        assert_eq!(value, 1);
+        assert_eq!(calls.get(), 1);
     }
 
     #[test]

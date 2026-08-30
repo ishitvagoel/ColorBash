@@ -138,6 +138,38 @@ _mbx_wait_child_until() {
     REPLY=$status
 }
 
+
+# Reads one bounded, already-LF-terminated line (an optional CR is stripped)
+# from a coprocess or process-substitution fd, tolerant of a read that hits
+# its deadline with a partial line already in `REPLY` (status 1). Used by any
+# caller that must skip a stale reply and keep reading later frames from the
+# same fd (ADR 0011 stale-generation skip): ghost QUERY/RESULT and highlight
+# HIGHLIGHT/STYLED both need this, so it lives here rather than inside either
+# feature module.
+_mbx_engine_read_line() {
+    local fd=$1
+    local deadline=$2
+    local timeout status=0
+    local LC_ALL=C
+
+    _mbx_deadline_remaining "$deadline" || return 1
+    timeout=$REPLY
+    REPLY=
+    IFS= read -r -t "$timeout" -n 65536 -u "$fd" REPLY || status=$?
+    case $status in
+        0 | 1)
+            [[ -n $REPLY || $status == 0 ]] || return 1
+            if [[ $REPLY == *$'\r' ]]; then
+                REPLY=${REPLY%$'\r'}
+            fi
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 _mbx_read_bounded_response() {
     local fd=$1
     local deadline=$2
@@ -254,10 +286,16 @@ _mbx_engine_write() {
 
     # A background builtin write keeps a peer that stops reading from consuming
     # the complete render deadline. Its PID is always bounded and collected.
-    (
+    # `set +m` alone does not stop Bash announcing "[N] PID" for this job when
+    # the caller runs from a bind -x keystroke callback (confirmed: it does
+    # not happen from PROMPT_COMMAND, but does from self-insert) — the
+    # announcement goes to the shell's own stderr, not the backgrounded
+    # command's, so only wrapping the whole group's stderr suppresses it
+    # (M-063).
+    { (
         trap '' PIPE
         printf '%s\n' "$request" >&"$_MBX_ENGINE_IN_FD" 2>/dev/null
-    ) &
+    ) & } 2>/dev/null
     writer_pid=$!
     if ! _mbx_wait_child_until "$writer_pid" "$deadline"; then
         _mbx_terminate_child "$writer_pid"
@@ -300,10 +338,16 @@ _mbx_engine_exchange() {
 
     # A background builtin write keeps a peer that stops reading from consuming
     # the complete render deadline. Its PID is always bounded and collected.
-    (
+    # `set +m` alone does not stop Bash announcing "[N] PID" for this job when
+    # the caller runs from a bind -x keystroke callback (confirmed: it does
+    # not happen from PROMPT_COMMAND, but does from self-insert) — the
+    # announcement goes to the shell's own stderr, not the backgrounded
+    # command's, so only wrapping the whole group's stderr suppresses it
+    # (M-063).
+    { (
         trap '' PIPE
         printf '%s\n' "$request" >&"$_MBX_ENGINE_IN_FD" 2>/dev/null
-    ) &
+    ) & } 2>/dev/null
     writer_pid=$!
 
     if _mbx_read_bounded_response "$_MBX_ENGINE_OUT_FD" "$deadline"; then
