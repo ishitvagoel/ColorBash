@@ -20,6 +20,16 @@ const DIR_MODE: u32 = 0o700;
 const FILE_MODE: u32 = 0o600;
 const BUSY_TIMEOUT_MS: u64 = 100;
 const MIGRATE_BUSY_DEADLINE_MS: u64 = 2_000;
+/// How long an explicitly user-invoked command may wait out lock contention.
+///
+/// `BUSY_TIMEOUT_MS` is deliberately short: the prompt path must never stall
+/// waiting on another shell's lock, and dropping a record is the designed
+/// degradation there. A command the person at the keyboard typed is the
+/// opposite case — they are already waiting on it, and failing after 100 ms
+/// with `database is locked` because a second shell happened to be writing is
+/// a worse outcome than pausing briefly. Two open shells is the normal case
+/// for a shell integration, not an edge case.
+const USER_COMMAND_BUSY_DEADLINE_MS: u64 = 2_000;
 const WRITER_BATCH_SIZE: usize = 32;
 const REPO_CONTEXT_CACHE_CAPACITY: usize = 128;
 const REPO_CONTEXT_CACHE_TTL: Duration = Duration::from_secs(1);
@@ -526,9 +536,16 @@ impl HistoryControl for QueuedHistoryStore {
 
     fn clear(&self) -> Result<(), HistoryError> {
         let connection = open_connection(&self.store_path)?;
-        connection
-            .execute("DELETE FROM history", [])
-            .map_err(history_error(HistoryErrorKind::Write))?;
+        // `open_connection` already waits out contention on the *open*; the
+        // DELETE itself had only the connection's 100 ms `busy_timeout` and no
+        // retry, so a concurrent writer surfaced as `database is locked` to a
+        // user who had simply typed `mbx history clear`.
+        execute_batch_with_lock_retry_until(
+            &connection,
+            "DELETE FROM history;",
+            USER_COMMAND_BUSY_DEADLINE_MS,
+        )
+        .map_err(history_error(HistoryErrorKind::Write))?;
         Ok(())
     }
 
@@ -1716,6 +1733,54 @@ mod tests {
         }
         assert_main_store_not_destroyed(path);
         assert_unique_keys(path);
+    }
+
+    /// `mbx history clear` is a command a person typed and is waiting on, so a
+    /// second shell holding the write lock must delay it, not fail it. With
+    /// only the 100 ms `busy_timeout` and no retry this returned
+    /// `history write: database is locked`.
+    #[test]
+    fn clear_waits_out_a_concurrent_writer_instead_of_failing() {
+        let (dir, path) = temp_store("clr-busy");
+        commit_sentinel_row(&path);
+        let store = QueuedHistoryStore::open(&path, 8).unwrap();
+        assert_eq!(store.count().unwrap(), 1);
+
+        // Hold the write lock from another connection, then release it well
+        // after the hot-path budget would have given up but inside the
+        // user-command one.
+        let held = rusqlite::Connection::open(&path).unwrap();
+        held.busy_timeout(Duration::from_millis(BUSY_TIMEOUT_MS))
+            .unwrap();
+        held.execute_batch("PRAGMA journal_mode=WAL; BEGIN IMMEDIATE;")
+            .unwrap();
+        let releaser = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(400));
+            let _ = held.execute_batch("ROLLBACK;");
+            drop(held);
+        });
+
+        let started = std::time::Instant::now();
+        let outcome = store.clear();
+        let waited = started.elapsed();
+        releaser.join().unwrap();
+
+        outcome.expect("clear must wait out a concurrent writer, not fail closed");
+        assert_eq!(
+            store.count().unwrap(),
+            0,
+            "clear should have emptied the store"
+        );
+        assert!(
+            waited >= Duration::from_millis(200),
+            "the clear should have actually waited on the lock, not raced past it; waited {waited:?}"
+        );
+        assert!(
+            waited < Duration::from_millis(USER_COMMAND_BUSY_DEADLINE_MS + 1_000),
+            "clear must stay bounded by its deadline; waited {waited:?}"
+        );
+        drop(store);
+        drop(dir);
     }
 
     #[test]
