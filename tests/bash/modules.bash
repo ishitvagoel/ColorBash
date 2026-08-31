@@ -67,6 +67,16 @@ _mbx_tty_clamp_row '中x' 2
 assert_eq '中' "$REPLY" 'non-ASCII scalars count as two columns'
 _mbx_tty_clamp_row '中x' 1
 assert_eq '' "$REPLY" 'a two-column scalar that does not fit is dropped'
+(
+    LC_ALL=C
+    LANG=C
+    _mbx_tty_clamp_row '中x' 2
+    assert_eq '中' "$REPLY" \
+        'clamp keeps a whole UTF-8 scalar under a C locale (M-084)'
+    _mbx_tty_clamp_row $'\033[1;34m中\033[0mx' 2
+    assert_eq $'\033[1;34m中\033[0m' "$REPLY" \
+        'C-locale clamp still treats SGR as width-free around a wide scalar'
+)
 if [[ -n $saved_columns ]]; then
     COLUMNS=$saved_columns
 else

@@ -1968,3 +1968,24 @@ to prevent recurrence, not to assign blame.
   `crates/pty/tests/highlight.rs`
   (`highlight_preview_row_paints_sgr_below_an_intact_prompt`).
 
+## M-084 — TTY row clamp split UTF-8 under a C locale
+
+- Discovered: 2026-08-31
+- Status: Fixed
+- Failed assumption: `${#text}` and `${text:index:1}` walk Unicode scalars,
+  so treating `code >= 128` as two columns would keep `中` intact. That is
+  true only in a UTF-8 locale. In C/POSIX they walk bytes.
+- Impact: the Bash-matrix CI containers (`ubuntu:20.04`/`22.04`/`24.04`)
+  default to C. `_mbx_tty_clamp_row '中x' 2` copied the first byte
+  (`$'\344'`) and the module suite failed on every Bash 5.x leg while the
+  UTF-8 canonical suite stayed green.
+- Correction: clamp with `LC_ALL=C` and consume a whole UTF-8 sequence per
+  non-ASCII scalar (2/3/4 bytes from the lead byte). Signed high-byte codes
+  are folded back into 0–255.
+- Prevention: any Bash walk that cares about glyphs or display width must
+  either force a UTF-8 locale that the host guarantees, or index bytes and
+  decode UTF-8 itself. Module contracts for that walk must run under
+  `LC_ALL=C`, not only the developer's UTF-8 locale.
+- Evidence: `_mbx_tty_clamp_row` in `bash/engine.bash`; C-locale clamp
+  contracts in `tests/bash/modules.bash`.
+

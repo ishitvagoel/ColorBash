@@ -207,11 +207,13 @@ _mbx_tty_erase_below() {
 
 # Visible-width clamp for a tty row. CSI SGR runs and SOH/STX markers do not
 # consume columns. Non-ASCII scalars count as two columns (conservative).
+# Indexing is LC_ALL=C bytes: `${#var}` / `${var:i:1}` walk Unicode scalars
+# only in a UTF-8 locale, and the Bash-matrix CI containers are C/POSIX.
 _mbx_tty_clamp_row() {
     local text=$1
     local max=${2:-79}
-    local out= width=0 index=0 ch code
-    local w
+    local out= width=0 index=0 ch code w seq len remaining
+    local LC_ALL=C
 
     ((max > 0)) || {
         REPLY=
@@ -220,6 +222,9 @@ _mbx_tty_clamp_row() {
     while ((index < ${#text})); do
         ch=${text:index:1}
         printf -v code '%d' "'$ch"
+        if ((code < 0)); then
+            code=$((code + 256))
+        fi
         if ((code == 1 || code == 2)); then
             index=$((index + 1))
             continue
@@ -235,16 +240,33 @@ _mbx_tty_clamp_row() {
             done
             continue
         fi
-        w=1
-        if ((code >= 128)); then
+        if ((code < 128)); then
+            w=1
+            seq=$ch
+            len=1
+        else
             w=2
+            if ((code >= 240)); then
+                len=4
+            elif ((code >= 224)); then
+                len=3
+            elif ((code >= 192)); then
+                len=2
+            else
+                len=1
+            fi
+            remaining=$((${#text} - index))
+            if ((len > remaining)); then
+                len=$remaining
+            fi
+            seq=${text:index:len}
         fi
         if ((width + w > max)); then
             break
         fi
-        out+=$ch
+        out+=$seq
         width=$((width + w))
-        index=$((index + 1))
+        index=$((index + len))
     done
     REPLY=$out
 }
