@@ -5,7 +5,7 @@ use crate::telemetry::trace_message;
 use mbx_protocol::{MAX_MESSAGE_BYTES, Request, Response, ResponseKind, validate_message_line};
 use std::fs;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
-use std::os::unix::fs::{FileTypeExt, PermissionsExt};
+use std::os::unix::fs::{DirBuilderExt, FileTypeExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -61,6 +61,9 @@ fn serve_socket_connection(
 ) -> Result<(), String> {
     stream
         .set_read_timeout(Some(Duration::from_secs(30)))
+        .map_err(io_error)?;
+    stream
+        .set_write_timeout(Some(Duration::from_secs(30)))
         .map_err(io_error)?;
     let reader_stream = stream.try_clone().map_err(io_error)?;
     serve_connection(
@@ -265,6 +268,15 @@ fn ensure_socket_path_available(path: &Path) -> Result<(), String> {
 
 fn bind_socket(path: &Path) -> Result<(UnixListener, SocketCleanup), String> {
     ensure_socket_path_available(path)?;
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() && !parent.exists() {
+            std::fs::DirBuilder::new()
+                .recursive(true)
+                .mode(0o700)
+                .create(parent)
+                .map_err(io_error)?;
+        }
+    }
     let listener = UnixListener::bind(path).map_err(io_error)?;
     let cleanup = SocketCleanup(path.to_path_buf());
     fs::set_permissions(path, fs::Permissions::from_mode(0o600)).map_err(io_error)?;

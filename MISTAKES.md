@@ -881,9 +881,15 @@ to prevent recurrence, not to assign blame.
 - Prevention: never show an inline suffix unless the Enter macro is armed.
   Bind accept helpers before wrapping `self-insert`. Armed flags must clear
   even when a secondary keymap bind fails.
-- Evidence: `_mbx_ghost_disarm_enter` / `_mbx_ghost_install` /
+- Evidence:   `_mbx_ghost_disarm_enter` / `_mbx_ghost_install` /
   `_mbx_ghost_show` in `bash/ghost.bash`; module contract for partial disarm
   in `tests/bash/modules.bash`.
+- Recurrence (2026-08-31): `_mbx_highlight_disarm_enter` cleared
+  `_MBX_HIGHLIGHT_ENTER_ARMED` only on full success, repeating this exact
+  cause. Highlight now always clears the flag after attempting both keymaps;
+  module contract covers the partial-vi failure. Prevention stands: when a
+  new feature copies an existing arm/disarm pair, diff the two functions
+  (M-066).
 
 ## M-045 — Protocol frame reader rejected multi-line search output
 
@@ -1000,6 +1006,13 @@ to prevent recurrence, not to assign blame.
 - Evidence: `_mbx_text_has_c0_or_del` in `bash/protocol.bash`;
   `_mbx_search_helper` / `_mbx_editor_insert_token`; H-6/H-7 in
   `tests/bash/modules.bash` and `docs/hrd-002-hostile-audit-plan.md`.
+- Recurrence (2026-08-31): ghost Up/Down history-motion
+  (`_mbx_ghost_previous_history` / `_mbx_ghost_next_history`) and ranked
+  completion insert (`_mbx_comp_apply_word_token`) wrote untrusted text into
+  `READLINE_LINE` with no C0/DEL gate. Overlay display already sanitized;
+  insert did not. Both sinks now gate; module contracts skip a C0 history
+  row and refuse a C0 candidate token. Prevention stands: every
+  `READLINE_LINE` assignment of untrusted text uses `_mbx_text_has_c0_or_del`.
 
 ## M-051 — Engine coprocess died on prompt Ctrl+C
 
@@ -1097,6 +1110,10 @@ to prevent recurrence, not to assign blame.
   bytes.
 - Evidence: `sanitize_wrap` in `scripts/configure.bash`; smoke wrap-token
   reject in `tests/bash/smoke.bash`.
+- Recurrence (2026-08-31): `_mbx_comp_identifier_ok` used the same
+  `[[ $1 == [A-Za-z_][A-Za-z0-9_]* ]]` glob, so `git;rm` matched. It now uses
+  an anchored `=~ ^[A-Za-z_][A-Za-z0-9_-]*$` (hyphens allowed for command
+  names). Module contract rejects `git;rm` and `foo bar`.
 
 ## M-057 — Isolated HOME tests inherited XDG_CONFIG_HOME
 
@@ -1456,6 +1473,13 @@ to prevent recurrence, not to assign blame.
   `tests/bash/modules.bash` R-3 (a helper that prints a plausible root but
   exits nonzero must fall through to cwd), confirmed to fail against the
   unfixed code.
+- Recurrence (2026-08-31): `_mbx_highlight_refresh_cli` discarded the
+  child's wait status (`>/dev/null`) and returned 0 with the payload even
+  after a kill; `_mbx_ghost_query_cli` likewise ignored wait failure if any
+  candidate had been parsed. Both now go through `_mbx_wait_or_kill_child`;
+  highlight requires exit status 0, and ghost discards candidates from a
+  timed-out child. Module contract: a highlight helper that prints two
+  well-formed lines then `exit 1` must not install them.
 
 ## M-068 — A declared workspace license shipped with no license text in the tree
 
@@ -1837,8 +1861,98 @@ to prevent recurrence, not to assign blame.
   tell here was a retry helper sitting in the same file, used by the writer
   loop and by `open_connection`, that the one statement which actually reached
   a user had skipped.
-- Evidence: `crates/cli/src/storage.rs`
+- Evidence:   `crates/cli/src/storage.rs`
   (`clear_waits_out_a_concurrent_writer_instead_of_failing`), which holds the
   write lock from a second connection for 400 ms — past the hot-path budget,
   inside the user-command one. Against the unfixed code it reproduces CI's
   exact failure, `HistoryError { kind: Write, message: "database is locked" }`.
+
+## M-078 — `${#var-}` is a runtime bad substitution
+
+- Discovered: 2026-08-31
+- Status: Fixed
+- Failed assumption: Bash default-value syntax works inside `${#…}`, as in
+  `local len=${#_MBX_HIGHLIGHT_PLAIN-}`.
+- Impact: `_mbx_highlight_forward` aborted with `bad substitution` on every
+  Right/`C-f` press before moving the cursor, and printed the error into the
+  session. Invisible because no test referenced `_mbx_highlight_forward`.
+- Correction: use `${#_MBX_HIGHLIGHT_PLAIN}` (unset length is 0 without
+  `nounset`). Module contract advances the plain cursor.
+- Prevention: never put `-`, `=`, `+`, or `?` operators inside `${#…}`.
+  Motion widgets need a contract that they actually move.
+- Evidence: `bash/highlight.bash` (`_mbx_highlight_forward`);
+  `tests/bash/modules.bash`.
+
+## M-079 — Store create-then-chmod left a world-readable window
+
+- Discovered: 2026-08-31
+- Status: Fixed
+- Failed assumption: creating a SQLite file (or directory) then `chmod 0600`
+  was equivalent to creating it with that mode. M-033 fixed widening, not
+  this race.
+- Impact: on a shared host, another UID could open the new database during
+  the umask window. WAL/SHM were only tightened later.
+- Correction: create the store file with `OpenOptionsExt` mode `0600` and
+  the parent directory with `DirBuilderExt` mode `0700` before SQLite opens
+  them. Socket bind still chmods immediately after `bind` (Unix sockets
+  cannot be pre-created as regular files); its parent dir is created `0700`
+  when missing.
+- Prevention: create files and directories with the target mode; do not
+  create-then-chmod. Permission tests must cover a newly created store, not
+  only tightening of an existing one.
+- Evidence: `ensure_restricted_store_file` / `create_store_dir` in
+  `crates/cli/src/storage.rs`; `newly_created_store_file_is_owner_only`.
+
+## M-080 — History `Drop` blocked forever on a full queue
+
+- Discovered: 2026-08-31
+- Status: Fixed
+- Failed assumption: ingest's non-blocking `try_send` meant Drop could
+  `send(Shutdown)` and `join` the writer. `SyncSender::send` blocks when the
+  queue is full.
+- Impact: process exit / serve teardown with history enabled could hang if
+  the writer was slow (Git enrich, lock wait) while the queue was at
+  capacity.
+- Correction: Drop uses `try_send(Shutdown)` and a 500 ms timed join.
+  Disconnect still ends the writer after its current batch.
+- Prevention: a hot-path queue that is non-blocking on ingest must also be
+  non-blocking on shutdown.
+- Evidence: `QueuedHistoryStore::Drop`; `drop_does_not_block_on_a_full_queue`.
+
+## M-081 — History exclude glob was exponential in star count
+
+- Discovered: 2026-08-31
+- Status: Fixed
+- Failed assumption: a recursive `*` matcher on local config was cheap
+  enough for every RECORD, including 64 KiB command text.
+- Impact: a pathological `MBX_HISTORY_EXCLUDE` (many `*`s) could stall or
+  melt ingest.
+- Correction: collapse consecutive `*` atoms and bound matcher steps
+  (`GLOB_STEP_BUDGET`). Over-budget patterns fail open (do not exclude)
+  rather than stall.
+- Prevention: untrusted haystacks plus user-supplied glob patterns need a
+  work bound, not only a correctness corpus of short strings.
+- Evidence: `crates/cli/src/policy.rs`;
+  `glob_match_is_bounded_on_pathological_stars`.
+
+## M-082 — Highlight accepted C0 input and skipped mid-codepoint after `\`
+
+- Discovered: 2026-08-31
+- Status: Fixed
+- Failed assumption: rejecting NUL and running `strip(style(x)) == x` on a
+  printable corpus proved the helper was safe for arbitrary bytes. Word
+  tokens copy input verbatim, so SOH/STX/CSI already in the input were
+  treated as markup on strip. Quote lexing advanced one byte after `\`,
+  splitting a following multibyte scalar.
+- Impact: `mbx highlight` / HIGHLIGHT wire could return styled text whose
+  strip was not the original; cursor maps could sit mid-glyph.
+- Correction: `highlight_line` rejects every C0 byte and DEL, not only NUL.
+  Escaped sequences in double quotes and backticks skip a whole UTF-8
+  scalar.
+- Prevention: the strip-round-trip contract must include C0/CSI in the
+  input, or those bytes must be rejected at the helper boundary. Byte `+ 2`
+  after `\` is not a UTF-8 advance.
+- Evidence: `crates/cli/src/highlight.rs`
+  (`c0_or_del_input_is_rejected`,
+  `escaped_multibyte_in_quotes_does_not_split_a_scalar`).
+

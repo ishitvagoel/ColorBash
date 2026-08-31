@@ -1009,6 +1009,24 @@ _mbx_comp_cycle_next
 assert_eq 'echo aa' "$READLINE_LINE" \
     'ranked cycle must not replace a prefix-colliding word at a different offset'
 
+READLINE_LINE='aa'
+READLINE_POINT=2
+_MBX_COMP_WORD_START=0
+_MBX_COMP_WORD_END=2
+_mbx_comp_apply_word_token "$(printf 'aa\033flag')"
+assert_eq 'aa' "$READLINE_LINE" \
+    'ranked accept must not insert a candidate that contains C0'
+assert_eq 2 "$READLINE_POINT" \
+    'ranked accept must leave the cursor unchanged when the token contains C0'
+_mbx_comp_identifier_ok git_ok || fail 'a legal completer name must pass identifier_ok'
+_mbx_comp_identifier_ok git-lfs || fail 'a hyphenated command name must pass identifier_ok'
+if _mbx_comp_identifier_ok 'git;rm'; then
+    fail 'identifier_ok must reject a semicolon (M-056 glob * is not a class repeat)'
+fi
+if _mbx_comp_identifier_ok 'foo bar'; then
+    fail 'identifier_ok must reject whitespace'
+fi
+
 # COMP-004 ranked cycle: prefix inserts head; equal head rotates; unrelated is no-op.
 _mbx_comp_wrap_backend _mbx_comp_r2_backend
 READLINE_LINE='mbx_comp_rank aa'
@@ -1460,6 +1478,19 @@ _mbx_ghost_next_history
 assert_eq 'echo MBX_GHST:beta' "$READLINE_LINE" \
     'ghost Down from offset 2 should load the newer history row'
 assert_eq 1 "${_MBX_GHOST_HIST_OFFSET:-missing}" 'ghost Down should decrement the history offset'
+history -c
+history -s 'echo MBX_GHST:clean'
+history -s "$(printf 'echo \033hijack')"
+READLINE_LINE='typed'
+READLINE_POINT=5
+_MBX_GHOST_HAS=0
+_MBX_GHOST_HIST_OFFSET=0
+_MBX_GHOST_HIST_CURRENT=
+_mbx_ghost_previous_history
+assert_eq 'echo MBX_GHST:clean' "$READLINE_LINE" \
+    'ghost Up must skip a C0 history row and load the next clean entry'
+assert_eq 2 "${_MBX_GHOST_HIST_OFFSET:-missing}" \
+    'ghost Up should advance past the hostile row'
 history -c
 for history_n in $(seq 1 12); do
     history -s "echo MBX_GHST:$history_n"
@@ -1917,6 +1948,78 @@ _MBX_HIGHLIGHT_ACTIVE=0
 _mbx_highlight_self_insert $'\x01'
 assert_eq 'echo keep' "$_MBX_HIGHLIGHT_PLAIN" \
     'highlight self-insert must refuse C0 bytes'
+
+# Highlight forward used `${#_MBX_HIGHLIGHT_PLAIN-}`, which is a runtime
+# bad substitution on every Bash (the `-` default is not valid inside `${#…}`).
+MBX_HIGHLIGHT=1
+MBX_BIN=/nonexistent/mbx-highlight
+_MBX_HIGHLIGHT_PLAIN='abc'
+_MBX_HIGHLIGHT_POINT=0
+_MBX_HIGHLIGHT_ACTIVE=0
+READLINE_LINE='abc'
+READLINE_POINT=0
+_mbx_highlight_forward
+assert_eq 1 "${_MBX_HIGHLIGHT_POINT:-missing}" \
+    'highlight forward must advance the plain cursor (not abort on ${#var-})'
+assert_eq 1 "$READLINE_POINT" 'highlight forward must update READLINE_POINT'
+
+# Partial keymap disarm must still clear ENTER_ARMED (M-044 recurrence).
+_MBX_HIGHLIGHT_ENTER_ARMED=1
+_MBX_HIGHLIGHT_VI_BOUND=1
+_MBX_HIGHLIGHT_WRAP_CTRL_J=0
+_MBX_HIGHLIGHT_VI_WRAP_CTRL_J=1
+_mbx_highlight_disarm_enter_keymap() {
+    if [[ $1 == emacs ]]; then
+        return 0
+    fi
+    return 1
+}
+_mbx_highlight_disarm_enter || true
+assert_eq 0 "${_MBX_HIGHLIGHT_ENTER_ARMED:-missing}" \
+    'partial keymap disarm must still clear HIGHLIGHT ENTER_ARMED (M-044)'
+unset -f _mbx_highlight_disarm_enter_keymap
+source "$ROOT/bash/highlight.bash"
+
+# A helper that prints a well-formed payload then exits nonzero must not
+# install that payload (M-067).
+cat >"$highlight_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+printf '%s\n' 'echo'
+printf '%s\n' '4'
+exit 1
+EOF
+chmod +x "$highlight_stub_dir/mbx"
+MBX_BIN=$highlight_stub_dir/mbx
+MBX_HIGHLIGHT=1
+_MBX_HIGHLIGHT_PLAIN='echo'
+_MBX_HIGHLIGHT_POINT=4
+_MBX_HIGHLIGHT_ACTIVE=0
+READLINE_LINE='keep'
+READLINE_POINT=4
+if _mbx_highlight_refresh; then
+    fail 'highlight refresh must reject a helper that exits nonzero (M-067)'
+fi
+assert_eq 'keep' "$READLINE_LINE" \
+    'a nonzero highlight helper must leave the line unchanged'
+cat >"$highlight_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+if [ "$1" = highlight ]; then
+    shift
+    plain=
+    point=0
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --point) point=$2; shift 2 ;;
+            --color) shift 2 ;;
+            *) plain="$plain${plain:+ }$1"; shift ;;
+        esac
+    done
+    printf '%s\n' "$(printf '\001\033[31m\002%s\001\033[0m\002' "$plain")"
+    printf '%s\n' "$((point + 7))"
+fi
+EOF
+chmod +x "$highlight_stub_dir/mbx"
+MBX_BIN=$highlight_stub_dir/mbx
 
 # H-6: MBX_HIGHLIGHT=1 and MBX_HISTORY=1 can both be on (only ghost and
 # highlight are mutually exclusive), so a history RECORD's ACK can still be

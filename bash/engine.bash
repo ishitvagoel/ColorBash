@@ -138,6 +138,42 @@ _mbx_wait_child_until() {
     REPLY=$status
 }
 
+# Wait for a child until the deadline. On timeout, terminate it and return 1
+# so callers cannot treat a killed helper's leftover payload as success
+# (M-067). On success, REPLY is the child's exit status.
+_mbx_wait_or_kill_child() {
+    local pid=$1
+    local deadline=$2
+
+    if _mbx_wait_child_until "$pid" "$deadline"; then
+        return 0
+    fi
+    _mbx_terminate_child "$pid"
+    return 1
+}
+
+# Shared bind -x job-control isolation (M-049). Features that spawn from a
+# keystroke callback must suspend monitor/notify and restore them on every
+# return path. One pair of flags is enough: these widgets do not nest.
+_MBX_JOBS_SAVED_MONITOR=0
+_MBX_JOBS_SAVED_NOTIFY=0
+
+_mbx_jobs_suspend() {
+    _MBX_JOBS_SAVED_MONITOR=0
+    _MBX_JOBS_SAVED_NOTIFY=0
+    [[ $- == *m* ]] && _MBX_JOBS_SAVED_MONITOR=1
+    [[ $- == *b* ]] && _MBX_JOBS_SAVED_NOTIFY=1
+    set +m
+    set +b
+}
+
+_mbx_jobs_restore() {
+    ((${_MBX_JOBS_SAVED_NOTIFY:-0} == 1)) && set -b
+    ((${_MBX_JOBS_SAVED_MONITOR:-0} == 1)) && set -m
+    _MBX_JOBS_SAVED_NOTIFY=0
+    _MBX_JOBS_SAVED_MONITOR=0
+}
+
 
 # Reads one bounded, already-LF-terminated line (an optional CR is stripped)
 # from a coprocess or process-substitution fd, tolerant of a read that hits

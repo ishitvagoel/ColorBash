@@ -6,10 +6,11 @@ _MBX_PROTOCOL_MAGIC_HISTORY=MBX2
 _MBX_PROTOCOL_MAX_MESSAGE_BYTES=$((64 * 1024))
 _MBX_PROTOCOL_FORBIDDEN_RAW_BYTES=$'\001\002\003\004\005\006\007\010\012\013\014\015\016\017\020\021\022\023\024\025\026\027\030\031\032\033\034\035\036\037\177'
 
-# True when text contains a C0 byte or DEL. Ghost suffixes, search inserts, and
-# editor tokens land in READLINE_LINE; ESC there is terminal injection on
-# redisplay (HRD-002). TAB is included: it is C0 even though MBX1 allows it as
-# a field separator.
+# True when text contains a C0 byte or DEL. Every READLINE_LINE sink must call
+# this before assignment: ghost suffixes, ghost history-motion, search inserts,
+# ranked-completion tokens, and editor tokens. ESC there is terminal injection
+# on redisplay (HRD-002). TAB is included: it is C0 even though MBX1 allows it
+# as a field separator.
 _mbx_text_has_c0_or_del() {
     local text=${1-}
     local LC_ALL=C

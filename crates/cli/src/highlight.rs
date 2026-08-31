@@ -75,7 +75,7 @@ fn lex(input: &str) -> Vec<Token> {
                 index += 1;
                 while index < bytes.len() {
                     if bytes[index] == b'\\' && index + 1 < bytes.len() {
-                        index += 2;
+                        skip_escaped(input, &mut index);
                         continue;
                     }
                     if bytes[index] == b'"' {
@@ -94,7 +94,7 @@ fn lex(input: &str) -> Vec<Token> {
                 index += 1;
                 while index < bytes.len() && bytes[index] != b'`' {
                     if bytes[index] == b'\\' && index + 1 < bytes.len() {
-                        index += 2;
+                        skip_escaped(input, &mut index);
                         continue;
                     }
                     index += 1;
@@ -265,11 +265,24 @@ fn render(input: &str, plain_point: usize) -> (String, usize) {
     (output, styled_point)
 }
 
+fn skip_escaped(input: &str, index: &mut usize) {
+    *index += 1;
+    if *index >= input.len() {
+        return;
+    }
+    let step = input[*index..].chars().next().map_or(1, |ch| ch.len_utf8());
+    *index += step;
+}
+
+fn contains_c0_or_del(input: &str) -> bool {
+    input.bytes().any(|byte| byte < 0x20 || byte == 0x7f)
+}
+
 pub fn highlight_line(input: &str, plain_point: usize, color: bool) -> Option<(String, usize)> {
     if input.len() > MAX_HIGHLIGHT_BYTES {
         return None;
     }
-    if input.contains('\0') {
+    if contains_c0_or_del(input) {
         return None;
     }
     if !color {
@@ -406,5 +419,26 @@ mod tests {
     fn oversized_input_is_rejected() {
         let input = "a".repeat(4097);
         assert!(highlight_line(&input, 0, true).is_none());
+    }
+
+    #[test]
+    fn c0_or_del_input_is_rejected() {
+        assert!(highlight_line("\u{1}secret\u{2}", 0, true).is_none());
+        assert!(highlight_line("echo \x1b[31mred", 0, true).is_none());
+        assert!(highlight_line("tab\there", 0, false).is_none());
+        assert!(highlight_line("ok", 0, true).is_some());
+    }
+
+    #[test]
+    fn escaped_multibyte_in_quotes_does_not_split_a_scalar() {
+        let tokens = lex("echo \"\\中x\"");
+        assert!(
+            tokens
+                .iter()
+                .all(|token| token.end <= "echo \"\\中x\"".len()),
+            "token ends must stay on char boundaries"
+        );
+        let (styled, _) = highlight_line("echo \"\\中x\"", 0, true).expect("highlight");
+        assert_eq!(strip_to_plain(&styled), "echo \"\\中x\"");
     }
 }

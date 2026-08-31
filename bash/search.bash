@@ -71,10 +71,7 @@ _mbx_search_read_line() {
 }
 
 _mbx_search_restore_jobs() {
-    ((${_MBX_SEARCH_SAVED_NOTIFY:-0} == 1)) && set -b
-    ((${_MBX_SEARCH_SAVED_MONITOR:-0} == 1)) && set -m
-    _MBX_SEARCH_SAVED_NOTIFY=0
-    _MBX_SEARCH_SAVED_MONITOR=0
+    _mbx_jobs_restore
 }
 
 _mbx_search_helper() {
@@ -90,14 +87,8 @@ _mbx_search_helper() {
         return 1
     deadline=$REPLY
     # bind -x under `set -m`/`set -b` can print job noise into the line buffer.
-    # Ghost already suspends monitor/notify around the same process-substitution
-    # helper; search must match that (M-049).
-    _MBX_SEARCH_SAVED_MONITOR=0
-    _MBX_SEARCH_SAVED_NOTIFY=0
-    [[ $- == *m* ]] && _MBX_SEARCH_SAVED_MONITOR=1
-    [[ $- == *b* ]] && _MBX_SEARCH_SAVED_NOTIFY=1
-    set +m
-    set +b
+    # Shared `_mbx_jobs_suspend` covers ghost, highlight, and search (M-049).
+    _mbx_jobs_suspend
     exec {output_fd}< <(exec "$MBX_BIN" "$@" 2>/dev/null)
     child_pid=$!
     while ((${#_MBX_SEARCH_MATCHES[@]} < limit)); do
@@ -109,8 +100,8 @@ _mbx_search_helper() {
         _MBX_SEARCH_MATCHES+=("$REPLY")
     done
     exec {output_fd}<&-
-    if ! _mbx_wait_child_until "$child_pid" "$deadline"; then
-        _mbx_terminate_child "$child_pid"
+    if ! _mbx_wait_or_kill_child "$child_pid" "$deadline"; then
+        child_status=1
     else
         child_status=$REPLY
     fi
@@ -129,12 +120,7 @@ _mbx_search_repo_root() {
     [[ -x ${MBX_BIN:-} ]] || return 1
     _mbx_deadline_after "${MBX_SEARCH_TIMEOUT:-${MBX_HISTORY_TIMEOUT:-0.10}}" || return 1
     deadline=$REPLY
-    _MBX_SEARCH_SAVED_MONITOR=0
-    _MBX_SEARCH_SAVED_NOTIFY=0
-    [[ $- == *m* ]] && _MBX_SEARCH_SAVED_MONITOR=1
-    [[ $- == *b* ]] && _MBX_SEARCH_SAVED_NOTIFY=1
-    set +m
-    set +b
+    _mbx_jobs_suspend
     exec {output_fd}< <(exec "$MBX_BIN" repo root --cwd "$PWD" 2>/dev/null)
     child_pid=$!
     if _mbx_search_read_line "$output_fd" "$deadline"; then
@@ -143,8 +129,8 @@ _mbx_search_repo_root() {
         root=$REPLY
     fi
     exec {output_fd}<&-
-    if ! _mbx_wait_child_until "$child_pid" "$deadline"; then
-        _mbx_terminate_child "$child_pid"
+    if ! _mbx_wait_or_kill_child "$child_pid" "$deadline"; then
+        status=1
     else
         status=$REPLY
     fi

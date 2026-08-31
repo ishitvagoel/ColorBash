@@ -8,7 +8,7 @@ use crate::provider::{
 use crate::telemetry::trace_message;
 use std::collections::HashMap;
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, SyncSender, TryRecvError, TrySendError};
 use std::thread;
@@ -315,9 +315,22 @@ fn writer_loop(
 
 impl Drop for QueuedHistoryStore {
     fn drop(&mut self) {
-        let _ = self.sender.send(QueueMessage::Shutdown);
+        // Ingest already uses non-blocking try_send. Blocking send here hung
+        // process exit when the queue was full and the writer was slow
+        // (Git enrich or lock wait). try_send; if the queue is full, dropping
+        // the sender still disconnects the receiver so the writer exits after
+        // its current batch.
+        match self.sender.try_send(QueueMessage::Shutdown) {
+            Ok(()) | Err(TrySendError::Disconnected(_)) => {}
+            Err(TrySendError::Full(_)) => {}
+        }
         if let Some(writer) = self.writer.take() {
-            let _ = writer.join();
+            let (done_tx, done_rx) = mpsc::channel();
+            thread::spawn(move || {
+                let _ = writer.join();
+                let _ = done_tx.send(());
+            });
+            let _ = done_rx.recv_timeout(Duration::from_millis(500));
         }
     }
 }
@@ -604,11 +617,6 @@ fn tighten_mode(path: &Path, max_mode: u32) -> Result<(), HistoryError> {
     Ok(())
 }
 
-fn apply_created_mode(path: &Path, mode: u32) -> Result<(), HistoryError> {
-    fs::set_permissions(path, fs::Permissions::from_mode(mode))
-        .map_err(io_error(HistoryErrorKind::Open))
-}
-
 fn restrict_store_permissions(store_path: &Path) -> Result<(), HistoryError> {
     if let Some(dir) = store_path.parent() {
         tighten_mode(dir, DIR_MODE)?;
@@ -626,8 +634,12 @@ fn create_store_dir(store_path: &Path) -> Result<(), HistoryError> {
     if dir.exists() {
         return tighten_mode(dir, DIR_MODE);
     }
-    fs::create_dir_all(dir).map_err(io_error(HistoryErrorKind::Open))?;
-    apply_created_mode(dir, DIR_MODE)
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(DIR_MODE)
+        .create(dir)
+        .map_err(io_error(HistoryErrorKind::Open))?;
+    tighten_mode(dir, DIR_MODE)
 }
 
 fn open_connection(store_path: &Path) -> Result<rusqlite::Connection, HistoryError> {
@@ -645,13 +657,23 @@ fn open_connection(store_path: &Path) -> Result<rusqlite::Connection, HistoryErr
     }
 }
 
+fn ensure_restricted_store_file(store_path: &Path) -> Result<(), HistoryError> {
+    match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(FILE_MODE)
+        .open(store_path)
+    {
+        Ok(_) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+        Err(error) => Err(io_error(HistoryErrorKind::Open)(error)),
+    }
+}
+
 fn try_open_connection(store_path: &Path) -> Result<rusqlite::Connection, HistoryError> {
-    let created = !store_path.exists();
+    ensure_restricted_store_file(store_path)?;
     let connection =
         rusqlite::Connection::open(store_path).map_err(history_error(HistoryErrorKind::Open))?;
-    if created {
-        apply_created_mode(store_path, FILE_MODE)?;
-    }
     connection
         .busy_timeout(Duration::from_millis(BUSY_TIMEOUT_MS))
         .map_err(history_error(HistoryErrorKind::Open))?;
@@ -956,7 +978,7 @@ fn now_utc_iso_days_ago(days: u64) -> String {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_secs())
         .unwrap_or(0);
-    let cutoff = now.saturating_sub(days * 86_400);
+    let cutoff = now.saturating_sub(days.saturating_mul(86_400));
     unix_to_iso_utc(cutoff)
 }
 
@@ -2138,6 +2160,39 @@ mod tests {
             }
         }
         drop(dir);
+    }
+
+    #[test]
+    fn newly_created_store_file_is_owner_only() {
+        let (dir, path) = temp_store("create-mode");
+        let store = QueuedHistoryStore::open(&path, 8).unwrap();
+        assert_eq!(mode_of(&path), 0o600);
+        drop(store);
+        drop(dir);
+    }
+
+    #[test]
+    fn drop_does_not_block_on_a_full_queue() {
+        let (dir, path) = temp_store("drop-full");
+        let store = QueuedHistoryStore::open(&path, 1).unwrap();
+        let sample = entry("s", 1, "echo drop", "/w", "2026-08-31T00:00:00Z");
+        for sequence in 0..64u64 {
+            let mut row = sample.clone();
+            row.event_sequence = sequence;
+            let _ = store.record(row);
+        }
+        let started = std::time::Instant::now();
+        drop(store);
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "Drop must not block on a full writer queue"
+        );
+        drop(dir);
+    }
+
+    #[test]
+    fn retention_day_multiply_does_not_overflow() {
+        let _ = now_utc_iso_days_ago(u64::MAX);
     }
 
     #[test]

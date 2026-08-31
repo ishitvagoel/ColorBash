@@ -192,10 +192,7 @@ _mbx_ghost_candidate_seen() {
 }
 
 _mbx_ghost_restore_jobs() {
-    ((${_MBX_GHOST_SAVED_NOTIFY:-0} == 1)) && set -b
-    ((${_MBX_GHOST_SAVED_MONITOR:-0} == 1)) && set -m
-    _MBX_GHOST_SAVED_NOTIFY=0
-    _MBX_GHOST_SAVED_MONITOR=0
+    _mbx_jobs_restore
 }
 
 # Apply a QUERY RESULT only when its generation is still current (ADR 0011).
@@ -305,9 +302,13 @@ _mbx_ghost_query_cli() {
         _MBX_GHOST_CANDIDATES+=("$match")
     done
     exec {output_fd}<&-
-    if ! _mbx_wait_child_until "$child_pid" "$deadline"; then
-        _mbx_terminate_child "$child_pid"
+    if ! _mbx_wait_or_kill_child "$child_pid" "$deadline"; then
+        _MBX_GHOST_CANDIDATES=()
+        return 1
     fi
+    # A timed-out/killed child is already rejected above. A nonzero exit with
+    # no candidates is also a miss; leftover rows from a successful parse
+    # still count, matching search's "any clean match is enough" policy.
     ((${#_MBX_GHOST_CANDIDATES[@]} > 0)) || return 1
     REPLY=${_MBX_GHOST_CANDIDATES[0]}
 }
@@ -326,12 +327,7 @@ _mbx_ghost_query() {
         return 1
     deadline=$REPLY
     ((_MBX_GHOST_GENERATION += 1))
-    _MBX_GHOST_SAVED_MONITOR=0
-    _MBX_GHOST_SAVED_NOTIFY=0
-    [[ $- == *m* ]] && _MBX_GHOST_SAVED_MONITOR=1
-    [[ $- == *b* ]] && _MBX_GHOST_SAVED_NOTIFY=1
-    set +m
-    set +b
+    _mbx_jobs_suspend
     if [[ ${_MBX_ENGINE_READY:-0} == 1 ]] && \
         declare -F _mbx_engine_write >/dev/null 2>&1; then
         _mbx_ghost_query_wire "$query" "$limit" "$_MBX_GHOST_GENERATION" \
@@ -489,8 +485,18 @@ _mbx_ghost_previous_history() {
         _MBX_GHOST_HIST_CURRENT=${READLINE_LINE-}
     fi
     offset=$((${_MBX_GHOST_HIST_OFFSET:-0} + 1))
-    _mbx_ghost_history_entry "$offset" || return 0
-    entry=$REPLY
+    while true; do
+        _mbx_ghost_history_entry "$offset" || return 0
+        entry=$REPLY
+        # History-motion is a READLINE_LINE sink. QUERY suffixes are already
+        # gated; Up/Down were not, so a TAB/ESC in a history row reached
+        # redisplay (M-050).
+        if _mbx_text_has_c0_or_del "$entry"; then
+            offset=$((offset + 1))
+            continue
+        fi
+        break
+    done
     READLINE_LINE=$entry
     READLINE_POINT=${#READLINE_LINE}
     _MBX_GHOST_HIST_OFFSET=$offset
@@ -508,21 +514,27 @@ _mbx_ghost_next_history() {
     if ((offset <= 0)); then
         return 0
     fi
-    offset=$((offset - 1))
-    _MBX_GHOST_HIST_OFFSET=$offset
-    if ((offset == 0)); then
-        READLINE_LINE=${_MBX_GHOST_HIST_CURRENT-}
+    while ((offset > 0)); do
+        offset=$((offset - 1))
+        _MBX_GHOST_HIST_OFFSET=$offset
+        if ((offset == 0)); then
+            READLINE_LINE=${_MBX_GHOST_HIST_CURRENT-}
+            READLINE_POINT=${#READLINE_LINE}
+            _mbx_ghost_reset_state
+            _mbx_ghost_disarm_enter || true
+            return 0
+        fi
+        _mbx_ghost_history_entry "$offset" || return 0
+        entry=$REPLY
+        if _mbx_text_has_c0_or_del "$entry"; then
+            continue
+        fi
+        READLINE_LINE=$entry
         READLINE_POINT=${#READLINE_LINE}
         _mbx_ghost_reset_state
         _mbx_ghost_disarm_enter || true
         return 0
-    fi
-    _mbx_ghost_history_entry "$offset" || return 0
-    entry=$REPLY
-    READLINE_LINE=$entry
-    READLINE_POINT=${#READLINE_LINE}
-    _mbx_ghost_reset_state
-    _mbx_ghost_disarm_enter || true
+    done
 }
 
 _mbx_ghost_backward_word() {

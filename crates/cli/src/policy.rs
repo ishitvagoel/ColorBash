@@ -55,31 +55,59 @@ impl HistoryPolicy for EnvironmentHistoryPolicy {
 }
 
 fn glob_match(pattern: &str, text: &str) -> bool {
-    let pattern: Vec<char> = pattern.chars().collect();
+    let pattern: Vec<char> = collapse_stars(pattern.chars());
     let text: Vec<char> = text.chars().collect();
-    match_here(&pattern, &text)
+    let mut budget = GLOB_STEP_BUDGET;
+    match_here(&pattern, &text, &mut budget)
 }
 
-fn match_here(pattern: &[char], text: &[char]) -> bool {
+/// Consecutive `*` atoms are equivalent to one `*` and otherwise make the
+/// recursive matcher exponential in star count × text length.
+fn collapse_stars(chars: impl Iterator<Item = char>) -> Vec<char> {
+    let mut out = Vec::new();
+    let mut last_star = false;
+    for character in chars {
+        if character == '*' {
+            if last_star {
+                continue;
+            }
+            last_star = true;
+        } else {
+            last_star = false;
+        }
+        out.push(character);
+    }
+    out
+}
+
+const GLOB_STEP_BUDGET: usize = 256 * 1024;
+
+fn match_here(pattern: &[char], text: &[char], budget: &mut usize) -> bool {
+    if *budget == 0 {
+        return false;
+    }
+    *budget = budget.saturating_sub(1);
     match pattern.first() {
         None => text.is_empty(),
         Some('*') => {
             for split in 0..=text.len() {
-                if match_here(&pattern[1..], &text[split..]) {
+                if match_here(&pattern[1..], &text[split..], budget) {
                     return true;
                 }
             }
             false
         }
-        Some('?') => !text.is_empty() && match_here(&pattern[1..], &text[1..]),
-        Some('[') => match_bracket(pattern, text),
+        Some('?') => !text.is_empty() && match_here(&pattern[1..], &text[1..], budget),
+        Some('[') => match_bracket(pattern, text, budget),
         Some(character) => {
-            !text.is_empty() && *character == text[0] && match_here(&pattern[1..], &text[1..])
+            !text.is_empty()
+                && *character == text[0]
+                && match_here(&pattern[1..], &text[1..], budget)
         }
     }
 }
 
-fn match_bracket(pattern: &[char], text: &[char]) -> bool {
+fn match_bracket(pattern: &[char], text: &[char], budget: &mut usize) -> bool {
     if text.is_empty() {
         return false;
     }
@@ -113,7 +141,7 @@ fn match_bracket(pattern: &[char], text: &[char]) -> bool {
     if matched == negated {
         return false;
     }
-    match_here(&pattern[index + 1..], &text[1..])
+    match_here(&pattern[index + 1..], &text[1..], budget)
 }
 
 #[cfg(test)]
@@ -149,6 +177,19 @@ mod tests {
         assert!(glob_match("echo [!abc]x", "echo dx"));
         assert!(glob_match("echo [a-c]x", "echo bx"));
         assert!(glob_match("*secret*", "docker run --secret xyz"));
+    }
+
+    #[test]
+    fn glob_match_is_bounded_on_pathological_stars() {
+        let started = std::time::Instant::now();
+        let pattern = "*a".repeat(40);
+        let text = "a".repeat(40) + "b";
+        assert!(!glob_match(&pattern, &text));
+        assert!(
+            started.elapsed() < std::time::Duration::from_millis(200),
+            "exclude glob must not explode on many stars"
+        );
+        assert!(glob_match("git *", "git status"));
     }
 
     #[test]

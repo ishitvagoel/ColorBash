@@ -137,9 +137,9 @@ _mbx_highlight_disarm_enter() {
         _mbx_highlight_disarm_enter_keymap vi-insert "${_MBX_HIGHLIGHT_VI_WRAP_CTRL_J:-0}" || \
             status=1
     fi
-    if ((status == 0)); then
-        _MBX_HIGHLIGHT_ENTER_ARMED=0
-    fi
+    # Always clear the flag so a later arm can retry. Returning before this
+    # left emacs disarmed while Enter stayed the restore macro (M-044).
+    _MBX_HIGHLIGHT_ENTER_ARMED=0
     return "$status"
 }
 
@@ -166,10 +166,7 @@ _mbx_highlight_arm_enter() {
 }
 
 _mbx_highlight_restore_jobs() {
-    ((${_MBX_HIGHLIGHT_SAVED_NOTIFY:-0} == 1)) && set -b
-    ((${_MBX_HIGHLIGHT_SAVED_MONITOR:-0} == 1)) && set -m
-    _MBX_HIGHLIGHT_SAVED_NOTIFY=0
-    _MBX_HIGHLIGHT_SAVED_MONITOR=0
+    _mbx_jobs_restore
 }
 
 _mbx_highlight_read_two_lines() {
@@ -231,8 +228,7 @@ _mbx_highlight_refresh_cli() {
     child_pid=$!
     if ! _mbx_highlight_read_two_lines "$output_fd" "$deadline"; then
         exec {output_fd}<&-
-        _mbx_wait_child_until "$child_pid" "$deadline" >/dev/null || \
-            _mbx_terminate_child "$child_pid"
+        _mbx_wait_or_kill_child "$child_pid" "$deadline" || true
         return 1
     fi
     # Copy the payload out of REPLY/_MBX_HIGHLIGHT_STYLED_POINT before
@@ -241,8 +237,13 @@ _mbx_highlight_refresh_cli() {
     styled_line=$REPLY
     styled_point=${_MBX_HIGHLIGHT_STYLED_POINT:-0}
     exec {output_fd}<&-
-    _mbx_wait_child_until "$child_pid" "$deadline" >/dev/null || \
-        _mbx_terminate_child "$child_pid"
+    if ! _mbx_wait_or_kill_child "$child_pid" "$deadline"; then
+        return 1
+    fi
+    # A helper that wrote two lines then exited nonzero (or was killed after
+    # a partial write that still parsed) is not a successful highlight
+    # (M-067). validate_styled cannot see the exit status.
+    ((REPLY == 0)) || return 1
     REPLY=$styled_line
     _MBX_HIGHLIGHT_STYLED_POINT=$styled_point
     return 0
@@ -325,12 +326,7 @@ _mbx_highlight_refresh() {
     [[ ${MBX_HIGHLIGHT:-} == 1 ]] || return 1
     _mbx_deadline_after "${MBX_HIGHLIGHT_TIMEOUT:-0.05}" || return 1
     deadline=$REPLY
-    _MBX_HIGHLIGHT_SAVED_MONITOR=0
-    _MBX_HIGHLIGHT_SAVED_NOTIFY=0
-    [[ $- == *m* ]] && _MBX_HIGHLIGHT_SAVED_MONITOR=1
-    [[ $- == *b* ]] && _MBX_HIGHLIGHT_SAVED_NOTIFY=1
-    set +m
-    set +b
+    _mbx_jobs_suspend
     ((_MBX_HIGHLIGHT_GENERATION += 1))
     if [[ ${_MBX_ENGINE_READY:-0} == 1 ]] && \
         declare -F _mbx_engine_write >/dev/null 2>&1; then
@@ -421,7 +417,7 @@ _mbx_highlight_dismiss_style() {
 _mbx_highlight_forward() {
     _mbx_highlight_dismiss_style
     local point=${_MBX_HIGHLIGHT_POINT:-0}
-    local len=${#_MBX_HIGHLIGHT_PLAIN-}
+    local len=${#_MBX_HIGHLIGHT_PLAIN}
     if ((point < len)); then
         _MBX_HIGHLIGHT_POINT=$((point + 1))
         READLINE_LINE=${_MBX_HIGHLIGHT_PLAIN-}

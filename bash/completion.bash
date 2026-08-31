@@ -240,7 +240,10 @@ _MBX_COMP_OVERLAY_SHOWN=0
 }
 
 _mbx_comp_identifier_ok() {
-    [[ $1 == [A-Za-z_][A-Za-z0-9_]* ]]
+    # Anchored regex: `[[ == ]]` globs treat `*` as "anything remaining", so
+    # `git;rm` matched the old class-star pattern (M-056). Hyphens are allowed
+    # because command names like `git-lfs` are valid wrap targets.
+    [[ $1 =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]]
 }
 
 _mbx_comp_f_backend_from_spec() {
@@ -385,6 +388,9 @@ _mbx_comp_apply_word_token() {
     local line=${READLINE_LINE-}
     local start=${_MBX_COMP_WORD_START:-0}
     local end=${_MBX_COMP_WORD_END:-0}
+    # Overlay display sanitizes candidates; insert must still refuse C0/DEL
+    # so a hostile COMPREPLY cannot reach redisplay (M-050).
+    _mbx_text_has_c0_or_del "$token" && return 0
     READLINE_LINE=${line:0:start}${token}${line:end}
     READLINE_POINT=$((start + ${#token}))
 }
