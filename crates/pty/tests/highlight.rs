@@ -1,6 +1,6 @@
 mod common;
 
-use common::{deadline, mbx_bin, path_env, wait_all, workspace_root, TempHome};
+use common::{TempHome, deadline, mbx_bin, path_env, wait_all, workspace_root};
 use mbx_pty::{PtySession, Screen, SpawnOptions, WinSize};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;

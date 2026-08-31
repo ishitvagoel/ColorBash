@@ -354,7 +354,7 @@ pub(crate) fn strip_to_plain(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{char_offset_to_byte, highlight_line, lex, strip_to_plain, TokenKind};
+    use super::{TokenKind, char_offset_to_byte, highlight_line, lex, strip_to_plain};
 
     const HOSTILE_HIGHLIGHT_CORPUS: &[&str] = &[
         "if echo \"$HOME\"; then true; fi # note",
