@@ -495,7 +495,6 @@ write_config() {
         [[ -n ${V[comp_cycle_prev_keyseq]} ]] && emit_assign MBX_COMP_CYCLE_PREV_KEYSEQ "${V[comp_cycle_prev_keyseq]}"
         [[ -n ${V[overlay_keyseq]} ]] && emit_assign MBX_COMP_OVERLAY_KEYSEQ "${V[overlay_keyseq]}"
         [[ -n ${V[overlay_dismiss_keyseq]} ]] && emit_assign MBX_COMP_OVERLAY_DISMISS_KEYSEQ "${V[overlay_dismiss_keyseq]}"
-        [[ -n ${V[highlight_accept_keyseq]} ]] && emit_assign MBX_HIGHLIGHT_ACCEPT_KEYSEQ "${V[highlight_accept_keyseq]}"
     } >"$path"
     chmod 600 "$path" 2>/dev/null || true
 }
@@ -565,7 +564,7 @@ Advanced (empty keeps product default)
    37) Overlay keyseq / dismiss         $(show "${V[overlay_keyseq]}") / $(show "${V[overlay_dismiss_keyseq]}")
    38) Ghost cycle next/prev            $(show "${V[ghost_next_keyseq]}") / $(show "${V[ghost_prev_keyseq]}")
    39) Comp accept / cycle n/p          $(show "${V[comp_accept_keyseq]}") / $(show "${V[comp_cycle_next_keyseq]}") / $(show "${V[comp_cycle_prev_keyseq]}")
-   40) Editor / highlight accept        $(show "${V[editor_keyseq]}") / $(show "${V[highlight_accept_keyseq]}")
+   40) Editor insert keyseq             $(show "${V[editor_keyseq]}")
    41) Ghost delete / accept helpers    $(show "${V[ghost_delete_keyseq]}") / $(show "${V[ghost_accept_keyseq]}")
     b) Back
 EOF
@@ -577,8 +576,8 @@ Type a number to toggle or edit that option, then w to save.
 
 History records admitted commands in a local SQLite store; it does not rewrite
 .bash_history. Ghost shows an insert-only suffix (Right accepts; Enter runs the
-typed prefix). Highlight colors the line; Enter still runs plain bytes.
-Ghost and highlight cannot both be on.
+typed prefix). Highlight colors a reserved preview row below the prompt; Enter still runs
+plain bytes. Ghost and highlight cannot both be on.
 
 Tab stays stock Bash. Overlay lists ranked candidates after Tab on a wrapped
 -F completer (comfort wraps git). Occupied Readline chords are skipped unless
@@ -718,7 +717,6 @@ advanced_loop() {
                 ;;
             40)
                 ask_set editor_keyseq 'Editor insert keyseq (example \\C-x\\C-y)'
-                ask_set highlight_accept_keyseq 'Highlight accept helper (example \\C-x\\C-m)'
                 ;;
             41)
                 ask_set ghost_delete_keyseq 'Ghost delete helper (example \\C-x\\C-d)'

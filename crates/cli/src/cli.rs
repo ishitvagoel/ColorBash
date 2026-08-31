@@ -1,7 +1,7 @@
 use crate::prompt::PromptContext;
 use mbx_protocol::{
-    FLAG_ASCII_ICONS, FLAG_DISABLE_GIT, FLAG_NERD_ICONS, FLAG_NO_COLOR, FLAG_PRODUCTION, FLAG_SSH,
-    PromptFlags,
+    PromptFlags, FLAG_ASCII_ICONS, FLAG_DISABLE_GIT, FLAG_NERD_ICONS, FLAG_NO_COLOR,
+    FLAG_PRODUCTION, FLAG_SSH,
 };
 use std::num::NonZeroU64;
 use std::path::PathBuf;
@@ -61,7 +61,7 @@ pub enum HighlightCommand {
         point: usize,
         no_color: bool,
         /// An explicit color decision from a caller that already knows the
-        /// terminal capability (Bash, via `_mbx_color_capable`). When
+        /// terminal capability (Bash, via `_mbx_highlight_color_flag`). When
         /// present it wins over `no_color` and over this process's own
         /// stdout, which is meaningless here: direct CLI use aside, both the
         /// coprocess and the process-substitution spawn path never have the
@@ -203,7 +203,7 @@ fn parse_socket_path(args: &[String]) -> Result<PathBuf, String> {
 
 fn parse_highlight(args: &[String]) -> Result<HighlightCommand, String> {
     let text = args.first().cloned().ok_or("highlight requires TEXT")?;
-    let mut point = text.len();
+    let mut point = text.chars().count();
     let mut no_color = false;
     let mut color = None;
     let mut index = 1;

@@ -30,11 +30,49 @@ assert_status() {
     assert_eq "$expected" "$actual" "$message"
 }
 
+# M-072: stall-until-timeout cases must track the deadline, not a host-specific
+# wall-clock ceiling. `fast_us`/`slow_us` are elapsed times at two timeouts
+# whose difference is `timeout_delta_us`.
+assert_elapsed_tracks_deadline() {
+    local label=$1
+    local fast_us=$2
+    local slow_us=$3
+    local timeout_delta_us=$4
+    local delta_us=$((slow_us - fast_us))
+    ((delta_us > 10000 && delta_us < timeout_delta_us * 3 + 50000)) || \
+        fail "$label: deadline did not govern: a ${timeout_delta_us}us larger timeout changed elapsed time by ${delta_us}us (${fast_us}us then ${slow_us}us)"
+    ((fast_us < 1000000)) || \
+        fail "$label: unbounded wait ${fast_us}us"
+}
+
 source "$ROOT/bash/protocol.bash"
 source "$ROOT/bash/config.bash"
 source "$ROOT/bash/fallback.bash"
 source "$ROOT/bash/engine.bash"
 source "$ROOT/bash/prompt.bash"
+
+# Visible-width clamp used by highlight preview and the completion overlay
+# (ADR 0015 / COMP-004). SGR and SOH/STX are width-free; non-ASCII is two
+# columns so a combining/wide glyph cannot wrap a reserved row.
+saved_columns=${COLUMNS:-}
+COLUMNS=20
+_mbx_tty_columns
+assert_eq 19 "$REPLY" 'tty paint budget is COLUMNS-1'
+_mbx_tty_clamp_row 'abcdefghijklmnopqrstuvwxyz' 10
+assert_eq 'abcdefghij' "$REPLY" 'ASCII clamp stops at the column budget'
+_mbx_tty_clamp_row $'\033[31mabcdefghij\033[0mxyz' 10
+assert_eq $'\033[31mabcdefghij\033[0m' "$REPLY" \
+    'SGR does not consume columns; a trailing reset before overflow is kept'
+_mbx_tty_clamp_row '中x' 2
+assert_eq '中' "$REPLY" 'non-ASCII scalars count as two columns'
+_mbx_tty_clamp_row '中x' 1
+assert_eq '' "$REPLY" 'a two-column scalar that does not fit is dropped'
+if [[ -n $saved_columns ]]; then
+    COLUMNS=$saved_columns
+else
+    unset COLUMNS
+fi
+unset saved_columns
 
 hostile_field=$'a%\t\n\r\e\177\303\251'
 _mbx_escape_field "$hostile_field"
@@ -361,7 +399,10 @@ run_multi_mib_rejection() {
     fi
     wait "$producer" 2>/dev/null || true
 
-    ((elapsed_us < 400000)) || fail "$label multi-MiB rejection was not prompt"
+    # Prompt rejection of a multi-MiB producer, not a stall-until-timeout
+    # deadline (M-072 leftover). The MAX+1 guard must fire well before the
+    # 0.25s read budget; one second is an unbounded-wait ceiling only.
+    ((elapsed_us < 1000000)) || fail "$label multi-MiB rejection was not prompt"
     [[ ! -e $completion_marker ]] || \
         fail "$label multi-MiB producer was collected in full before rejection"
     rm -f -- "$completion_marker"
@@ -402,22 +443,33 @@ fi
 exec {bad_lookahead_fd}<&-
 wait "$bad_lookahead_pid" 2>/dev/null || true
 
-exec {stalled_lookahead_fd}< <(printf '%s\r' "$max_payload"; exec sleep 60)
-stalled_lookahead_pid=$!
-_mbx_deadline_after .03
-lookahead_deadline=$REPLY
-_mbx_clock_now_us
-lookahead_started_us=$REPLY
-if _mbx_read_bounded_response "$stalled_lookahead_fd" "$lookahead_deadline"; then
-    fail 'the exact-MAX CRLF lookahead accepted a missing LF'
-fi
-_mbx_clock_now_us
-lookahead_elapsed_us=$((REPLY - lookahead_started_us))
-exec {stalled_lookahead_fd}<&-
-kill -KILL "$stalled_lookahead_pid" 2>/dev/null || true
-wait "$stalled_lookahead_pid" 2>/dev/null || true
-((lookahead_elapsed_us < 200000)) || \
-    fail 'the exact-MAX CRLF lookahead exceeded its absolute deadline'
+measure_stalled_crlf_lookahead() {
+    local timeout=$1
+    local fd pid deadline started
+    exec {fd}< <(printf '%s\r' "$max_payload"; exec sleep 60)
+    pid=$!
+    _mbx_deadline_after "$timeout"
+    deadline=$REPLY
+    _mbx_clock_now_us
+    started=$REPLY
+    if _mbx_read_bounded_response "$fd" "$deadline"; then
+        exec {fd}<&-
+        kill -KILL "$pid" 2>/dev/null || true
+        wait "$pid" 2>/dev/null || true
+        fail 'the exact-MAX CRLF lookahead accepted a missing LF'
+    fi
+    _mbx_clock_now_us
+    REPLY=$((REPLY - started))
+    exec {fd}<&-
+    kill -KILL "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+}
+measure_stalled_crlf_lookahead .05
+lookahead_fast_us=$REPLY
+measure_stalled_crlf_lookahead .10
+assert_elapsed_tracks_deadline 'exact-MAX CRLF lookahead' \
+    "$lookahead_fast_us" "$REPLY" 50000
+unset lookahead_fast_us
 
 stalling_bin="$ROOT/tests/bash/fixtures/stalling-mbx.bash"
 marker=${TMPDIR:-/tmp}/colorbash-stall-$BASHPID-$RANDOM
@@ -435,6 +487,7 @@ fi
 failed_request=$REPLY
 _mbx_clock_now_us
 elapsed_us=$((REPLY - started_us))
+# Fast-path size reject, not a stall-until-timeout (M-072 leftover).
 ((elapsed_us < 100000)) || fail 'oversized request preflight entered the slow encoder'
 assert_eq '' "$failed_request" 'oversized request preflight retained a partial frame'
 
@@ -456,6 +509,7 @@ elapsed_us=$((REPLY - started_us))
 assert_eq "$_MBX_PROTOCOL_MAX_MESSAGE_BYTES" "${#encoded_request}" \
     'the exactly fitting request did not land on the MBX1 boundary'
 ((elapsed_us < 100000)) || fail 'printable-ASCII request bypassed the native fast path'
+# Fast path, not a stall-until-timeout (M-072 leftover).
 unset encoded_request
 
 # Percent must use the escape loop. Its cooperative deadline prevents an
@@ -471,25 +525,36 @@ if _mbx_protocol_encode_prompt \
 fi
 _mbx_clock_now_us
 elapsed_us=$((REPLY - started_us))
+# Cooperative size/deadline reject during encode, not a stall-until-timeout
+# (M-072 leftover). The loop must not spend seconds; 200 ms is already generous.
 ((elapsed_us < 200000)) || fail 'escape-heavy request encoding escaped its deadline'
 
 # A healthy handshake followed by an oversized logical PWD must still reach the
 # builtin fallback within one render budget. Per-call may use only what remains;
 # it cannot receive a fresh timeout after coprocess framing fails.
+measure_oversized_fallback() {
+    local timeout=$1
+    MBX_RENDER_TIMEOUT=$timeout
+    _mbx_engine_start || fail 'the oversized-PWD fixture did not complete its handshake'
+    _mbx_clock_now_us
+    local started=$REPLY
+    PWD=$oversized_logical_pwd _mbx_update_prompt 0 -
+    _mbx_clock_now_us
+    REPLY=$((REPLY - started))
+}
 MBX_BIN=$stalling_bin
 MBX_IPC_MODE=coprocess
 MBX_IPC_TIMEOUT=.25
-MBX_RENDER_TIMEOUT=.03
-_mbx_engine_start || fail 'the oversized-PWD fixture did not complete its handshake'
-_mbx_clock_now_us
-started_us=$REPLY
-PWD=$oversized_logical_pwd _mbx_update_prompt 0 -
-_mbx_clock_now_us
-elapsed_us=$((REPLY - started_us))
-((elapsed_us < 200000)) || fail 'oversized request fallback escaped the render deadline'
+measure_oversized_fallback .05
+oversized_fast_us=$REPLY
 assert_eq 0 "${_MBX_ENGINE_READY:-missing}" \
     'oversized request framing left the coprocess marked ready'
 (( ${#PS1} < 1024 )) || fail 'the oversized logical PWD replaced the bounded fallback'
+wait_for_deferred_reap
+measure_oversized_fallback .10
+assert_elapsed_tracks_deadline 'oversized request fallback' \
+    "$oversized_fast_us" "$REPLY" 50000
+unset oversized_fast_us
 wait_for_deferred_reap
 rm -f -- "$marker"
 
@@ -576,19 +641,29 @@ unset oversized_logical_pwd exactly_fitting_cwd near_limit_logical_pwd \
 
 # A direct per-call timeout exercises process-substitution $! ownership and
 # proves that the child is killed and later reaped without an unbounded wait.
+measure_per_call_stall() {
+    local timeout=$1
+    rm -f -- "$marker"
+    MBX_RENDER_TIMEOUT=$timeout
+    _mbx_clock_now_us
+    local started=$REPLY
+    if _mbx_prompt_per_call 0 - /tmp "$native_flags"; then
+        fail 'a stalling per-call helper produced a prompt'
+    fi
+    _mbx_clock_now_us
+    REPLY=$((REPLY - started))
+}
 MBX_BIN=$stalling_bin
-MBX_RENDER_TIMEOUT=.03
-_mbx_clock_now_us
-started_us=$REPLY
-if _mbx_prompt_per_call 0 - /tmp "$native_flags"; then
-    fail 'a stalling per-call helper produced a prompt'
-fi
-_mbx_clock_now_us
-elapsed_us=$((REPLY - started_us))
-((elapsed_us < 200000)) || fail 'the per-call helper exceeded its absolute deadline'
+measure_per_call_stall .05
+per_call_fast_us=$REPLY
 [[ -e $marker ]] || fail 'the process-substitution helper was not actually started'
 [[ -n ${_MBX_DEFERRED_CHILD_PIDS:-} ]] || \
     fail 'the timed-out process-substitution child was not retained for safe reaping'
+wait_for_deferred_reap
+rm -f -- "$marker"
+measure_per_call_stall .10
+assert_elapsed_tracks_deadline 'per-call helper' "$per_call_fast_us" "$REPLY" 50000
+unset per_call_fast_us
 wait_for_deferred_reap
 rm -f -- "$marker"
 
@@ -609,6 +684,7 @@ started_us=$REPLY
 _mbx_update_prompt 0 -
 _mbx_clock_now_us
 elapsed_us=$((REPLY - started_us))
+# Decode of a fully acquired frame, not a stall-until-timeout (M-072 leftover).
 ((elapsed_us < 400000)) || fail 'percent-heavy decoding escaped the render deadline'
 [[ -e $response_marker ]] || fail 'the near-MAX response was not fully emitted before fallback'
 [[ ! -e $marker ]] || fail 'percent-heavy decoding granted per-call a second budget'
@@ -621,20 +697,29 @@ rm -f -- "$response_marker"
 
 # The coprocess consumes the one render budget. Cleanup must be nonblocking and
 # the coordinator must not start a fresh per-call process with a new timeout.
+measure_fallback_chain() {
+    local timeout=$1
+    rm -f -- "$marker"
+    MBX_RENDER_TIMEOUT=$timeout
+    _mbx_engine_start || fail 'the stalling fixture did not complete its handshake'
+    _mbx_clock_now_us
+    local started=$REPLY
+    _mbx_update_prompt 0 -
+    _mbx_clock_now_us
+    REPLY=$((REPLY - started))
+}
 MBX_IPC_MODE=coprocess
 MBX_IPC_TIMEOUT=.25
-MBX_RENDER_TIMEOUT=.04
-_mbx_engine_start || fail 'the stalling fixture did not complete its handshake'
-_mbx_clock_now_us
-started_us=$REPLY
-_mbx_update_prompt 0 -
-_mbx_clock_now_us
-elapsed_us=$((REPLY - started_us))
-((elapsed_us < 200000)) || fail 'the fallback chain exceeded one overall render deadline'
+measure_fallback_chain .05
+chain_fast_us=$REPLY
 assert_eq 0 "${_MBX_ENGINE_READY:-missing}" \
     'a timed-out coprocess remained marked ready'
 [[ ! -e $marker ]] || fail 'the coordinator granted per-call a second timeout budget'
 [[ -n $PS1 ]] || fail 'the deadline path did not commit the builtin fallback'
+wait_for_deferred_reap
+measure_fallback_chain .10
+assert_elapsed_tracks_deadline 'fallback chain' "$chain_fast_us" "$REPLY" 50000
+unset chain_fast_us
 wait_for_deferred_reap
 unset MBX_STALL_PROMPT_MARKER
 
@@ -1171,6 +1256,26 @@ if [[ -n $saved_lines ]]; then
     LINES=$saved_lines
 fi
 unset saved_lines
+
+# COMP-004 width guard: candidate + kind/desc must share one COLUMNS-1 budget.
+saved_columns=${COLUMNS:-}
+COLUMNS=20
+_MBX_COMP_OVERLAY_CANDIDATES=(verylongcandidate_aaaaaaaaaaaaaaaaaaaa)
+_MBX_COMP_OVERLAY_KINDS=(file)
+_MBX_COMP_OVERLAY_DESCS=('a long description that would wrap')
+_mbx_comp_overlay_format_row 0 0
+formatted_overlay_row=$REPLY
+_mbx_tty_clamp_row "$formatted_overlay_row" 19
+assert_eq "$formatted_overlay_row" "$REPLY" \
+    'an overlay row must already be within COLUMNS-1 after format'
+[[ ${#formatted_overlay_row} -lt ${#_MBX_COMP_OVERLAY_CANDIDATES[0]} ]] || \
+    fail 'overlay format must truncate a candidate wider than the terminal'
+if [[ -n $saved_columns ]]; then
+    COLUMNS=$saved_columns
+else
+    unset COLUMNS
+fi
+unset saved_columns formatted_overlay_row
 
 # OV-3 (M-065 follow-up): capping the draw must also cap navigation and
 # acceptance. With eight candidates on a six-row terminal only four rows are
@@ -1845,6 +1950,10 @@ _mbx_highlight_strip_line $'echo \033[31mhi\033[0m'
 assert_eq 'echo hi' "$REPLY" 'highlight strip should remove markers and SGR'
 _mbx_highlight_strip_line $'\001\033[32m\002ok\001\033[0m\002'
 assert_eq 'ok' "$REPLY" 'highlight strip should keep plain bytes between markers'
+_mbx_highlight_preview_row_ok $'\033[1;34mtrue\033[0m' || \
+    fail 'preview row must allow CSI SGR (ESC is not injection there)'
+_mbx_highlight_preview_row_ok $'true\001' && \
+    fail 'preview row must refuse leftover SOH'
 
 highlight_stub_dir=$(mktemp -d)
 cat >"$highlight_stub_dir/mbx" <<'EOF'
@@ -1869,11 +1978,10 @@ MBX_BIN=$highlight_stub_dir/mbx
 MBX_HIGHLIGHT=1
 _MBX_HIGHLIGHT_PLAIN='echo hi'
 _MBX_HIGHLIGHT_POINT=7
-_MBX_HIGHLIGHT_ACTIVE=0
 _mbx_highlight_refresh
-assert_eq $'\001\033[31m\002echo hi\001\033[0m\002' "$READLINE_LINE" \
-    'highlight refresh should install the styled helper line'
-assert_eq 14 "$READLINE_POINT" 'highlight refresh should map the styled cursor'
+assert_eq 'echo hi' "$READLINE_LINE" \
+    'highlight refresh must leave READLINE_LINE as the plain bytes (ADR 0015)'
+assert_eq 7 "$READLINE_POINT" 'highlight refresh must keep the plain cursor'
 
 # H-2: strip-then-compare accepts markers only when the stripped bytes match plain.
 _MBX_HIGHLIGHT_PLAIN='echo hi'
@@ -1885,14 +1993,62 @@ _mbx_highlight_validate_styled "$styled_bad" && \
     fail 'styled stub with extra escape should be rejected'
 _MBX_HIGHLIGHT_PLAIN='echo hi'
 _MBX_HIGHLIGHT_POINT=7
-_MBX_HIGHLIGHT_ACTIVE=0
 set -m
 _mbx_highlight_refresh || fail 'highlight refresh should succeed with the stub helper'
 [[ $- == *m* ]] || fail 'highlight helper must restore monitor mode after a lookup (H-5)'
 set +m
-(( _MBX_HIGHLIGHT_ACTIVE == 1 )) || fail 'highlight refresh should activate styled mode'
-_mbx_highlight_disarm_enter || true
-_MBX_HIGHLIGHT_ACTIVE=0
+assert_eq 'echo hi' "$READLINE_LINE" \
+    'a successful refresh must not assign styled bytes to READLINE_LINE'
+
+# Color is a tty-paint decision (bind -x stdout is often a pipe), not a
+# hardcoded 0 (M-062).
+if [[ ${TERM:-dumb} == dumb || -n ${NO_COLOR+x} || ${MBX_COLOR:-auto} == never ]]; then
+    expected_highlight_color=0
+else
+    expected_highlight_color=1
+fi
+cat >"$highlight_stub_dir/mbx" <<EOF
+#!/bin/sh
+color_file="$highlight_stub_dir/color"
+if [ "\$1" = highlight ]; then
+    shift
+    plain=
+    point=0
+    while [ \$# -gt 0 ]; do
+        case "\$1" in
+            --point) point=\$2; shift 2 ;;
+            --color) printf '%s' "\$2" >"\$color_file"; shift 2 ;;
+            *) plain="\$plain\${plain:+ }\$1"; shift ;;
+        esac
+    done
+    printf '%s\\n' "\$(printf '\\001\\033[31m\\002%s\\001\\033[0m\\002' "\$plain")"
+    printf '%s\\n' "\$point"
+fi
+EOF
+chmod +x "$highlight_stub_dir/mbx"
+_MBX_HIGHLIGHT_PLAIN='echo hi'
+_MBX_HIGHLIGHT_POINT=7
+_mbx_highlight_refresh || fail 'highlight refresh should succeed when recording --color'
+assert_eq "$expected_highlight_color" "$(<"$highlight_stub_dir/color")" \
+    'highlight CLI must pass a real _mbx_highlight_color_flag decision (M-062)'
+cat >"$highlight_stub_dir/mbx" <<'EOF'
+#!/bin/sh
+if [ "$1" = highlight ]; then
+    shift
+    plain=
+    point=0
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --point) point=$2; shift 2 ;;
+            --color) shift 2 ;;
+            *) plain="$plain${plain:+ }$1"; shift ;;
+        esac
+    done
+    printf '%s\n' "$(printf '\001\033[31m\002%s\001\033[0m\002' "$plain")"
+    printf '%s\n' "$point"
+fi
+EOF
+chmod +x "$highlight_stub_dir/mbx"
 
 # H-6: occupied bindings refuse overwrite unless override is set.
 _mbx_user_hl_occupy() { :; }
@@ -1909,9 +2065,10 @@ bind -u z 2>/dev/null || true
 bind -x '"\C-m": _mbx_user_hl_occupy' 2>/dev/null || true
 _MBX_HIGHLIGHT_INSTALLED=0
 _MBX_HIGHLIGHT_BOUND=0
-_mbx_highlight_install
-(( _MBX_HIGHLIGHT_BOUND == 0 )) || \
-    fail 'occupied Enter should refuse highlight install when Enter cannot arm'
+_mbx_highlight_install_keymap emacs 2>/dev/null || \
+    fail 'occupied Enter must not block printable wrapping (ADR 0015)'
+bind -X 2>/dev/null | grep -Fq '_mbx_highlight_self_insert' || \
+    fail 'printables must still wrap when Enter is occupied'
 bind -u '"\C-m"' 2>/dev/null || true
 unset -f _mbx_user_hl_occupy 2>/dev/null || true
 
@@ -1934,17 +2091,14 @@ MBX_HIGHLIGHT=1
 for highlight_row in "${highlight_hostile_corpus[@]}"; do
     _MBX_HIGHLIGHT_PLAIN=$highlight_row
     _MBX_HIGHLIGHT_POINT=${#highlight_row}
-    _MBX_HIGHLIGHT_ACTIVE=0
     _mbx_highlight_refresh || fail 'highlight refresh failed for hostile corpus row'
-    _mbx_highlight_strip_line "$READLINE_LINE"
-    assert_eq "$highlight_row" "$REPLY" \
-        'helper corpus strip must round-trip exact bytes'
+    assert_eq "$highlight_row" "$READLINE_LINE" \
+        'helper corpus must leave READLINE_LINE as the exact plain bytes'
 done
 
 # HLT-003 P-2: wrapped self-insert refuses C0 bytes.
 _MBX_HIGHLIGHT_PLAIN='echo keep'
 _MBX_HIGHLIGHT_POINT=9
-_MBX_HIGHLIGHT_ACTIVE=0
 _mbx_highlight_self_insert $'\x01'
 assert_eq 'echo keep' "$_MBX_HIGHLIGHT_PLAIN" \
     'highlight self-insert must refuse C0 bytes'
@@ -1955,7 +2109,6 @@ MBX_HIGHLIGHT=1
 MBX_BIN=/nonexistent/mbx-highlight
 _MBX_HIGHLIGHT_PLAIN='abc'
 _MBX_HIGHLIGHT_POINT=0
-_MBX_HIGHLIGHT_ACTIVE=0
 READLINE_LINE='abc'
 READLINE_POINT=0
 _mbx_highlight_forward
@@ -1963,22 +2116,8 @@ assert_eq 1 "${_MBX_HIGHLIGHT_POINT:-missing}" \
     'highlight forward must advance the plain cursor (not abort on ${#var-})'
 assert_eq 1 "$READLINE_POINT" 'highlight forward must update READLINE_POINT'
 
-# Partial keymap disarm must still clear ENTER_ARMED (M-044 recurrence).
-_MBX_HIGHLIGHT_ENTER_ARMED=1
-_MBX_HIGHLIGHT_VI_BOUND=1
-_MBX_HIGHLIGHT_WRAP_CTRL_J=0
-_MBX_HIGHLIGHT_VI_WRAP_CTRL_J=1
-_mbx_highlight_disarm_enter_keymap() {
-    if [[ $1 == emacs ]]; then
-        return 0
-    fi
-    return 1
-}
-_mbx_highlight_disarm_enter || true
-assert_eq 0 "${_MBX_HIGHLIGHT_ENTER_ARMED:-missing}" \
-    'partial keymap disarm must still clear HIGHLIGHT ENTER_ARMED (M-044)'
-unset -f _mbx_highlight_disarm_enter_keymap
-source "$ROOT/bash/highlight.bash"
+# ADR 0015 deleted the highlight Enter arm/disarm path (M-044's highlight
+# recurrence). The ghost Enter path still has the module contract above.
 
 # A helper that prints a well-formed payload then exits nonzero must not
 # install that payload (M-067).
@@ -1993,7 +2132,6 @@ MBX_BIN=$highlight_stub_dir/mbx
 MBX_HIGHLIGHT=1
 _MBX_HIGHLIGHT_PLAIN='echo'
 _MBX_HIGHLIGHT_POINT=4
-_MBX_HIGHLIGHT_ACTIVE=0
 READLINE_LINE='keep'
 READLINE_POINT=4
 if _mbx_highlight_refresh; then
@@ -2055,7 +2193,7 @@ unset -f _mbx_engine_write _mbx_engine_stop
 unset _MBX_ENGINE_OUT_FD _MBX_TEST_ENGINE_STOPPED
 
 unset MBX_BIN MBX_HIGHLIGHT _MBX_HIGHLIGHT_PLAIN _MBX_HIGHLIGHT_POINT \
-    _MBX_HIGHLIGHT_ACTIVE _MBX_HIGHLIGHT_INSTALLED _MBX_HIGHLIGHT_BOUND READLINE_LINE READLINE_POINT
+    _MBX_HIGHLIGHT_INSTALLED _MBX_HIGHLIGHT_BOUND READLINE_LINE READLINE_POINT
 rm -rf "$highlight_stub_dir"
 
 source "$ROOT/bash/editor.bash"

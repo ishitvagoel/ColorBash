@@ -2,6 +2,12 @@
 
 Status: Accepted (2026-08-27)
 
+Amended by ADR 0015 (2026-08-31): decisions 2–3 (in-buffer `\001`/`\002`
+markers and the Enter restore macro) are superseded. `READLINE_LINE` stays
+plain; styled bytes paint on one reserved row below the prompt. Install
+rules (opt-in, tty, occupied-binding skip, no Tab rebind, ghost exclusion)
+stand.
+
 ## Context
 
 Live syntax highlighting and completion overlays were deferred because Readline

@@ -274,43 +274,39 @@ text. Display bytes are sanitized (no raw controls).
 **Check:** `_MBX_COMP_OVERLAY_BOUND` is `1` and `bind -X` lists
 `_mbx_comp_overlay_toggle`. `bind -p` still shows `"\C-g": abort`.
 
-**Known limitation:** the overlay's cursor save/restore can corrupt the
-prompt and prior output when it draws near the bottom of a short terminal
-and the draw scrolls the screen (`M-065` in `MISTAKES.md`, open — see
-`docs/comp-004-overlay-plan.md`). Not yet fixed; avoid relying on the
-overlay when your terminal is only a few rows tall.
+Rows are reserved with IND before the cursor is saved (`M-065` fixed) and
+each row is clamped to `COLUMNS-1` so a wide candidate does not wrap onto
+an extra reserved row. Type-to-filter GUI menus are not part of this
+overlay.
 
-**Automated:** `bash tests/bash/modules.bash` (O-1–O-5),
-`cargo test -p mbx-pty --test completion_harness overlay_lists ranked_accept_works_with_overlay_env`.
-Terminal-safety evidence (including the open defect above) is in
-`crates/pty/tests/overlay_screen.rs`.
+**Automated:** `bash tests/bash/modules.bash` (O-1–O-5 plus the format-row
+clamp contract),
+`cargo test -p mbx-pty --test completion_harness overlay_lists ranked_accept_works_with_overlay_env`,
+`cargo test -p mbx-pty --test overlay_screen`.
 
 ### 10. Syntax highlighting (opt-in)
 
-Requires `MBX_HIGHLIGHT=1`. Needs a tty. **Skipped** when `MBX_GHOST=1`.
+Requires `MBX_HIGHLIGHT=1`. Needs a writable `/dev/tty`. **Skipped** when
+`MBX_GHOST=1`. While the completion overlay is visible, highlight does not
+paint (the overlay owns the rows below the prompt).
 
-**Live color is currently off by design, not a configuration step you're
-missing.** Bash's own Readline renders the `\001`/`\002` markers this feature
-uses to make color invisible-width by displaying them as literal `^A`/`^[`
-control-character sequences instead of hiding them — that convention only
-applies inside `PS1`, not inside the edit buffer (`READLINE_LINE`). Typing at
-the prompt with `MBX_HIGHLIGHT=1` exercises the full pipeline below (lexer,
-coprocess round trip, exact-byte recovery on Enter) with styling forced off
-(`M-064` in `MISTAKES.md`; `docs/adr/0014-highlight-over-coprocess.md`).
+The edit buffer stays ordinary Bash text (`READLINE_LINE` is never styled).
+Styled bytes paint on **one reserved row below the prompt** (ADR 0015;
+M-065 IND/DECSC). Enter runs those plain bytes. Helper failure or a
+missing tty leaves the line unpainted and usable.
 
 ```bash
 MBX_HIGHLIGHT=1 bash --noprofile --norc
 source /absolute/path/to/ColorBash/bash/init.bash
 ```
 
-Type `if echo "$HOME"; then true; fi # note`. The line still round-trips
-through the lexer and redraws correctly; it will not visibly change color
-until `M-064` is resolved. Incomplete quotes are still classified (tolerant
-lexer). Lines over 4 KiB or containing NUL stay unstyled.
+Type `true`. The prompt line stays `> true`; a copy of `true` appears on
+the next row in bold blue (keywords). Incomplete quotes are still classified
+(tolerant lexer). Lines over 4 KiB or containing C0/DEL stay unstyled.
+`echo` is not a keyword — use `true`/`false`/`if` to see color.
 
-The lexer's token/color mapping below is real and already used by the
-standalone `mbx highlight` command (which writes straight to your terminal,
-not through Readline, so `M-064` does not apply there):
+The lexer's token/color mapping is the same as the standalone
+`mbx highlight` command:
 
 | Color (16-color SGR) | Token |
 | --- | --- |
@@ -321,9 +317,9 @@ not through Readline, so `M-064` does not apply there):
 | cyan | numbers |
 | gray | comments (`#` to end of line) |
 
-**Enter runs the plain command**, not the styled buffer. Motion (Left / Right /
-Home) dismisses styling, then moves the cursor on the plain bytes. Helper
-failure leaves the line unstyled and usable.
+**Enter runs the plain command.** Motion (Left / Right / Home) updates the
+plain buffer and refreshes the preview row. Helper failure leaves the
+prompt line plain and usable.
 
 **Check:**
 
@@ -332,8 +328,9 @@ printf 'bound=%s\n' "${_MBX_HIGHLIGHT_BOUND-}"
 bind -X | grep _mbx_highlight_self_insert
 ```
 
-Both should succeed (`bound=1` and a widget listed). If wrap could not arm
-Enter, `_MBX_HIGHLIGHT_BOUND` stays `0` and highlighting is a no-op.
+Both should succeed (`bound=1` and a widget listed). Occupied printable
+`bind -x` bindings are skipped unless `MBX_HIGHLIGHT_OVERRIDE=1`; if wrap
+cannot install, `_MBX_HIGHLIGHT_BOUND` stays `0`.
 
 C0 control bytes are not inserted. You can also exercise the helper without a
 shell:
@@ -344,9 +341,9 @@ shell:
 ```
 
 `--no-color` (or a non-tty, with no `--color` override) returns the exact
-input bytes. `--color 0|1` overrides that default explicitly; it is what
-Bash itself passes for both the coprocess and CLI-fallback interactive paths
-(currently always `0`, per `M-064` above).
+input bytes. `--color 0|1` overrides that default explicitly; the
+interactive path passes `_mbx_highlight_color_flag` because `bind -x`
+stdout is often a pipe.
 
 **Automated:** `cargo test -p mbx highlight::`,
 `cargo test -p mbx-pty --test highlight`, highlight contracts in
@@ -361,7 +358,7 @@ Bash itself passes for both the coprocess and CLI-fallback interactive paths
 | Prompt + any opt-in | Supported |
 | `MBX_HISTORY=1` + search chord | Supported |
 | `MBX_HISTORY=1` + `MBX_GHOST=1` | Supported |
-| `MBX_HIGHLIGHT=1` + overlay | Supported (independent) |
+| `MBX_HIGHLIGHT=1` + overlay | Supported; highlight skips paint while the overlay is visible |
 | Overlay + ranked accept/cycle | Overlay uses the same snapshot |
 | `MBX_GHOST=1` + `MBX_HIGHLIGHT=1` | **Unsupported**; highlight does not install |
 | Overlay + stock Tab without wrap | Overlay has nothing to show |
@@ -437,7 +434,6 @@ MBX_COMP_OVERLAY_DISMISS_KEYSEQ='\C-xj'
 MBX_HIGHLIGHT=1
 MBX_HIGHLIGHT_OVERRIDE=1
 MBX_HIGHLIGHT_TIMEOUT=0.05
-MBX_HIGHLIGHT_ACCEPT_KEYSEQ='\C-x\C-m'
 
 # Diagnostics (never logs command text)
 MBX_LOG=trace

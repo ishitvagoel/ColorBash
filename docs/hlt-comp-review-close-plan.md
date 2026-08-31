@@ -2,8 +2,10 @@
 
 Status: `complete` (2026-08-27). Slices 1–3 implemented on
 `cursor/hlt-comp-overlay-741c`. H-1–H-6, O-1–O-5, and M-1 have module/PTY
-evidence. Do **not** mark `HLT-002`, `HLT-003`, `COMP-004`, or Phase 6
-`complete`.
+evidence. Later work closed the leftover gates: ADR 0015 (2026-08-31) for
+`HLT-002`/`HLT-003`/Phase 6; overlay width guard for `COMP-004`. Historical
+"do not mark complete" notes below stay as the close-plan's original stop
+condition, not current roadmap status.
 
 Existing files (`bash/highlight.bash`, `bash/completion.bash`, `mbx highlight`)
 are a first cut. They are not exit evidence. A PTY session with `MBX_HIGHLIGHT=1`

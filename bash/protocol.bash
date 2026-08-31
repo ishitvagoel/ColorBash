@@ -8,9 +8,10 @@ _MBX_PROTOCOL_FORBIDDEN_RAW_BYTES=$'\001\002\003\004\005\006\007\010\012\013\014
 
 # True when text contains a C0 byte or DEL. Every READLINE_LINE sink must call
 # this before assignment: ghost suffixes, ghost history-motion, search inserts,
-# ranked-completion tokens, and editor tokens. ESC there is terminal injection
-# on redisplay (HRD-002). TAB is included: it is C0 even though MBX1 allows it
-# as a field separator.
+# ranked-completion tokens, editor tokens, and highlight wrapped insert (the
+# highlight preview row is not a READLINE_LINE sink — ADR 0015). ESC there is
+# terminal injection on redisplay (HRD-002). TAB is included: it is C0 even
+# though MBX1 allows it as a field separator.
 _mbx_text_has_c0_or_del() {
     local text=${1-}
     local LC_ALL=C

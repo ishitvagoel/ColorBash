@@ -61,6 +61,8 @@ fn spawn_overlay_shell(home: &Path, rows: u16, cols: u16, prelude: &str) -> PtyS
             .env("MBX_ICONS", "never")
             .env("MBX_DISABLE_GIT", "1")
             .env("MBX_COMP_OVERLAY", "1")
+            .env("COLUMNS", cols.to_string())
+            .env("LINES", rows.to_string())
             .cwd(home)
             .winsize(WinSize { rows, cols }),
     )
@@ -216,5 +218,71 @@ fn resize_while_overlay_is_visible_leaves_a_usable_prompt() {
         .write_str("echo MBX_OVERLAY_RESIZE_OK\n", deadline(2))
         .expect("sentinel");
     wait_all(&mut session, &["\nMBX_OVERLAY_RESIZE_OK", "> "]);
+    session.write_str("exit\n", deadline(2)).expect("exit");
+}
+
+const WIDE_CANDIDATE_PRELUDE: &str = "\
+mbx_comp_wide() { printf 'GOT:%s|\\n' \"$*\"; }
+_mbx_comp_wide_backend() {
+    COMPREPLY=(WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ)
+}
+complete -F _mbx_comp_wide_backend mbx_comp_wide
+";
+
+#[test]
+fn overlay_clamps_a_wide_row_so_it_does_not_wrap() {
+    let home = TempHome::new("ov-scr-wide");
+    let mut session = spawn_overlay_shell(home.path(), 10, 20, WIDE_CANDIDATE_PRELUDE);
+    let mut transcript: Vec<u8> = Vec::new();
+    macro_rules! step {
+        ($needles:expr) => {{
+            let chunk = wait_all(&mut session, $needles);
+            transcript.extend_from_slice(&chunk);
+        }};
+    }
+
+    step!(&["> "]);
+    session
+        .write_str("_mbx_comp_wrap_existing_f mbx_comp_wide\n", deadline(2))
+        .expect("wrap");
+    step!(&["> "]);
+    // Two long candidates: Tab must not unique-insert a wrapping word into the
+    // edit buffer. The overlay row is what must be clamped.
+    session
+        .write_str("mbx_comp_wide ", deadline(2))
+        .expect("type prefix");
+    step!(&["mbx_comp_wide "]);
+    session.write_all(&[TAB], deadline(2)).expect("tab");
+    session
+        .write_all(OVERLAY_KEYSEQ, deadline(2))
+        .expect("show overlay");
+    transcript.extend_from_slice(&drain(&mut session, 2));
+
+    let mut screen = Screen::new(10, 20);
+    screen.apply(&transcript);
+    let lines = screen.lines();
+    assert!(
+        lines.iter().any(|line| line.contains("mbx_comp_wide")),
+        "the prompt must survive a wide overlay row; screen was:\n{}",
+        lines.join("\n")
+    );
+    let wrap_continuations: Vec<&String> = lines
+        .iter()
+        .filter(|line| {
+            let trimmed = line.trim();
+            !trimmed.is_empty()
+                && trimmed.chars().all(|ch| ch == 'W' || ch == 'Z')
+                && !line.starts_with('>')
+                && !line.starts_with("  ")
+        })
+        .collect();
+    assert!(
+        wrap_continuations.is_empty(),
+        "a candidate wider than COLUMNS must be clamped to one row, not wrap \
+         onto a continuation of W/Z; leftover rows: {wrap_continuations:?}\n\
+         full screen was:\n{}",
+        lines.join("\n")
+    );
+
     session.write_str("exit\n", deadline(2)).expect("exit");
 }

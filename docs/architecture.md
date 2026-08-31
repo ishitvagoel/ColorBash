@@ -1,10 +1,10 @@
 # Foundation architecture
 
 Status: implemented prototype with the foundation prompt slice, an opt-in
-history sidecar, Strategy A ghost, and Strategy A history search. Opt-in
-highlighting and completion overlay are in `validation` (ADR 0013;
-`docs/hlt-comp-review-close-plan.md`). Dim paint and type-to-filter overlays
-remain `deferred`.
+history sidecar, Strategy A ghost, Strategy A history search, opt-in
+preview-row highlighting (ADR 0015), and an opt-in completion overlay
+(ADR 0013; M-065 reservation plus COLUMNS-1 clamp). Dim paint and
+type-to-filter overlays remain `deferred`.
 
 ## Scope
 
@@ -19,10 +19,10 @@ the line buffer, cycle a bounded snapshot with the same chord, and restore the
 typed line with `\C-xl`. Ghost suffixes, search inserts, ranked-completion tokens, ghost
 history-motion rows, and editor tokens that contain C0 or DEL are refused so
 Readline redisplay cannot inject terminal controls (`HRD-002`). Strategy A history search and ghost are
-unblocked. Opt-in syntax highlighting and completion overlay are in
-`validation` (ADR 0013; H-1–H-6, O-1–O-5, M-1 evidence in
-`docs/hlt-comp-review-close-plan.md`). Dim paint and type-to-filter overlays
-remain `deferred` from this MVP.
+unblocked. Opt-in syntax highlighting paints a reserved preview row
+(ADR 0015) and the completion overlay is `complete` aside from deferred
+type-to-filter GUI leftovers (`docs/comp-004-overlay-plan.md`). Dim paint and
+type-to-filter overlays remain `deferred` from this MVP.
 
 ## System boundary
 
@@ -384,15 +384,16 @@ This slice does not enable dim paint or a type-to-filter overlay. Strategy A
 ghost is implemented (ADR 0010); Strategy A search insert, cycling, restore,
 cwd preference, and opt-in failed empty-line insert are recorded (ADR 0009).
 Opt-in syntax highlighting (`MBX_HIGHLIGHT=1`) and completion overlay
-(`MBX_COMP_OVERLAY=1`) are in `validation` (ADR 0013/0014;
-`docs/hlt-comp-review-close-plan.md`). Highlighting's live refresh routes over
-the coprocess (`HLT-004`, ADR 0014) via an MBX2 `HIGHLIGHT`/`STYLED` frame
-dispatched by an independent `HighlightHandler`, falling back to a
-process-substitution spawn only when no coprocess is attached; it currently
-sends `color=0` unconditionally because Readline caret-renders Bash's
-`\001`/`\002` markers inside `READLINE_LINE` instead of hiding them as it does
-in `PS1` (`M-064`, open). Invariance and admission-parity
-PTY evidence is in `crates/pty/tests/history_invariance.rs`. 100k query p95 and
+(`MBX_COMP_OVERLAY=1`) are `complete` aside from deferred leftovers
+(ADR 0013/0014/0015; `docs/hlt-comp-review-close-plan.md`). Highlighting's
+live refresh routes over the coprocess (`HLT-004`, ADR 0014) via an MBX2
+`HIGHLIGHT`/`STYLED` frame dispatched by an independent `HighlightHandler`,
+falling back to a process-substitution spawn only when no coprocess is
+attached. `READLINE_LINE` stays permanently plain; the helper's styled copy
+paints on one reserved row below the prompt (ADR 0015, M-065 IND/DECSC), so
+Readline never caret-renders `\001`/`\002` (`M-064` fixed). Color is
+`_mbx_highlight_color_flag` because `bind -x` stdout is often a pipe.
+Invariance and admission-parity PTY evidence is in `crates/pty/tests/history_invariance.rs`. 100k query p95 and
 hostile inertness evidence is in `docs/benchmarks/2026-08-16-history-queries.md`
 and `crates/cli/src/corpus.rs`. Prompt-boundary write-ack PTY and release
 percentile evidence is in `crates/pty/tests/history_write_ack.rs` and
@@ -440,8 +441,8 @@ write-ack percentile leftover is `deferred` (not a budget pass;
 
 ## Reassessment gate
 
-The foundation supports continuing, with conditions. Before autocomplete or live
-highlighting on a **G5 revisit** slice:
+The foundation supports continuing, with conditions. Before dim paint or a
+type-to-filter overlay on a **G5 revisit** slice:
 
 1. run the deferred macOS `HRD-001` pairwise matrix when a host is available
    (ADR 0012); Linux L-1–L-5 are recorded;
@@ -462,16 +463,19 @@ insertion authoritative and records additive `_MBX_COMP_KINDS` / `_MBX_COMP_DESC
 metadata beside candidates for later UI. Descriptions are bounded and sanitized
 before any renderer consumes them (`docs/comp-003-metadata-plan.md`). Additive
 `_MBX_COMP_SCORES` / `_MBX_COMP_ORDER` rank candidates for display without
-reordering `COMPREPLY` (`docs/comp-003-ranking-plan.md`). There is no GUI
-overlay or popup menu in this milestone: Tab insertion stays stock Bash
-behavior (`docs/comp-004-popup-plan.md`). An optional ranked-accept `bind -x`
+reordering `COMPREPLY` (`docs/comp-003-ranking-plan.md`). Tab insertion stays
+stock Bash behavior (`docs/comp-004-popup-plan.md`); there is no type-to-filter
+GUI menu in this milestone. An optional ranked-accept `bind -x`
 chord (default `\C-x\C-a`) replaces the current word with `_MBX_COMP_RANKED_REPLY`
 when that word is a prefix of the ranked candidate, without changing Tab
 (`docs/comp-004-ranked-accept-plan.md`). Optional ranked-cycle chords (default
 `\C-xn` / `\C-xp`, not ghost `\C-x\C-n` / `\C-x\C-p`) rotate `_MBX_COMP_RANKED_LIST`
 and replace when the current word equals the ranked head
-(`docs/comp-004-ranked-cycle-plan.md`).
-Wrapped Git candidates (opt-in wrap or
+(`docs/comp-004-ranked-cycle-plan.md`). An opt-in completion overlay
+(`MBX_COMP_OVERLAY=1`) lists ranked candidates below the prompt after Tab
+on a wrapped `-F` completer; it reserves rows with IND before DECSC
+(M-065) and clamps each row to `COLUMNS-1`. Type-to-filter GUI menus
+remain `deferred`. Wrapped Git candidates (opt-in wrap or
 the `mbx_comp_git` fixture) receive additive `ref` / `flag` / `file` kinds
 (`docs/git-004-kinds-plan.md`).
 
@@ -482,8 +486,9 @@ resize-mid-line, and wide/combining glyph round trips (`docs/research/
 multiline-width-pty.md`), and the Bash history admission corpus
 (`docs/research/bash-history-admission.md`). The opt-in history sidecar is
 implemented; `G2` is complete and write-ack percentiles are `deferred`. Strategy A
-search and ghost are unblocked; highlighting and GUI overlay remain `deferred`
-(`docs/g3-gate-close-plan.md`; ADR 0003). Opt-in inline ghost is ADR 0010
+search and ghost are unblocked; opt-in highlighting (ADR 0015 preview row)
+and the completion overlay are `complete` aside from deferred leftovers
+(`docs/g3-gate-close-plan.md`; ADR 0003/0013/0015). Opt-in inline ghost is ADR 0010
 (`bash/ghost.bash`; suffix after `READLINE_POINT`; Enter uses a Readline
 delete-char + accept-line macro while a suffix is active; ASCII printables that
 are stock `self-insert` are wrapped on emacs and vi-insert; `\ef` / Ctrl-Right
@@ -501,5 +506,5 @@ policy records no GUI overlay; ranked-accept `bind -x` evidence is complete
 (`docs/comp-004-ranked-accept-plan.md`). Ranked-cycle `bind -x` evidence is
 complete (`docs/comp-004-ranked-cycle-plan.md`; default `\C-xn` / `\C-xp`).
 `COMP-005` Strategy A insert/fallthrough is complete
-(`docs/comp-005-strategy-a-close-plan.md`); overlay stays `deferred` and
-`COMP-004` stays `discovery`. `G3` explicit `bind -x` evidence is complete.
+(`docs/comp-005-strategy-a-close-plan.md`); type-to-filter GUI overlay stays
+`deferred` and `COMP-004` overlay is `complete`. `G3` explicit `bind -x` evidence is complete.

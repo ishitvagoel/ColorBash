@@ -6,10 +6,10 @@
 > intended program and are not a status tracker.
 
 - Last reviewed: 2026-08-31 UTC
-- Current milestone: Strategy A MVP is `complete` on Linux (`G5` 2026-08-27); Phase 9 `complete`; macOS `HRD-001` `deferred` (ADR 0012); `HRD-003` `deferred`; ADR 0013/0014 overlay/highlighting in `validation`
-- Active workstream: `M-064` (Readline does not hide `\001`/`\002` inside `READLINE_LINE`; blocks live highlight color, `HLT-002`); `HLT-003` hostile corpus (`docs/hlt-003-hostile-gate-plan.md`); G5 revisit macOS PTY; dim paint; percentile benches `deferred`
-- Next decision gate: resolve or explicitly descope `M-064` (needs PTY evidence before Phase 6 can close); `M-065` is fixed (2026-08-30), returning `COMP-004` to `validation`; G5 revisit (macOS matrix, `HLT-003` p99, `HRD-003`, dim paint). ADR 0013 review-close (H-1–H-6, O-1–O-5, M-1) is recorded; `HLT-003` hostile corpus slices 1–2 recorded; `HLT-004` coprocess transport recorded (ADR 0014)
-- Editor-facing work: opt-in ghost suffix is on main (ADR 0010). Async QUERY with stale-generation skip is recorded (ADR 0011). Explicit history-search insert (`\C-xh`), cycling, restore (`\C-xl`), cwd preference, and opt-in failed empty-line insert are recorded (ADR 0009). Opt-in syntax highlighting (`MBX_HIGHLIGHT=1`) and completion overlay (`MBX_COMP_OVERLAY=1`) are in `validation` (ADR 0013; `docs/hlt-comp-review-close-plan.md`). Dim paint and type-to-filter overlays are `deferred` from this MVP (G5 revisit)
+- Current milestone: Strategy A MVP is `complete` on Linux (`G5` 2026-08-27); Phase 6 `complete` (ADR 0015 preview-row highlighting; `HLT-003` p99 `deferred`); Phase 9 `complete`; macOS `HRD-001` `deferred` (ADR 0012); `HRD-003` `deferred`; `COMP-004` overlay `complete` (type-to-filter GUI `deferred`)
+- Active workstream: `REL-001` first `v*` tag (maintainer-gated); G5 revisit macOS PTY; dim paint; percentile benches `deferred`
+- Next decision gate: G5 revisit (macOS matrix, `HLT-003` p99, `HRD-003`, dim paint). ADR 0015 closed `M-064`; `COMP-004` width guard recorded
+- Editor-facing work: opt-in ghost suffix is on main (ADR 0010). Async QUERY with stale-generation skip is recorded (ADR 0011). Explicit history-search insert (`\C-xh`), cycling, restore (`\C-xl`), cwd preference, and opt-in failed empty-line insert are recorded (ADR 0009). Opt-in syntax highlighting (`MBX_HIGHLIGHT=1`, ADR 0015 preview row) and completion overlay (`MBX_COMP_OVERLAY=1`) are `complete` aside from deferred leftovers. Dim paint and type-to-filter overlays are `deferred` from this MVP (G5 revisit)
 - Timing policy: unmet percentile targets are `deferred` and do not block
   product development (`docs/latency-budget-deferral.md`)
 
@@ -136,7 +136,8 @@ recorded a green run on `origin/main` at commit
 Not implemented:
 
 - dim after-every-key paint or a type-to-filter Ctrl+R overlay (G5 revisit);
-- `HLT-003` hostile-input and latency exit gates for highlighting;
+- `HLT-003` highlight p99 (hostile/PTY slices are recorded; percentiles
+  `deferred`);
 - the release platform matrix (`HRD-001` macOS `deferred` per ADR 0012; Linux
   nested/SSH/login/vim/tmux PTY recorded), or remaining G5 pairwise combinations
   on macOS; or
@@ -329,9 +330,11 @@ to tests on this tree. Linux `HRD-001` L-1–L-5, `HRD-002`, and `HRD-004` are
 recorded. macOS `HRD-001` is **`deferred`** (ADR 0012), not `blocked`.
 `HRD-003` percentiles are `deferred` (`docs/latency-budget-deferral.md`).
 
-`HLT-003` and GUI overlay/dim-paint work are `deferred` from this Strategy A MVP
-with owner **G5 revisit**. Do not delete those IDs. Unmet percentile
-targets stay `deferred` and are not a pass/fail requirement for this close.
+`HLT-003` p99, type-to-filter GUI overlay, and dim-paint work remain
+`deferred` from this Strategy A MVP with owner **G5 revisit**. Do not
+delete those IDs. Unmet percentile targets stay `deferred` and are not a
+pass/fail requirement for this close. Preview-row highlighting and the
+COLUMNS-clamped completion overlay are `complete` (ADR 0015; M-065).
 
 ## Phase summary
 
@@ -342,8 +345,8 @@ targets stay `deferred` and are not a pass/fail requirement for this close.
 | 2 | Prompt | `complete` | `PRM-001`/`PRM-009` complete; capability/width/wrap recorded; `PRM-004` percentiles `deferred` |
 | 3 | History | `complete` | Phase 3A / `G2` complete; `HIST-009` and `HIST-010` complete; write-ack percentiles `deferred` |
 | 4 | Ghost suggestions | `complete` | ADR 0010 suffix; ADR 0011 QUERY + generation skip + overlapping delayed-RESULT PTY; `GHST-004` functional PTY recorded; dim paint `deferred`; latency percentiles `deferred` |
-| 5 | Completion | `complete` | Strategy A insert/fallthrough (`COMP-005`); `G4` / `COMP-001`–`COMP-003` / `GIT-004` complete; ranked-cycle `\C-xn` / `\C-xp`; `COMP-004` overlay slice `validation` — `M-065` fixed 2026-08-30 (ADR 0013) |
-| 6 | Syntax highlighting | `validation` | ADR 0013/0014; `HLT-004` coprocess transport `complete`; `HLT-002` `blocked` on `M-064` (Readline caret-renders markers inside `READLINE_LINE`, so live color stays off); `HLT-003` hostile gates `in-progress` (slices 1–2); p99 `deferred` |
+| 5 | Completion | `complete` | Strategy A insert/fallthrough (`COMP-005`); `G4` / `COMP-001`–`COMP-003` / `GIT-004` complete; ranked-cycle `\C-xn` / `\C-xp`; `COMP-004` overlay `complete` (M-065 reservation; COLUMNS-1 width guard; type-to-filter GUI `deferred`) |
+| 6 | Syntax highlighting | `complete` | ADR 0013/0014/0015; `HLT-004` coprocess `complete`; `HLT-002` preview-row PTY; `HLT-003` hostile slices 1–2; p99 `deferred` |
 | 7 | Git/provider expansion | `complete` | MVP exits `GIT-002` / `GIT-004` (`docs/git-phase7-mvp-close-plan.md`); `GIT-005` SDK `deferred`; upstream/remotes/tags unauthorized |
 | 8 | Enhanced Ctrl+R | `complete` | `SRCH-001`–`SRCH-003` complete (ADR 0009); cwd/signal/opt-in failed/opt-in repo insert recorded (`docs/srch-003-repo-filter-plan.md`); 100k interactive leftover `deferred`; overlay `deferred` |
 | 9 | Release hardening | `complete` | `HRD-002` and `HRD-004` complete; Linux `HRD-001` L-1–L-5 recorded; macOS `HRD-001` `deferred` (ADR 0012); `HRD-003` `deferred`; `G5` closed (`docs/g5-strategy-a-close-plan.md`) |
@@ -508,37 +511,28 @@ live-state and `compopt` parity are demonstrated. Do not start a GUI overlay.
 | `COMP-001` | Build a non-popup stock-completion adapter harness | `complete` | `docs/comp-001-harness-plan.md`; H-1–H-4; `G4` complete; 5 ms leftover `deferred` |
 | `COMP-002` | Prove file and one `-F` function's exact insertion parity | `complete` | `docs/comp-002-parity-plan.md`; P-1–P-4, F-1–F-4, L-1–L-4, N-1–N-2, S-1–S-4; `docs/g4-gate-close-plan.md`; 5 ms leftover `deferred` |
 | `COMP-003` | Add typed candidate metadata and bounded ranking | `complete` | `docs/comp-003-metadata-plan.md` K-1–K-4; `docs/comp-003-ranking-plan.md` R-1–R-4 in `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs` |
-| `COMP-004` | Add popup navigation and terminal-safe rendering | `validation` | Popup policy P-1–P-4 (`docs/comp-004-popup-plan.md`); ranked-accept A-1–A-6; ranked-cycle C-1–C-6; overlay slice OV-1 + PTY (`docs/comp-004-overlay-plan.md`, ADR 0013). **`M-065` fixed 2026-08-30**: the overlay reserves its rows with IND before saving the cursor, so a draw that scrolls can no longer invalidate the `\e7` save, and caps the draw at `LINES-2` so the reservation cannot scroll the prompt away. Evidence: `crates/pty/tests/overlay_screen.rs` (`overlay_near_the_bottom_of_a_short_terminal_leaves_the_prompt_intact`, no longer `#[ignore]`d, confirmed to fail against the unfixed code) and `tests/bash/modules.bash` OV-2/OV-3. Stays `validation` rather than `complete`: type-to-filter GUI menu remains `deferred`, and the overlay has no wide/combining-glyph line-width guard yet — a candidate wider than the terminal can still wrap and consume an extra row |
-| `COMP-005` | Insert/fall through exactly and pass the parity/PTY matrix | `complete` | `docs/comp-005-strategy-a-close-plan.md`; G4/COMP-002 P-1–P-4, L-1–L-4, N-1–N-2, S-1–S-4; ranked-accept A-1–A-6; ranked-cycle C-1–C-6 (`\C-xn` / `\C-xp`); `GIT-004` kinds; overlay `deferred`; 5 ms leftover `deferred` |
+| `COMP-004` | Add popup navigation and terminal-safe rendering | `complete` | Popup policy P-1–P-4 (`docs/comp-004-popup-plan.md`); ranked-accept A-1–A-6; ranked-cycle C-1–C-6; overlay slice OV-1 + PTY (`docs/comp-004-overlay-plan.md`, ADR 0013). **`M-065` fixed 2026-08-30**. **Width guard 2026-08-31**: `_mbx_comp_overlay_format_row` clamps each overlay row to `COLUMNS-1` (SGR skipped; non-ASCII two columns) so a wide candidate cannot wrap onto an extra reserved row. Evidence: `crates/pty/tests/overlay_screen.rs` (`overlay_clamps_a_wide_row_so_it_does_not_wrap`, `overlay_near_the_bottom_of_a_short_terminal_leaves_the_prompt_intact`) and `tests/bash/modules.bash` OV-2/OV-3 plus the format-row clamp contract. Type-to-filter GUI menu remains `deferred` |
+| `COMP-005` | Insert/fall through exactly and pass the parity/PTY matrix | `complete` | `docs/comp-005-strategy-a-close-plan.md`; G4/COMP-002 P-1–P-4, L-1–L-4, N-1–N-2, S-1–S-4; ranked-accept A-1–A-6; ranked-cycle C-1–C-6 (`\C-xn` / `\C-xp`); `GIT-004` kinds; overlay lives on `COMP-004` (`complete`; type-to-filter GUI `deferred`); 5 ms leftover `deferred` |
 
 Exit condition: `G4` for the adapter slice; `COMP-005` for the Strategy A
 completion feature. Overlay slice needed `HLT-003`-class hostile/latency
 evidence before `COMP-004` could move to `complete`; that evidence-gathering
 found `M-065`, a confirmed terminal-corruption defect, not just an unproven
 claim. `M-065` was fixed on 2026-08-30 — the overlay reserves its rows with
-IND before saving the cursor, and caps the draw at `LINES-2` — so `COMP-004`
-is back to `validation`. No DSR cursor-row query was needed; the earlier note
-here that one was required assumed the cursor row had to be known when it only
-had to be made safe. `COMP-004` still does not close: type-to-filter GUI menus
-remain `deferred`, and the overlay has no wide/combining-glyph line-width
-guard, so a candidate wider than the terminal can still wrap onto an extra
-row.
+IND before saving the cursor, and caps the draw at `LINES-2`. The COLUMNS-1
+visible-width guard landed 2026-08-31 (`overlay_clamps_a_wide_row_so_it_does_not_wrap`).
+Type-to-filter GUI menus remain `deferred` and do not block `COMP-004`
+`complete` (same rule as other deferred leftovers on complete phases).
 
 ### Phase 6 — Syntax highlighting
 
-Status: `validation` (ADR 0013/0014; owner **G5 revisit**). The coprocess
-transport slice (`HLT-004`) is `complete`. A more fundamental defect than the
-open hostile-input/latency gates was found while closing it: **real color has
-never rendered correctly in the live interactive path** (`M-064` — Readline
-caret-renders `\001`/`\002` inside `READLINE_LINE` instead of treating them as
-zero-width, unlike their documented `PS1` behavior). This was previously
-masked by a second, now-fixed bug (`M-062`) that kept color silently off in
-every real session. `bash/highlight.bash`'s interactive refresh currently
-sends `color=0` unconditionally as a deliberate, evidenced safe state, not a
-regression. Do not mark `HLT-002`, `HLT-003`, or Phase 6 `complete` until
-`M-064` is resolved by a follow-up ADR and PTY evidence, or the live-color
-goal is explicitly descoped with an accepted decision — a percentile leftover
-never blocked this phase and still does not; a correctness gap does.
+Status: `complete` (ADR 0013/0014/0015). `READLINE_LINE` stays permanently
+plain; the helper's styled copy paints on one reserved row below the prompt
+(ADR 0015), so Readline never caret-renders `\001`/`\002` (`M-064` fixed).
+Color is a tty-paint decision (`_mbx_highlight_color_flag`; `bind -x` stdout
+is often a pipe). `HLT-003` p99 stays `deferred`
+(`docs/latency-budget-deferral.md`) and does not block this close (G2/G4
+precedent).
 
 Define a tolerant token taxonomy only after Readline redraw feasibility is known.
 The highlighter must accept incomplete Bash, never execute or expand input, bound
@@ -547,14 +541,13 @@ and strip back to the exact original bytes.
 
 | ID | Deliverable | Status | Evidence or dependency |
 | --- | --- | --- | --- |
-| `HLT-001` | Define token taxonomy and tolerant incomplete-input lexer | `validation` | `docs/hlt-001-lexer-plan.md`; `crates/cli/src/highlight.rs`; `cargo test -p mbx highlight::` |
-| `HLT-002` | Integrate terminal-safe styling without taking execution ownership | `blocked` | `docs/hlt-002-integration-plan.md`; `bash/highlight.bash`; `tests/bash/modules.bash`; `crates/pty/tests/highlight.rs`; blocked on `M-064` — styling is not terminal-safe in `READLINE_LINE` today |
-| `HLT-003` | Pass exact-byte stripping, hostile-input, PTY, and latency gates | `in-progress` | `docs/hlt-003-hostile-gate-plan.md`; slices 1–2 S-1–S-4 and P-1–P-2 recorded; p99 `deferred`; slice 3 (if any) should incorporate `M-064` evidence once a rendering fix exists |
+| `HLT-001` | Define token taxonomy and tolerant incomplete-input lexer | `complete` | `docs/hlt-001-lexer-plan.md`; `crates/cli/src/highlight.rs`; `cargo test -p mbx highlight::` |
+| `HLT-002` | Integrate terminal-safe styling without taking execution ownership | `complete` | ADR 0015; `bash/highlight.bash`; `tests/bash/modules.bash`; `crates/pty/tests/highlight.rs` (`highlight_preview_row_paints_sgr_below_an_intact_prompt`: Screen shows SGR copy on a row below an intact prompt; Enter executes exact plain bytes) |
+| `HLT-003` | Pass exact-byte stripping, hostile-input, PTY, and latency gates | `complete` | `docs/hlt-003-hostile-gate-plan.md`; slices 1–2 S-1–S-4 and P-1–P-2 recorded; p99 `deferred` |
 | `HLT-004` | Route HIGHLIGHT over the coprocess instead of forking per keystroke | `complete` | `docs/adr/0014-highlight-over-coprocess.md`; `crates/cli/src/highlight_service.rs`; `docs/protocol-mbx2.md` HIGHLIGHT/STYLED; `crates/pty/tests/highlight.rs` (`wire_highlight_forks_no_helper_process_per_keystroke`, `cli_fallback_highlight_does_fork_the_helper_per_keystroke`) |
 
-Exit condition: `HLT-003` if G5 keeps highlighting in scope, **and** `M-064`
-resolved (or an accepted descope of live color), before Phase 6 can be
-`complete`. `HLT-004` does not close Phase 6 alone. Do not delete these IDs.
+Exit condition: `HLT-003` hostile/PTY gates plus `M-064` resolved. Met
+2026-08-31 (ADR 0015). p99 remains `deferred`. Do not delete these IDs.
 
 ### Phase 7 — Git and provider expansion
 
@@ -622,7 +615,7 @@ combinations are impractical.
 | `HRD-003` | Release-mode end-to-end latency and resource evidence | `deferred` | existing warm-Git / history-query / write-ack records; remaining matrix `deferred` (`docs/latency-budget-deferral.md`); do not chase product-code latency |
 | `HRD-004` | Install, upgrade, disable, removal, crash, and recovery evidence | `complete` | `docs/hrd-004-lifecycle-plan.md` L-1–L-6; setup/init never write `~/.bashrc`; helper crash and WAL recovery recorded; no package-manager installer |
 | `DIAG-001` | `mbx doctor` diagnostic command (`CODEX_MODERN_BASH_ARCHITECTURE.md` §41) | `complete` | `mbx_doctor` in `bash/config.bash`: Bash version, interactivity/tty, color/locale/icon capability, helper path/version/live handshake, IPC mode, config resolution, per-feature keybinding-collision report with the matching `*_OVERRIDE` fix, ghost/highlight exclusion check, history store path/permissions/row count; module contracts D-1–D-3 in `tests/bash/modules.bash`; README §"Check it is installed" points here instead of per-feature manual recipes |
-| `REL-001` | Prebuilt-binary release pipeline (GAP-1, `docs/repo-review-2026-08-29.md`) | `in-progress` | `.github/workflows/release.yml`: on a `v*` tag, builds `mbx` for `x86_64`/`aarch64` Linux on native GitHub-hosted runners (avoids cross-compiling `rusqlite`'s bundled C sources), packages a checksummed tarball, and publishes a GitHub release. **Untested end-to-end**: no tag has been pushed to exercise it, and cutting the first tag is a maintainer decision this workflow does not make on its own. `scripts/install.bash` preferring a verified download over `cargo build` is deliberately deferred until a real release exists to point at, rather than writing installer logic against a release that does not yet exist |
+| `REL-001` | Prebuilt-binary release pipeline (GAP-1, `docs/repo-review-2026-08-29.md`) | `in-progress` | `.github/workflows/release.yml` plus `scripts/package-release.bash` (same tarball+checksum as the workflow Package step). Packaging dry-run recorded 2026-08-31. **No `v*` tag has been pushed**; cutting the first tag is a maintainer decision. `workflow_dispatch` is build-only (M-071). `scripts/install.bash` preferring a verified download over `cargo build` stays deferred until a real release exists |
 
 Exit condition: `G5` after every non-deferred `HRD-*` item is complete.
 macOS `HRD-001` is explicitly `deferred` (ADR 0012).
@@ -633,24 +626,14 @@ Strategy A MVP on Linux is `complete` (`G5` 2026-08-27). Capture stays
 disabled by default. Unmet percentile leftovers are `deferred` and must not
 block product slices (`docs/latency-budget-deferral.md`).
 
-1. **`M-064`** (new, highest priority for Phase 6): determine whether any
-   Readline-recognized technique makes styling genuinely invisible inside
-   `READLINE_LINE`, or whether ADR 0013's marker-based design needs a
-   superseding ADR. This blocks `HLT-002` and Phase 6 `complete`; it is a
-   correctness gap, not a deferrable percentile. Until resolved, the
-   interactive refresh correctly stays at `color=0`; do not flip that without
-   this evidence.
-2. **G5 revisit** when a macOS host is available: run the `HRD-001` pairwise
+1. **G5 revisit** when a macOS host is available: run the `HRD-001` pairwise
    matrix per ADR 0012. Do not fake it on Linux.
-3. **`HLT-003`** hostile corpus and highlight p99 on Linux (`docs/latency-budget-deferral.md`
-   defers percentiles; do not block on them). ADR 0013 review-close slices 1–3
-   (H-1–H-6, O-1–O-5, M-1) are implemented; `HLT-004` coprocess transport is
-   complete (ADR 0014). Do not mark `HLT-002`, `COMP-004`, or Phase 6
-   `complete` without gate evidence beyond the review asserts, and not before
-   `M-064` above.
-4. `HRD-003` / `PRM-004` percentiles stay `deferred` unless an ADR ratifies new
-   numbers or a functional prompt-path defect is proven.
-5. `GIT-005` provider SDK stays post-MVP `deferred`.
+2. **`REL-001`**: maintainer `workflow_dispatch` smoke of `release.yml`, then
+   the first `v*` tag. Do not push a tag from an agent unless asked.
+3. `HLT-003` p99 / `HRD-003` / `PRM-004` percentiles stay `deferred` unless
+   an ADR ratifies new numbers or a functional prompt-path defect is proven.
+4. `GIT-005` provider SDK stays post-MVP `deferred`.
+5. Dim paint and type-to-filter overlays stay `deferred`.
 6. Do not enable capture by default. Do not combine `MBX_GHOST=1` with
    `MBX_HIGHLIGHT=1`.
 
@@ -707,9 +690,9 @@ emulator work, AI assistance, and automatic command correction or execution.
 Also `deferred` from this **Strategy A MVP** (owner G5 revisit; IDs kept):
 
 - macOS `HRD-001` pairwise PTY matrix (ADR 0012);
-- live syntax highlighting (`HLT-001`–`HLT-003`);
+- `HLT-003` highlight p99;
 - dim after-every-key ghost paint;
-- GUI completion overlay / type-to-filter Ctrl+R overlay.
+- type-to-filter GUI completion / Ctrl+R overlay.
 
 Do not leave those items `blocked` with no next action. Revisit at G5 or with
 an accepted decoration/ownership ADR.
@@ -753,3 +736,4 @@ entries for at-a-glance context.
 | 2026-08-30 | Fixed `M-077`: `mbx history clear` failed with `database is locked` when another shell held the write lock. `clear` waited out contention on opening its connection but then ran `DELETE FROM history` with no retry, under the 100 ms `BUSY_TIMEOUT_MS` meant for the prompt hot path — where never stalling matters and dropping a record is the designed degradation. That is the wrong policy for a command the user typed and is already waiting on, and two open shells is the ordinary case for a shell integration. `clear` now uses the retry helper this file already had, with a new `USER_COMMAND_BUSY_DEADLINE_MS` (2 s); the hot-path budget is unchanged. Surfaced by a CI failure on PR #53, in a diff that touched no history code. |
 | 2026-08-30 | Fixed `M-065`, unblocking `COMP-004` (now `validation`). The completion overlay reserves its rows with `\eD` (IND) *before* `\e7` saves the cursor, so a draw that scrolls the screen can no longer invalidate an absolute save — and caps the draw at `LINES-2` so the reservation itself cannot push the prompt off the top. No DSR (`\e[6n`) round trip was needed: the earlier note that one was required assumed the cursor row had to be *known* when it only had to be made *safe*, and avoiding DSR avoids its timeout and type-ahead risks. `crates/pty/tests/overlay_screen.rs` is no longer `#[ignore]`d and was confirmed to fail against the unfixed code. Review caught a defect the fix itself introduced: capping the draw without capping the selection let cycling and ranked accept address rows that were never drawn, so `_MBX_COMP_OVERLAY_SHOWN` now bounds both (OV-3). Recorded a trap worth remembering: 'is the prompt visible' does not discriminate this bug, because Readline redraws the prompt after a `bind -x` widget returns — the stranded overlay rows are what separate the two. |
 | 2026-08-31 | Safety/hardening batch ahead of the M-064 rendering ADR. Bash: C0/DEL gates on ghost history-motion and ranked-completion insert (M-050 recurrence); highlight disarm always clears `ENTER_ARMED` (M-044 recurrence); `${#_MBX_HIGHLIGHT_PLAIN-}` bad substitution on forward-motion (M-078); highlight/ghost CLI wait-or-kill plus exit-status check (M-067 recurrence); `_mbx_comp_identifier_ok` anchored regex (M-056 recurrence); shared `_mbx_jobs_suspend`/`_mbx_wait_or_kill_child`. Rust: create-with-mode store file/dir (M-079); non-blocking history Drop (M-080); bounded exclude glob (M-081); highlight rejects C0 and skips UTF-8 after `\` (M-082); retention `saturating_mul`; socket write timeout. Do not mark `HLT-002`, `COMP-004`, or Phase 6 complete. |
+| 2026-08-31 | Accepted ADR 0015: `READLINE_LINE` stays plain; styled bytes paint on one reserved preview row (M-065 IND/DECSC). Implemented in `bash/highlight.bash`. Color is a tty-paint decision because `bind -x` stdout is often a pipe (M-062 fixed). Point units are Unicode scalar counts. Preview-row C0 check must not use an octal glob range that includes ESC (M-083). PTY: `highlight_preview_row_paints_sgr_below_an_intact_prompt`. `HLT-002`/`HLT-003`/Phase 6 `complete`; `HLT-003` p99 stays `deferred`. Overlay COLUMNS-1 clamp: `overlay_clamps_a_wide_row_so_it_does_not_wrap`; `COMP-004` `complete` (type-to-filter GUI `deferred`). `scripts/package-release.bash` dry-run for `REL-001` (tag still maintainer-gated). Stall-until-timeout module cases converted to deadline-relative assertions (M-072 leftover). |

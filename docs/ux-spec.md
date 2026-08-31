@@ -100,20 +100,24 @@ No helper / limited terminal:
 
 ## Deferred editor UX
 
-Ghost suggestions, completion menus, type-to-filter history overlays,
-highlighting, multiline guides, and command palettes remain design
-requirements, not prototype claims. An opt-in history ghost (`MBX_GHOST=1` with
-`MBX_HISTORY=1`, ADR 0010) can show a sidecar prefix match after the cursor;
-Enter runs only the typed prefix. Right accepts the full row; Left, Home, Up,
-and Down dismiss or restore history navigation; Alt-F / Ctrl-Right accept one
-word; Ctrl-X Ctrl-N / Ctrl-P cycle other prefix matches. It is not dim
-after-every-key paint. An explicit history-search chord (`Ctrl-X` then `h`,
-ADR 0009) can insert one sidecar match and cycle a bounded snapshot;
-`Ctrl-X` then `l` restores the typed line. An empty chord prefers sidecar
-rows from `$PWD`; a typed prefix prefers cwd-scoped prefix then fuzzy before
-global queries. `MBX_SEARCH_FAILED=1` prefers failed empty-line rows first.
-It is not the interactive overlay shown above. The opt-in
-sidecar can store and query history from the CLI. Each later feature must
-insert or propose ordinary Bash text and must never auto-execute. The Readline
-research and ADR 0003 define the validation needed before dim highlighting and
-overlays are implemented.
+Dim after-every-key ghost paint, type-to-filter history overlays, multiline
+guides, and command palettes remain design requirements, not prototype
+claims. Opt-in Strategy A highlighting (`MBX_HIGHLIGHT=1`, ADR 0015) paints a
+styled copy on one reserved row below the prompt; `READLINE_LINE` stays
+plain and Enter runs those bytes. An opt-in completion overlay
+(`MBX_COMP_OVERLAY=1`) lists ranked candidates below the prompt after Tab on
+a wrapped `-F` completer; Tab insertion stays stock. An opt-in history ghost
+(`MBX_GHOST=1` with `MBX_HISTORY=1`, ADR 0010) can show a sidecar prefix match
+after the cursor; Enter runs only the typed prefix. Right accepts the full
+row; Left, Home, Up, and Down dismiss or restore history navigation; Alt-F /
+Ctrl-Right accept one word; Ctrl-X Ctrl-N / Ctrl-P cycle other prefix
+matches. It is not dim after-every-key paint. An explicit history-search
+chord (`Ctrl-X` then `h`, ADR 0009) can insert one sidecar match and cycle a
+bounded snapshot; `Ctrl-X` then `l` restores the typed line. An empty chord
+prefers sidecar rows from `$PWD`; a typed prefix prefers cwd-scoped prefix
+then fuzzy before global queries. `MBX_SEARCH_FAILED=1` prefers failed
+empty-line rows first. It is not the type-to-filter overlay shown above. The
+opt-in sidecar can store and query history from the CLI. Each later feature
+must insert or propose ordinary Bash text and must never auto-execute. The
+Readline research and ADR 0003 define the validation needed before dim
+highlighting and type-to-filter overlays are implemented.

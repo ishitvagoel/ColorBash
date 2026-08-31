@@ -64,14 +64,15 @@ decision Bash sends, not touch the wire format again.
    fallback for `MBX_IPC_MODE=off`/per-call, or when the coprocess died this
    cycle). `_mbx_highlight_refresh` dispatches on `_MBX_ENGINE_READY`, exactly
    mirroring ghost's existing wire/CLI split.
-5. Until `M-064` is resolved, both paths pass `color=0` on the wire and
-   `--color 0` to the CLI for the interactive refresh. The `mbx highlight`
-   CLI command itself gained `--color 0|1` as an explicit override (falling
-   back to the pre-existing stdout-tty check when omitted) so a caller that
-   already knows the true terminal capability — Bash, via
-   `_mbx_color_capable` — can pass it correctly for any future consumer that
-   is not subject to the Readline-redisplay defect (e.g. a direct manual
-   `mbx highlight` invocation at a real terminal, or `mbx doctor`).
+5. Color on both paths is `_mbx_highlight_color_flag` (ADR 0015). Until
+   ADR 0015, both paths passed `color=0` because Readline caret-renders
+   `\001`/`\002` inside `READLINE_LINE` (`M-064`). Styled bytes now paint
+   on a reserved row, so the interactive refresh sends a real color
+   decision. `bind -x` stdout is often a pipe, so this flag is not
+   `_mbx_color_capable`'s `-t 1` check. The `mbx highlight` CLI command
+   itself gained `--color 0|1` as an explicit override (falling back to
+   the pre-existing stdout-tty check when omitted) so a caller that
+   already knows the true terminal capability can pass it correctly.
 6. `_mbx_engine_write`/`_mbx_engine_exchange`'s existing SIGPIPE-isolated
    background write (`( trap '' PIPE; printf ... ) &`) is wrapped as
    `{ ( ... ) & } 2>/dev/null` (`M-063`). `set +m` alone does not suppress
@@ -116,13 +117,9 @@ roadmap's performance budget ("no external command on a cache-hit keystroke")
 now has durable evidence for the coprocess path instead of being an unmet
 percentile.
 
-Real color remains off in the live interactive path pending `M-064`. This is
-a narrower feature than ADR 0013 originally described (Phase 6 was never
-observed to render color correctly in a live session; the gap was masked by
-the stdout-tty color bug this ADR also found and left unfixed for the
-interactive path). Phase 6 and `HLT-003` should not be marked `complete`
-without `M-064`'s resolution or an explicit accepted-limitation note; see
-`docs/roadmap.md`.
+ADR 0015 resolved `M-064`: live color paints on the reserved preview row
+and `READLINE_LINE` stays plain. Phase 6 and `HLT-003` (hostile/PTY gates;
+p99 still `deferred`) closed on that path; see `docs/roadmap.md`.
 
 ## Validation
 

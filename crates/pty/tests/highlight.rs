@@ -1,12 +1,23 @@
 mod common;
 
-use common::{TempHome, deadline, mbx_bin, path_env, wait_all, workspace_root};
-use mbx_pty::{PtySession, SpawnOptions, WinSize};
+use common::{deadline, mbx_bin, path_env, wait_all, workspace_root, TempHome};
+use mbx_pty::{PtySession, Screen, SpawnOptions, WinSize};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 const CTRL_B: u8 = 0x02;
+
+/// Reads until the shell goes quiet. Waiting on `"echo PREVIEW_OK"` can match
+/// the preview row as soon as it is painted, before Readline redisplays the
+/// prompt line, so Screen assertions drain instead of using a needle.
+fn drain(session: &mut PtySession, seconds: u64) -> Vec<u8> {
+    match session.read_until(deadline(seconds), mbx_pty::DEFAULT_CAPTURE_LIMIT, |_| false) {
+        Ok(output) => output,
+        Err(mbx_pty::PtyError::Timeout(captured)) => captured,
+        Err(error) => panic!("draining the session failed: {error}"),
+    }
+}
 
 fn spawn_highlight_shell(home: &Path) -> PtySession {
     fs::write(
@@ -242,5 +253,49 @@ fn cli_fallback_highlight_does_fork_the_helper_per_keystroke() {
 
     session.write_str("\n", deadline(2)).expect("enter");
     wait_all(&mut session, &["\nab", "> "]);
+    session.write_str("exit\n", deadline(2)).expect("exit");
+}
+
+#[test]
+fn highlight_preview_row_paints_sgr_below_an_intact_prompt() {
+    let home = TempHome::new("hl-pty-preview");
+    let mut session = spawn_highlight_shell(home.path());
+    let mut transcript: Vec<u8> = Vec::new();
+    macro_rules! step {
+        ($needles:expr) => {{
+            let chunk = wait_all(&mut session, $needles);
+            transcript.extend_from_slice(&chunk);
+        }};
+    }
+
+    step!(&["> "]);
+    session.write_str("true", deadline(2)).expect("type");
+    transcript.extend_from_slice(&drain(&mut session, 2));
+
+    let mut screen = Screen::new(24, 80);
+    screen.apply(&transcript);
+    let lines = screen.lines();
+    assert!(
+        lines.iter().any(|line| line.contains("> true")),
+        "the prompt line must keep the plain edit buffer; screen was:\n{}",
+        lines.join("\n")
+    );
+    assert!(
+        lines.iter().any(|line| line.trim() == "true"),
+        "a reserved row below the prompt must show the styled copy; screen was:\n{}",
+        lines.join("\n")
+    );
+    let text = String::from_utf8_lossy(&transcript);
+    assert!(
+        text.contains("\u{1b}[1;34m"),
+        "a color-capable tty must receive SGR for the true keyword"
+    );
+    assert!(
+        !text.contains("^A") && !text.contains("^B"),
+        "Readline must not caret-render SOH/STX; READLINE_LINE stays plain"
+    );
+
+    session.write_str("\n", deadline(2)).expect("enter");
+    wait_all(&mut session, &["> "]);
     session.write_str("exit\n", deadline(2)).expect("exit");
 }

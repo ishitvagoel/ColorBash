@@ -43,14 +43,9 @@ jobs:
       - name: Build the release binary
         run: cargo build --release --workspace
       - name: Package
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          stage="mbx-${version}-${{ matrix.target }}"
-          mkdir -p "$stage"
-          cp target/release/mbx "$stage/"
-          cp README.md LICENSE-MIT LICENSE-APACHE "$stage/"
-          tar -czf "${stage}.tar.gz" "$stage"
-          sha256sum "${stage}.tar.gz" > "${stage}.tar.gz.sha256"
+        env:
+          MBX_PACKAGE_OUT: ${{ github.workspace }}
+        run: bash scripts/package-release.bash "${GITHUB_REF_NAME#v}" "${{ matrix.target }}"
       - uses: actions/upload-artifact@v4
         with:
           name: mbx-${{ matrix.target }}

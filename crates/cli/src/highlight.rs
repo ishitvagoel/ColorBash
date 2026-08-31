@@ -278,6 +278,25 @@ fn contains_c0_or_del(input: &str) -> bool {
     input.bytes().any(|byte| byte < 0x20 || byte == 0x7f)
 }
 
+/// Bash `READLINE_POINT` / `${#var}` are Unicode scalar counts (ADR 0015).
+fn char_offset_to_byte(input: &str, chars: usize) -> usize {
+    input
+        .char_indices()
+        .nth(chars)
+        .map(|(index, _)| index)
+        .unwrap_or(input.len())
+}
+
+fn byte_offset_to_char(input: &str, byte: usize) -> usize {
+    let mut byte = byte.min(input.len());
+    while byte > 0 && !input.is_char_boundary(byte) {
+        byte -= 1;
+    }
+    input[..byte].chars().count()
+}
+
+/// `plain_point` is a Unicode scalar count, matching Bash `READLINE_POINT`.
+/// The returned styled point is also a scalar count into the styled string.
 pub fn highlight_line(input: &str, plain_point: usize, color: bool) -> Option<(String, usize)> {
     if input.len() > MAX_HIGHLIGHT_BYTES {
         return None;
@@ -285,11 +304,14 @@ pub fn highlight_line(input: &str, plain_point: usize, color: bool) -> Option<(S
     if contains_c0_or_del(input) {
         return None;
     }
+    let char_point = plain_point.min(input.chars().count());
     if !color {
-        let point = plain_point.min(input.len());
-        return Some((input.to_owned(), point));
+        return Some((input.to_owned(), char_point));
     }
-    Some(render(input, plain_point.min(input.len())))
+    let byte_point = char_offset_to_byte(input, char_point);
+    let (output, styled_byte) = render(input, byte_point);
+    let styled_point = byte_offset_to_char(&output, styled_byte);
+    Some((output, styled_point))
 }
 
 #[cfg(test)]
@@ -332,7 +354,7 @@ pub(crate) fn strip_to_plain(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{TokenKind, highlight_line, lex, strip_to_plain};
+    use super::{char_offset_to_byte, highlight_line, lex, strip_to_plain, TokenKind};
 
     const HOSTILE_HIGHLIGHT_CORPUS: &[&str] = &[
         "if echo \"$HOME\"; then true; fi # note",
@@ -363,20 +385,16 @@ mod tests {
     #[test]
     fn hostile_corpus_cursor_maps_at_start_middle_and_end() {
         for input in HOSTILE_HIGHLIGHT_CORPUS {
-            let len = input.len();
-            let mid = input
-                .char_indices()
-                .map(|(index, _)| index)
-                .nth(input.chars().count() / 2)
-                .unwrap_or(0);
-            for point in [0, mid, len] {
+            let char_len = input.chars().count();
+            let mid = char_len / 2;
+            for point in [0, mid, char_len] {
                 let (styled, styled_point) = highlight_line(input, point, true).expect("highlight");
                 assert_eq!(strip_to_plain(&styled), *input);
-                let end = styled_point.min(styled.len());
+                let end = char_offset_to_byte(&styled, styled_point);
                 let plain_prefix = strip_to_plain(&styled[..end]);
                 assert_eq!(
-                    plain_prefix.len(),
-                    point.min(len),
+                    plain_prefix.chars().count(),
+                    point,
                     "cursor drift at point {point} for {input:?}"
                 );
             }
@@ -413,6 +431,19 @@ mod tests {
         let input = "echo hi";
         let (_, point) = highlight_line(input, 5, true).unwrap();
         assert_eq!(point, 5);
+    }
+
+    #[test]
+    fn highlight_maps_character_point_past_a_multibyte_scalar() {
+        let input = "echo 中x";
+        assert_eq!(input.len(), 9);
+        assert_eq!(input.chars().count(), 7);
+        let (styled, styled_point) = highlight_line(input, 6, true).expect("highlight");
+        let end = char_offset_to_byte(&styled, styled_point);
+        assert_eq!(strip_to_plain(&styled[..end]), "echo 中");
+        let (styled, past_end) = highlight_line(input, 99, true).expect("highlight");
+        let end = char_offset_to_byte(&styled, past_end);
+        assert_eq!(strip_to_plain(&styled[..end]), input);
     }
 
     #[test]

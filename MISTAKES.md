@@ -889,7 +889,8 @@ to prevent recurrence, not to assign blame.
   cause. Highlight now always clears the flag after attempting both keymaps;
   module contract covers the partial-vi failure. Prevention stands: when a
   new feature copies an existing arm/disarm pair, diff the two functions
-  (M-066).
+  (M-066). ADR 0015 deleted the highlight Enter arm/disarm path entirely, so
+  this recurrence cannot happen there; ghost still has the contract.
 
 ## M-045 — Protocol frame reader rejected multi-line search output
 
@@ -1218,7 +1219,7 @@ to prevent recurrence, not to assign blame.
 ## M-062 — Highlight color was decided from the helper's own stdout, which is never a terminal
 
 - Discovered: 2026-08-29
-- Status: Mitigated
+- Status: Fixed (2026-08-31)
 - Failed assumption: `crate::environment::color_disabled_for_stdout()`
   (an `io::stdout().is_terminal()` check on the `mbx` process itself) was a
   valid way to decide whether to style `mbx highlight`'s output.
@@ -1241,17 +1242,18 @@ to prevent recurrence, not to assign blame.
   `_mbx_prompt_flags` in `bash/config.bash` as the one place this decision is
   made. The pre-existing stdout-tty check remains only as the *default* for a
   direct manual CLI invocation with no `--color` given.
-- Why `Mitigated` and not `Fixed`: the plumbing is correct and tested, but
-  `bash/highlight.bash`'s live interactive refresh (`_mbx_highlight_refresh_wire`
-  and `_mbx_highlight_refresh_cli`) still passes `color=0` unconditionally,
-  because enabling it exposed a second, deeper defect — M-064 — that must be
-  resolved first. Do not flip these to a real color decision without also
-  resolving M-064; doing so alone would replace plain typed text with visibly
-  garbled terminal output on every keystroke.
+- Why `Mitigated` and not `Fixed` (superseded 2026-08-31): the plumbing was
+  correct, but live refresh still passed `color=0` until ADR 0015. That
+  remaining half is now fixed: `_mbx_highlight_color_flag` decides color from
+  TERM/NO_COLOR/MBX_COLOR plus a writable controlling tty (`-t 1` is false
+  inside `bind -x` widgets, which was the same class of bug on the Bash side).
+  Evidence: `crates/pty/tests/highlight.rs`
+  (`highlight_preview_row_paints_sgr_below_an_intact_prompt`).
 - Prevention: a capability decision (terminal color, width, TTY-ness) must
   come from whichever side of an IPC boundary can actually observe it, passed
   explicitly as data — never re-derived by inspecting the other side's own
-  process state. This is the same rule ADR 0007/`PRM-007` already apply to
+  process state. For `bind -x` widgets, observe `/dev/tty` or stdin, not
+  stdout. This is the same rule ADR 0007/`PRM-007` already apply to
   prompt rendering; highlighting had quietly violated it.
 - Evidence: `crates/cli/src/cli.rs` (`--color` parsing),
   `crates/cli/src/app.rs::execute_highlight`, `bash/config.bash`
@@ -1294,7 +1296,7 @@ to prevent recurrence, not to assign blame.
 ## M-064 — Readline does not treat `\001`/`\002` as invisible inside `READLINE_LINE`
 
 - Discovered: 2026-08-29
-- Status: Open
+- Status: Fixed (2026-08-31, ADR 0015)
 - Failed assumption: ADR 0013 assumed Readline's non-printing markers
   (`RL_PROMPT_START_IGNORE`/`_END_IGNORE`, `\001`/`\002`) make an enclosed SGR
   run zero-width and invisible wherever they appear, because that is their
@@ -1312,29 +1314,22 @@ to prevent recurrence, not to assign blame.
   off in practice) and by every existing test asserting only byte-exactness
   or plain-mode round-tripping, never that genuine color rendered
   correctly on screen.
-- Current state: `bash/highlight.bash`'s live refresh paths
-  (`_mbx_highlight_refresh_wire`, `_mbx_highlight_refresh_cli`) deliberately
-  pass `color=0` unconditionally, so the interactive feature stays in its
-  long-standing safe (uncolored, non-garbled) state. `mbx highlight`'s direct
-  CLI output is unaffected (it never goes through Readline's buffer
-  redisplay) and does render real color, matching the README's manual demo.
+- Current state: ADR 0015. Live refresh sends a real color decision and
+  paints SGR on the reserved preview row. `READLINE_LINE` stays plain.
 - Prevention: a technique's documented behavior for one call site (`PS1`)
   must not be assumed to transfer to a structurally different call site
   (`READLINE_LINE`) without a PTY test that actually captures and asserts the
   rendered bytes contain no leftover control characters — not just that they
   round-trip back to the plain buffer.
-- Next step (not done here): research whether any Readline-recognized
-  technique makes styling genuinely invisible within the edit buffer, or
-  whether the whole marker-based design in ADR 0013 needs a superseding
-  decision. This needs its own ADR and PTY evidence, not a wire-protocol
-  change; see `docs/adr/0014-highlight-over-coprocess.md`.
+- Next step (done 2026-08-31): ADR 0015 paints styled bytes on one reserved
+  row below the prompt (M-065 IND/DECSC). `READLINE_LINE` stays permanently
+  plain; the Enter restore macro is gone. PTY + `Screen` evidence:
+  `highlight_preview_row_paints_sgr_below_an_intact_prompt`.
 - Evidence: byte-level capture and analysis over a live PTY session (raw
   `0x01`/`0x1b`/`0x02` confirmed present via `od -c` on `mbx highlight`'s own
   output, contrasted with the literal two-character `^A`/`^[`/`^B` sequences
   Bash's redisplay produced for the same bytes once inserted into
-  `READLINE_LINE`); `crates/pty/src/session.rs`
-  (`visible_text_strips_readline_markers_around_styled_run`, added so the PTY
-  test harness can correctly strip real markers once this is fixed).
+  `READLINE_LINE`); ADR 0015; `crates/pty/tests/highlight.rs`.
 
 ## M-065 — Completion overlay's DECSC/DECRC save is invalidated by its own scroll
 
@@ -1652,19 +1647,13 @@ to prevent recurrence, not to assign blame.
   rather than guessed: the delta lands near the nominal 100 000 us idle and
   compressed to ~68 000 us with every core saturated, so the window is
   30 000-250 000 us, still far from the ~0 a non-governing deadline produces.
-- Known remaining exposure, not fixed here: `tests/bash/modules.bash` contains
-  nine hardcoded wall-clock ceilings of this same shape (lines ~364, 419, 438,
-  458, 474, 489, 583, 607, 628). Only the near-limit one has ever failed in
-  CI, and the rest pass on Bash 5.0, 5.1, and 5.2 there, so they are left
-  alone rather than rewritten inside an already-large change. Under
-  deliberately induced full-core saturation — harsher than this CI runs — the
-  `oversized request fallback escaped the render deadline` assertion at line
-  489 also fails, which is evidence the pattern is systemic rather than
-  specific to the one case fixed here. Converting the remainder to
-  deadline-relative assertions deserves its own slice.
-- Evidence: `tests/bash/modules.bash` (`measure_near_limit_prompt` and its two
-  assertions); all three Bash suites pass on a from-source Bash 5.0 build and
-  on Bash 5.2.
+- Follow-up (2026-08-31): stall-until-timeout cases (CRLF lookahead,
+  oversized-PWD fallback, per-call helper, fallback chain) now use
+  `assert_elapsed_tracks_deadline`. Fast-path and decode-bound ceilings stay
+  absolute because they are not stall-until-timeout measurements.
+- Evidence: `tests/bash/modules.bash` (`measure_near_limit_prompt`,
+  `assert_elapsed_tracks_deadline`); all three Bash suites pass on a
+  from-source Bash 5.0 build and on Bash 5.2.
 
 ## M-073 — The Bash compatibility corpus compared echoed input as if it were program output
 
@@ -1955,4 +1944,27 @@ to prevent recurrence, not to assign blame.
 - Evidence: `crates/cli/src/highlight.rs`
   (`c0_or_del_input_is_rejected`,
   `escaped_multibyte_in_quotes_does_not_split_a_scalar`).
+
+## M-083 — Preview-row C0 glob included ESC and refused every SGR row
+
+- Discovered: 2026-08-31
+- Status: Fixed
+- Failed assumption: skipping the C0 range `$'\030'-$'\037'` would leave ESC
+  (`$'\033'`) intact so SGR on the highlight preview row could pass the
+  injection check. In Bash, `\030` is octal 24 and `\037` is octal 31; that
+  range includes ESC (octal 033 / decimal 27).
+- Impact: every colored preview row was refused. Module tests and a PTY
+  Screen capture showed an intact prompt with no styled copy below it when
+  `color=1`. A `color=0` (plain) preview still appeared, which looked like
+  M-062 again.
+- Correction: `_mbx_highlight_preview_row_ok` walks bytes and allows only
+  code 27 among C0; SOH/STX/DEL and every other control stay refused.
+- Prevention: do not encode "all C0 except ESC" as an octal glob range.
+  Octal `\033` is ESC; a range that starts at `\030` includes it. Write a
+  byte loop or an explicit allow-list, and assert that an SGR row is
+  accepted while SOH is not.
+- Evidence: `_mbx_highlight_preview_row_ok` in `bash/highlight.bash`;
+  module contracts that an SGR row is allowed and SOH is refused;
+  `crates/pty/tests/highlight.rs`
+  (`highlight_preview_row_paints_sgr_below_an_intact_prompt`).
 

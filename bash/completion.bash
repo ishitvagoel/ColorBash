@@ -507,14 +507,34 @@ _mbx_comp_overlay_capacity() {
 }
 
 _mbx_comp_overlay_reserve() {
-    local count=${1:-0}
-    local index pad=
+    _mbx_tty_reserve_rows "${1:-0}"
+}
 
-    ((count > 0)) || return 0
-    for ((index = 0; index < count; index++)); do
-        pad+=$'\eD'
-    done
-    printf '%s\e[%dA' "$pad" "$count" >/dev/tty 2>/dev/null || true
+# One overlay row: marker, candidate, optional kind/desc, then the COLUMNS-1
+# visible-width clamp (COMP-004). SGR is width-free; non-ASCII is two columns.
+_mbx_comp_overlay_format_row() {
+    local i=$1
+    local idx=$2
+    local kind=${_MBX_COMP_OVERLAY_KINDS[i]:-}
+    local desc=${_MBX_COMP_OVERLAY_DESCS[i]:-}
+    local candidate row
+
+    _mbx_comp_sanitize_display "${_MBX_COMP_OVERLAY_CANDIDATES[i]}"
+    candidate=$REPLY
+    if ((i == idx)); then
+        row=$'>\033[1m '"${candidate}"$'\033[0m'
+    else
+        row="  ${candidate}"
+    fi
+    if [[ -n $kind && -n $desc ]]; then
+        row+=" "$'\033[90m'"($kind: $desc)"$'\033[0m'
+    elif [[ -n $kind ]]; then
+        row+=" "$'\033[90m'"($kind)"$'\033[0m'
+    elif [[ -n $desc ]]; then
+        row+=" "$'\033[90m'"($desc)"$'\033[0m'
+    fi
+    _mbx_tty_columns
+    _mbx_tty_clamp_row "$row" "$REPLY"
 }
 
 _mbx_comp_overlay_clear() {
@@ -535,7 +555,6 @@ _mbx_comp_overlay_clear() {
 _mbx_comp_overlay_refresh() {
     local i n=${#_MBX_COMP_OVERLAY_CANDIDATES[@]}
     local idx=${_MBX_COMP_OVERLAY_INDEX:-0}
-    local kind desc candidate
     [[ ${MBX_COMP_OVERLAY:-} == 1 ]] || return 0
     ((n > 0)) || {
         _mbx_comp_overlay_clear
@@ -567,24 +586,8 @@ _mbx_comp_overlay_refresh() {
         _mbx_comp_overlay_reserve "$draw"
         printf '\e7' >/dev/tty 2>/dev/null || true
         for ((i = 0; i < draw; i++)); do
-            kind=${_MBX_COMP_OVERLAY_KINDS[i]:-}
-            desc=${_MBX_COMP_OVERLAY_DESCS[i]:-}
-            _mbx_comp_sanitize_display "${_MBX_COMP_OVERLAY_CANDIDATES[i]}"
-            candidate=$REPLY
-            if ((i == idx)); then
-                printf '\n>\033[1m %s\033[0m' "$candidate" >/dev/tty 2>/dev/null || true
-            else
-                printf '\n  %s' "$candidate" >/dev/tty 2>/dev/null || true
-            fi
-            if [[ -n $kind || -n $desc ]]; then
-                if [[ -n $kind && -n $desc ]]; then
-                    printf ' \033[90m(%s: %s)\033[0m' "$kind" "$desc" >/dev/tty 2>/dev/null || true
-                elif [[ -n $kind ]]; then
-                    printf ' \033[90m(%s)\033[0m' "$kind" >/dev/tty 2>/dev/null || true
-                else
-                    printf ' \033[90m(%s)\033[0m' "$desc" >/dev/tty 2>/dev/null || true
-                fi
-            fi
+            _mbx_comp_overlay_format_row "$i" "$idx"
+            printf '\n%s\e[K' "$REPLY" >/dev/tty 2>/dev/null || true
             _MBX_COMP_OVERLAY_LINES=$((_MBX_COMP_OVERLAY_LINES + 1))
         done
         printf '\e8' >/dev/tty 2>/dev/null || true

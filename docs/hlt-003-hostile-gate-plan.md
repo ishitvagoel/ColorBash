@@ -1,18 +1,16 @@
 # HLT-003: hostile-input and exact-byte stripping gates
 
-Status: `in-progress` (2026-08-27; reviewed 2026-08-29). Slices 1–2 assert
-evidence is recorded; p99 percentiles stay `deferred` per
-`docs/latency-budget-deferral.md`. Do not mark `HLT-003` or Phase 6
-`complete` until the roadmap exit condition is met — which now also requires
-resolving `M-064` (Readline caret-renders `\001`/`\002` inside
-`READLINE_LINE`, so live color has never rendered correctly), a correctness
-gap discovered while implementing `HLT-004` (ADR 0014). `M-064` blocks
-Phase 6 independently of this plan's own remaining rank-3 item.
+Status: `complete` (2026-08-31) for slices 1–2. p99 percentiles stay
+`deferred` per `docs/latency-budget-deferral.md`. ADR 0015 resolved
+`M-064`: live color paints on the reserved preview row and
+`READLINE_LINE` stays plain, so this gate no longer blocks Phase 6.
 
 ## Why this plan
 
-Phase 6 requires exact-byte recovery and hostile-input safety before `HLT-003`
-can move toward `complete`. Wrap/Enter/motion evidence exists (H-1–H-6, M-1).
+Phase 6 required exact-byte recovery and hostile-input safety before
+`HLT-003` could move toward `complete`. Wrap/Enter/motion evidence exists
+(H-1–H-6, M-1). Preview-row rendering (ADR 0015) is the live path; Enter
+executes the plain buffer.
 
 | Rank | Item | Why this order |
 | --- | --- | --- |
@@ -28,7 +26,6 @@ can move toward `complete`. Wrap/Enter/motion evidence exists (H-1–H-6, M-1).
 3. Cursor map at start, middle, and end without drift.
 4. Lexer must advance past non-ASCII bytes (no infinite loop).
 5. Bash module: real `mbx highlight` corpus strip-round-trip in plain mode.
-6. Do **not** mark `HLT-003` or Phase 6 `complete`.
 
 ## Goal (slice 2) — `complete`
 
@@ -63,4 +60,4 @@ bash tests/run.bash
 
 ## Stop
 
-Do not start slice 2 until S-1–S-4 pass. Do not chase p99 percentiles.
+Do not chase p99 percentiles. Do not start a second rendering strategy.

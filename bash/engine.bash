@@ -174,6 +174,81 @@ _mbx_jobs_restore() {
     _MBX_JOBS_SAVED_MONITOR=0
 }
 
+# Below-prompt paint (M-065 / ADR 0015). IND reserves rows so a later DECSC
+# cannot be invalidated by the draw's own scroll. Callers write to /dev/tty.
+_mbx_tty_columns() {
+    local cols=${COLUMNS:-}
+    [[ $cols =~ ^[0-9]+$ ]] && ((cols > 1)) || cols=80
+    REPLY=$((cols - 1))
+}
+
+_mbx_tty_reserve_rows() {
+    local count=${1:-0}
+    local index pad=
+
+    ((count > 0)) || return 0
+    for ((index = 0; index < count; index++)); do
+        pad+=$'\eD'
+    done
+    printf '%s\e[%dA' "$pad" "$count" >/dev/tty 2>/dev/null || true
+}
+
+_mbx_tty_save_cursor() {
+    printf '\e7' >/dev/tty 2>/dev/null || true
+}
+
+_mbx_tty_restore_cursor() {
+    printf '\e8' >/dev/tty 2>/dev/null || true
+}
+
+_mbx_tty_erase_below() {
+    printf '\e[J' >/dev/tty 2>/dev/null || true
+}
+
+# Visible-width clamp for a tty row. CSI SGR runs and SOH/STX markers do not
+# consume columns. Non-ASCII scalars count as two columns (conservative).
+_mbx_tty_clamp_row() {
+    local text=$1
+    local max=${2:-79}
+    local out= width=0 index=0 ch code
+    local w
+
+    ((max > 0)) || {
+        REPLY=
+        return 0
+    }
+    while ((index < ${#text})); do
+        ch=${text:index:1}
+        printf -v code '%d' "'$ch"
+        if ((code == 1 || code == 2)); then
+            index=$((index + 1))
+            continue
+        fi
+        if ((code == 27)) && [[ ${text:index+1:1} == '[' ]]; then
+            out+=$'\e['
+            index=$((index + 2))
+            while ((index < ${#text})); do
+                ch=${text:index:1}
+                out+=$ch
+                index=$((index + 1))
+                [[ $ch == m ]] && break
+            done
+            continue
+        fi
+        w=1
+        if ((code >= 128)); then
+            w=2
+        fi
+        if ((width + w > max)); then
+            break
+        fi
+        out+=$ch
+        width=$((width + w))
+        index=$((index + 1))
+    done
+    REPLY=$out
+}
+
 
 # Reads one bounded, already-LF-terminated line (an optional CR is stripped)
 # from a coprocess or process-substitution fd, tolerant of a read that hits

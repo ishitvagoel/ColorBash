@@ -1,18 +1,13 @@
 # shellcheck shell=bash
-# Opt-in syntax highlighting (ADR 0013). Plain bytes live in _MBX_HIGHLIGHT_PLAIN;
-# READLINE_LINE holds styled text with Readline non-printing markers. Enter
-# arms a Readline-only restore macro (M-041); do not combine with MBX_GHOST=1.
+# Opt-in syntax highlighting (ADR 0013, ADR 0015). READLINE_LINE stays plain;
+# the helper's styled copy is painted on one reserved row below the prompt.
+# Do not combine with MBX_GHOST=1.
 
-_MBX_HIGHLIGHT_ACCEPT_DEFAULT_KEYSEQ='\C-x\C-m'
 _MBX_HIGHLIGHT_PLAIN=
 _MBX_HIGHLIGHT_POINT=0
-_MBX_HIGHLIGHT_ACTIVE=0
 _MBX_HIGHLIGHT_BOUND=0
 _MBX_HIGHLIGHT_VI_BOUND=0
-_MBX_HIGHLIGHT_ENTER_ARMED=0
-_MBX_HIGHLIGHT_WRAP_CTRL_J=0
-_MBX_HIGHLIGHT_VI_WRAP_CTRL_J=0
-_MBX_HIGHLIGHT_ACCEPT_KEYSEQ=$_MBX_HIGHLIGHT_ACCEPT_DEFAULT_KEYSEQ
+_MBX_HIGHLIGHT_PAINTED=0
 _MBX_HIGHLIGHT_GENERATION=0
 
 _mbx_highlight_strip_line() {
@@ -55,114 +50,23 @@ _mbx_highlight_strip_line() {
     REPLY=$plain
 }
 
-_mbx_highlight_styled_to_plain_point() {
-    local line=${READLINE_LINE-}
-    local styled_point=${READLINE_POINT:-0}
-    local index=0 plain_index=0
-    local skipping=0 byte code
+# Drop SOH/STX only; keep CSI so the preview row can use real SGR (ADR 0015).
+_mbx_highlight_strip_markers() {
+    local line=$1
+    local out= index=0 byte code
     local LC_ALL=C
 
-    while ((index < styled_point && index < ${#line})); do
+    while ((index < ${#line})); do
         byte=${line:index:1}
         printf -v code '%d' "'$byte"
-        if ((skipping)); then
-            ((code == 2)) && skipping=0
-        elif ((code == 1)); then
-            skipping=1
-        elif ((code == 27)) && [[ ${line:index+1:1} == '[' ]]; then
-            index=$((index + 2))
-            while ((index < ${#line})); do
-                byte=${line:index:1}
-                [[ $byte == m ]] && break
-                index=$((index + 1))
-            done
-        else
-            ((plain_index++))
+        if ((code == 1 || code == 2)); then
+            index=$((index + 1))
+            continue
         fi
+        out+=$byte
         index=$((index + 1))
     done
-    REPLY=$plain_index
-}
-
-_mbx_highlight_escape_macro_plain() {
-    local plain=$1
-    local i char escaped=
-    for ((i = 0; i < ${#plain}; i++)); do
-        char=${plain:i:1}
-        case $char in
-            \\) escaped+='\\' ;;
-            \") escaped+='\\"' ;;
-            *) escaped+=$char ;;
-        esac
-    done
-    REPLY=$escaped
-}
-
-_mbx_highlight_enter_restore_macro() {
-    local plain=$1
-    local accept_key=$2
-    local escaped
-    _mbx_highlight_escape_macro_plain "$plain"
-    escaped=$REPLY
-    REPLY=$'\C-u'"$escaped$accept_key"
-}
-
-_mbx_highlight_disarm_enter_keymap() {
-    local keymap=$1
-    local wrap_j=$2
-    bind -m "$keymap" '"\C-m": accept-line' || return 1
-    if [[ $wrap_j == 1 ]]; then
-        bind -m "$keymap" '"\C-j": accept-line' || return 1
-    fi
-}
-
-_mbx_highlight_arm_enter_keymap() {
-    local keymap=$1
-    local wrap_j=$2
-    local macro=$3
-    bind -m "$keymap" "\"\\C-m\": \"$macro\"" || return 1
-    if [[ $wrap_j == 1 ]]; then
-        if ! bind -m "$keymap" "\"\\C-j\": \"$macro\""; then
-            bind -m "$keymap" '"\C-m": accept-line' || true
-            return 1
-        fi
-    fi
-}
-
-_mbx_highlight_disarm_enter() {
-    [[ ${_MBX_HIGHLIGHT_ENTER_ARMED:-0} == 1 ]] || return 0
-    local status=0
-    _mbx_highlight_disarm_enter_keymap emacs "${_MBX_HIGHLIGHT_WRAP_CTRL_J:-0}" || status=1
-    if [[ ${_MBX_HIGHLIGHT_VI_BOUND:-0} == 1 ]]; then
-        _mbx_highlight_disarm_enter_keymap vi-insert "${_MBX_HIGHLIGHT_VI_WRAP_CTRL_J:-0}" || \
-            status=1
-    fi
-    # Always clear the flag so a later arm can retry. Returning before this
-    # left emacs disarmed while Enter stayed the restore macro (M-044).
-    _MBX_HIGHLIGHT_ENTER_ARMED=0
-    return "$status"
-}
-
-_mbx_highlight_arm_enter() {
-    local macro plain=${_MBX_HIGHLIGHT_PLAIN-}
-    local accept_key=${_MBX_HIGHLIGHT_ACCEPT_KEYSEQ}
-    [[ ${_MBX_HIGHLIGHT_BOUND:-0} == 1 ]] || return 0
-    if [[ ${_MBX_HIGHLIGHT_ENTER_ARMED:-0} == 1 ]]; then
-        _mbx_highlight_disarm_enter || return 1
-    fi
-    _mbx_highlight_enter_restore_macro "$plain" "$accept_key" || return 1
-    macro=$REPLY
-    [[ -n $macro ]] || return 1
-    _mbx_highlight_arm_enter_keymap emacs "${_MBX_HIGHLIGHT_WRAP_CTRL_J:-0}" "$macro" || \
-        return 1
-    if [[ ${_MBX_HIGHLIGHT_VI_BOUND:-0} == 1 ]]; then
-        if ! _mbx_highlight_arm_enter_keymap vi-insert "${_MBX_HIGHLIGHT_VI_WRAP_CTRL_J:-0}" \
-            "$macro"; then
-            _mbx_highlight_disarm_enter_keymap emacs "${_MBX_HIGHLIGHT_WRAP_CTRL_J:-0}" || true
-            return 1
-        fi
-    fi
-    _MBX_HIGHLIGHT_ENTER_ARMED=1
+    REPLY=$out
 }
 
 _mbx_highlight_restore_jobs() {
@@ -206,11 +110,86 @@ _mbx_highlight_validate_styled() {
     return 0
 }
 
+_mbx_highlight_unpaint() {
+    [[ ${_MBX_HIGHLIGHT_PAINTED:-0} == 1 ]] || return 0
+    if [[ -w /dev/tty ]]; then
+        _mbx_tty_erase_below
+    fi
+    _MBX_HIGHLIGHT_PAINTED=0
+}
+
+_mbx_highlight_have_tty() {
+    # Same gate as the overlay: stdout must be a tty (module tests are not)
+    # and /dev/tty must be writable. The overlay owns the rows below the
+    # prompt while it is visible.
+    [[ -t 1 && -w /dev/tty ]] || return 1
+    [[ ${_MBX_COMP_OVERLAY_VISIBLE:-0} == 1 ]] && return 1
+    return 0
+}
+
+# ESC (CSI) is required for SGR on the preview row. Every other C0/DEL is
+# injection. Do not use a glob range to skip ESC: `$'\030'-$'\037'` is octal
+# 24-31 and *includes* ESC (octal 033).
+_mbx_highlight_preview_row_ok() {
+    local row=$1
+    local LC_ALL=C index=0 ch code
+
+    while ((index < ${#row})); do
+        ch=${row:index:1}
+        printf -v code '%d' "'$ch"
+        if ((code == 27)); then
+            index=$((index + 1))
+            continue
+        fi
+        if ((code < 32 || code == 127)); then
+            return 1
+        fi
+        index=$((index + 1))
+    done
+    return 0
+}
+
+_mbx_highlight_paint() {
+    local styled=$1
+    local row
+
+    _mbx_highlight_unpaint
+    _mbx_highlight_have_tty || return 0
+    _mbx_highlight_strip_markers "$styled"
+    row=$REPLY
+    _mbx_highlight_preview_row_ok "$row" || return 0
+    _mbx_tty_columns
+    _mbx_tty_clamp_row "$row" "$REPLY"
+    row=$REPLY
+    [[ -n $row ]] || return 0
+    _mbx_tty_reserve_rows 1
+    _mbx_tty_save_cursor
+    # Same draw as the overlay (M-065): IND reserved the row, DECSC saved the
+    # prompt cell, `\n` steps onto the reserved row without CUP. `\e[K` clears
+    # leftover cells so a shorter refresh cannot leave a stale tail.
+    printf '\n%s\e[K' "$row" >/dev/tty 2>/dev/null || true
+    _mbx_tty_restore_cursor
+    _MBX_HIGHLIGHT_PAINTED=1
+}
+
 _mbx_highlight_fallback_plain() {
     READLINE_LINE=${_MBX_HIGHLIGHT_PLAIN-}
     READLINE_POINT=${_MBX_HIGHLIGHT_POINT:-0}
-    _MBX_HIGHLIGHT_ACTIVE=0
-    _mbx_highlight_disarm_enter || true
+    _mbx_highlight_unpaint
+}
+
+_mbx_highlight_color_flag() {
+    # Paint goes to /dev/tty, not Bash's stdout. `bind -x` widgets often have
+    # stdout as a pipe, so `_mbx_color_capable`'s `-t 1` check would keep
+    # live color off (the same class of bug as M-062, different side of the
+    # boundary). Honor TERM/NO_COLOR/MBX_COLOR, then the controlling tty.
+    if [[ ${TERM:-dumb} == dumb || -n ${NO_COLOR+x} || ${MBX_COLOR:-auto} == never ]]; then
+        REPLY=0
+    elif [[ -t 1 || -t 0 || -w /dev/tty ]]; then
+        REPLY=1
+    else
+        REPLY=0
+    fi
 }
 
 # Spawn fallback: one helper process per call. Used only when no coprocess is
@@ -221,8 +200,8 @@ _mbx_highlight_refresh_cli() {
     local plain=$1 point=$2 deadline=$3
     local output_fd child_pid color styled_line styled_point
 
-    # Always 0: see the comment in _mbx_highlight_refresh_wire (M-064).
-    color=0
+    _mbx_highlight_color_flag
+    color=$REPLY
     exec {output_fd}< <(exec "$MBX_BIN" highlight "$plain" --point "$point" \
         --color "$color" 2>/dev/null)
     child_pid=$!
@@ -231,29 +210,21 @@ _mbx_highlight_refresh_cli() {
         _mbx_wait_or_kill_child "$child_pid" "$deadline" || true
         return 1
     fi
-    # Copy the payload out of REPLY/_MBX_HIGHLIGHT_STYLED_POINT before
-    # _mbx_wait_child_until, which overwrites REPLY with an exit status
-    # (M-049/M-055).
     styled_line=$REPLY
     styled_point=${_MBX_HIGHLIGHT_STYLED_POINT:-0}
     exec {output_fd}<&-
     if ! _mbx_wait_or_kill_child "$child_pid" "$deadline"; then
         return 1
     fi
-    # A helper that wrote two lines then exited nonzero (or was killed after
-    # a partial write that still parsed) is not a successful highlight
-    # (M-067). validate_styled cannot see the exit status.
     ((REPLY == 0)) || return 1
     REPLY=$styled_line
     _MBX_HIGHLIGHT_STYLED_POINT=$styled_point
     return 0
 }
 
-# Coprocess path: one HIGHLIGHT/STYLED round trip over the already-warm
-# transport, matching ghost's QUERY/RESULT shape (ADR 0011 generation and
-# stale-reply skip; ADR 0014 extends the same discipline to highlighting). A
-# delayed STYLED reply for an older generation is skipped rather than treated
-# as a hard failure, so a backed-up coprocess cannot desync the line buffer.
+# Coprocess path: one HIGHLIGHT/STYLED round trip (ADR 0014). Color is a
+# real `_mbx_highlight_color_flag` decision (ADR 0015); styled bytes are
+# painted below the prompt, never assigned to READLINE_LINE (M-064).
 _mbx_highlight_refresh_wire() {
     (($# == 4)) || return 2
 
@@ -261,22 +232,13 @@ _mbx_highlight_refresh_wire() {
     local request_id response result_gen color
     local -a fields=()
 
-    # Always 0: Bash's own Readline redisplay renders \001/\002 using its
-    # standard unprintable-control-character convention (caret notation, e.g.
-    # `^A^[[35m^B`) when they appear inside READLINE_LINE, unlike their
-    # documented zero-width behavior inside PS1. Passing a real color
-    # decision here would replace plain typed text with visibly garbled
-    # output on every keystroke. See M-064; fixing this needs a follow-up ADR
-    # on a rendering technique Readline actually hides within the edit
-    # buffer, not just a wire-protocol change.
-    color=0
+    _mbx_highlight_color_flag
+    color=$REPLY
     ((_MBX_REQUEST_ID += 1))
     request_id=$_MBX_REQUEST_ID
     _mbx_protocol_encode_highlight "$request_id" "$generation" "$color" "$point" "$plain" || \
         return 1
     if ! _mbx_engine_write "$REPLY" "$deadline"; then
-        # A failed write can leave the coprocess desynced; stop so the prompt
-        # path starts a clean helper next cycle (matches the ghost wire path).
         _mbx_engine_stop
         return 1
     fi
@@ -302,11 +264,6 @@ _mbx_highlight_refresh_wire() {
             _mbx_engine_stop
             return 1
         }
-        # A history RECORD's ACK can still be queued on the shared fd when a
-        # keystroke lands mid-cycle: MBX_HIGHLIGHT=1 and MBX_HISTORY=1 are not
-        # mutually exclusive (only ghost and highlight are), and both features
-        # read the one coprocess. Skip it the way ghost's identical loop does
-        # rather than tearing down a healthy helper.
         if ((${#fields[@]} == 3)) && \
             [[ ${fields[0]} == "$_MBX_PROTOCOL_MAGIC_HISTORY" && \
                 ${fields[2]} == ACK ]]; then
@@ -320,7 +277,7 @@ _mbx_highlight_refresh_wire() {
 
 _mbx_highlight_refresh() {
     local deadline plain=${_MBX_HIGHLIGHT_PLAIN-} point=${_MBX_HIGHLIGHT_POINT:-0}
-    local styled_line styled_point status=1
+    local styled_line status=1
 
     [[ -x ${MBX_BIN:-} ]] || return 1
     [[ ${MBX_HIGHLIGHT:-} == 1 ]] || return 1
@@ -338,86 +295,60 @@ _mbx_highlight_refresh() {
     _mbx_highlight_restore_jobs
     ((status == 0)) || return 1
     styled_line=$REPLY
-    styled_point=${_MBX_HIGHLIGHT_STYLED_POINT:-0}
     _mbx_highlight_validate_styled "$styled_line" || return 1
-    READLINE_LINE=$styled_line
-    READLINE_POINT=$styled_point
-    _MBX_HIGHLIGHT_ACTIVE=1
-    if [[ $styled_line == "$plain" ]]; then
-        _mbx_highlight_disarm_enter || true
-    elif ! _mbx_highlight_arm_enter; then
-        _mbx_highlight_fallback_plain
-        return 1
-    fi
+    READLINE_LINE=$plain
+    READLINE_POINT=$point
+    _mbx_highlight_paint "$styled_line"
     return 0
 }
 
-_mbx_highlight_capture_plain() {
-    if [[ ${_MBX_HIGHLIGHT_ACTIVE:-0} == 1 ]]; then
-        _mbx_highlight_strip_line "${READLINE_LINE-}"
-        if [[ $REPLY == "${_MBX_HIGHLIGHT_PLAIN-}" && ${READLINE_LINE-} == "$REPLY" ]]; then
-            _MBX_HIGHLIGHT_POINT=${READLINE_POINT:-0}
-        else
-            _mbx_highlight_styled_to_plain_point
-            _MBX_HIGHLIGHT_POINT=$REPLY
-        fi
-        return 0
-    fi
-    _mbx_highlight_strip_line "${READLINE_LINE-}"
-    _MBX_HIGHLIGHT_PLAIN=$REPLY
+_mbx_highlight_sync_plain() {
+    _MBX_HIGHLIGHT_PLAIN=${READLINE_LINE-}
     _MBX_HIGHLIGHT_POINT=${READLINE_POINT:-0}
 }
 
 _mbx_highlight_self_insert() {
     local ch=${1-}
-    local plain=${_MBX_HIGHLIGHT_PLAIN-}
-    local point=${_MBX_HIGHLIGHT_POINT:-0}
+    local plain point
 
     [[ -n $ch ]] || ch=${READLINE_KEYSEQ-}
     [[ -n $ch ]] || return 0
     _mbx_text_has_c0_or_del "$ch" && return 0
-    _mbx_highlight_capture_plain
+    _mbx_highlight_sync_plain
     plain=${_MBX_HIGHLIGHT_PLAIN-}
     point=${_MBX_HIGHLIGHT_POINT:-0}
-    _MBX_HIGHLIGHT_PLAIN=${plain:0:point}${ch}${plain:point}
-    _MBX_HIGHLIGHT_POINT=$((point + ${#ch}))
+    READLINE_LINE=${plain:0:point}${ch}${plain:point}
+    READLINE_POINT=$((point + ${#ch}))
+    _MBX_HIGHLIGHT_PLAIN=$READLINE_LINE
+    _MBX_HIGHLIGHT_POINT=$READLINE_POINT
     if ! _mbx_highlight_refresh; then
         _mbx_highlight_fallback_plain
     fi
 }
 
 _mbx_highlight_backspace() {
-    local plain=${_MBX_HIGHLIGHT_PLAIN-}
-    local point=${_MBX_HIGHLIGHT_POINT:-0}
+    local plain point
 
-    _mbx_highlight_capture_plain
+    _mbx_highlight_sync_plain
     plain=${_MBX_HIGHLIGHT_PLAIN-}
     point=${_MBX_HIGHLIGHT_POINT:-0}
     if ((point > 0)); then
-        _MBX_HIGHLIGHT_PLAIN=${plain:0:point-1}${plain:point}
-        _MBX_HIGHLIGHT_POINT=$((point - 1))
+        READLINE_LINE=${plain:0:point-1}${plain:point}
+        READLINE_POINT=$((point - 1))
+        _MBX_HIGHLIGHT_PLAIN=$READLINE_LINE
+        _MBX_HIGHLIGHT_POINT=$READLINE_POINT
         if ! _mbx_highlight_refresh; then
             _mbx_highlight_fallback_plain
         fi
     fi
 }
 
-_mbx_highlight_dismiss_style() {
-    if [[ ${_MBX_HIGHLIGHT_ACTIVE:-0} != 1 ]]; then
-        return 0
-    fi
-    _mbx_highlight_styled_to_plain_point
-    _MBX_HIGHLIGHT_POINT=$REPLY
-    READLINE_LINE=${_MBX_HIGHLIGHT_PLAIN-}
-    READLINE_POINT=${_MBX_HIGHLIGHT_POINT:-0}
-    _MBX_HIGHLIGHT_ACTIVE=0
-    _mbx_highlight_disarm_enter || true
-}
-
 _mbx_highlight_forward() {
-    _mbx_highlight_dismiss_style
-    local point=${_MBX_HIGHLIGHT_POINT:-0}
-    local len=${#_MBX_HIGHLIGHT_PLAIN}
+    local point len
+
+    _mbx_highlight_sync_plain
+    point=${_MBX_HIGHLIGHT_POINT:-0}
+    len=${#_MBX_HIGHLIGHT_PLAIN}
     if ((point < len)); then
         _MBX_HIGHLIGHT_POINT=$((point + 1))
         READLINE_LINE=${_MBX_HIGHLIGHT_PLAIN-}
@@ -429,8 +360,10 @@ _mbx_highlight_forward() {
 }
 
 _mbx_highlight_backward() {
-    _mbx_highlight_dismiss_style
-    local point=${_MBX_HIGHLIGHT_POINT:-0}
+    local point
+
+    _mbx_highlight_sync_plain
+    point=${_MBX_HIGHLIGHT_POINT:-0}
     if ((point > 0)); then
         _MBX_HIGHLIGHT_POINT=$((point - 1))
         READLINE_LINE=${_MBX_HIGHLIGHT_PLAIN-}
@@ -442,7 +375,7 @@ _mbx_highlight_backward() {
 }
 
 _mbx_highlight_beginning() {
-    _mbx_highlight_dismiss_style
+    _mbx_highlight_sync_plain
     _MBX_HIGHLIGHT_POINT=0
     READLINE_LINE=${_MBX_HIGHLIGHT_PLAIN-}
     READLINE_POINT=0
@@ -509,18 +442,6 @@ _mbx_highlight_bind_x() {
     bind -m "$keymap" -x "$spec"
 }
 
-_mbx_highlight_bind_fn() {
-    local keymap=$1
-    local keyseq=$2
-    local fn=$3
-    local allowed=$4
-    local spec
-    _mbx_highlight_can_wrap "$keyseq" "$keymap" "$allowed" || return 1
-    _mbx_highlight_quoted_keyseq "$keyseq"
-    spec="${REPLY}: $fn"
-    bind -m "$keymap" "$spec"
-}
-
 _mbx_highlight_bind_self_chars() {
     local keymap=$1
     local chars=$2
@@ -539,20 +460,8 @@ _mbx_highlight_bind_self_chars() {
 _mbx_highlight_install_keymap() {
     local keymap=$1
     local chars=$'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _-.:/!#$%&()*+,;<=>?@[]^{|}~\'"`\\'
-    local accept_key=${_MBX_HIGHLIGHT_ACCEPT_KEYSEQ}
-    local wrapped=0 wrap_j=0
+    local wrapped=0
 
-    _mbx_highlight_can_wrap "$accept_key" "$keymap" accept-line || return 1
-    _mbx_highlight_stock_fn '\C-m' "$keymap"
-    if [[ $REPLY != accept-line ]] || _mbx_highlight_keyseq_has_x '\C-m' "$keymap"; then
-        return 1
-    fi
-    _mbx_highlight_stock_fn '\C-j' "$keymap"
-    if [[ $REPLY == accept-line ]] && ! _mbx_highlight_keyseq_has_x '\C-j' "$keymap"; then
-        wrap_j=1
-    fi
-    ((wrap_j == 1)) || return 1
-    _mbx_highlight_bind_fn "$keymap" "$accept_key" accept-line accept-line || return 1
     _mbx_highlight_bind_self_chars "$keymap" "$chars" && wrapped=1
     _mbx_highlight_bind_x "$keymap" '\C-h' _mbx_highlight_backspace backward-delete-char \
         && wrapped=1
@@ -566,11 +475,6 @@ _mbx_highlight_install_keymap() {
     _mbx_highlight_bind_x "$keymap" '\C-a' _mbx_highlight_beginning beginning-of-line || true
     _mbx_highlight_bind_x "$keymap" '\eOH' _mbx_highlight_beginning beginning-of-line || true
     _mbx_highlight_bind_x "$keymap" '\e[H' _mbx_highlight_beginning beginning-of-line || true
-    if [[ $keymap == emacs ]]; then
-        _MBX_HIGHLIGHT_WRAP_CTRL_J=$wrap_j
-    else
-        _MBX_HIGHLIGHT_VI_WRAP_CTRL_J=$wrap_j
-    fi
     ((wrapped == 1))
 }
 
@@ -578,9 +482,7 @@ _mbx_highlight_install() {
     [[ ${_MBX_HIGHLIGHT_INSTALLED:-0} != 1 ]] || return 0
     _MBX_HIGHLIGHT_BOUND=0
     _MBX_HIGHLIGHT_VI_BOUND=0
-    _MBX_HIGHLIGHT_ENTER_ARMED=0
-    _MBX_HIGHLIGHT_WRAP_CTRL_J=0
-    _MBX_HIGHLIGHT_VI_WRAP_CTRL_J=0
+    _MBX_HIGHLIGHT_PAINTED=0
     if [[ $- != *i* || ! -t 0 ]]; then
         _MBX_HIGHLIGHT_INSTALLED=1
         return 0
@@ -593,7 +495,6 @@ _mbx_highlight_install() {
         _MBX_HIGHLIGHT_INSTALLED=1
         return 0
     fi
-    _MBX_HIGHLIGHT_ACCEPT_KEYSEQ=${MBX_HIGHLIGHT_ACCEPT_KEYSEQ:-$_MBX_HIGHLIGHT_ACCEPT_DEFAULT_KEYSEQ}
     if _mbx_highlight_install_keymap emacs; then
         _MBX_HIGHLIGHT_BOUND=1
     fi

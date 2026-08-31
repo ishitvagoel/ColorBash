@@ -17,11 +17,9 @@ v1→v2 migration evidence are recorded.
 `HIGHLIGHT`/`STYLED` (ADR 0014) extend MBX2 with the same generation and
 stale-skip discipline for opt-in syntax highlighting, dispatched by an
 independent `HighlightHandler` so `MBX_HIGHLIGHT=1` does not require
-`MBX_HISTORY=1`. The interactive Bash path currently always sends `color=0`
-pending `M-064` (Readline caret-renders `\001`/`\002` inside `READLINE_LINE`
-rather than treating them as zero-width, unlike their documented behavior in
-`PS1`); the field exists so a future fix changes only what Bash sends, not the
-wire format.
+`MBX_HISTORY=1`. `color` is `_mbx_highlight_color_flag` (ADR 0015);
+styled bytes paint on a reserved preview row rather than `READLINE_LINE`
+(`M-064` fixed).
 
 ## Purpose
 
@@ -122,9 +120,11 @@ MBX2<TAB>request-id<TAB>HIGHLIGHT<TAB>generation<TAB>color<TAB>point<TAB>text
   an older generation is dropped, a newer one fails the request.
 - `color` is `0` or `1`. It exists so the caller — the only side that can see
   the real terminal — decides colorability; the helper never infers it from
-  its own stdout (fixing that inference was the un-fixed half of `M-062`,
-  itself blocked by `M-064`). Any other value is `ERROR invalid`.
-- `point` is the plain-buffer cursor position (decimal usize).
+  its own stdout (`M-062`). Bash passes `_mbx_highlight_color_flag`
+  (ADR 0015; `bind -x` stdout is often a pipe). Any other value is
+  `ERROR invalid`.
+- `point` is the plain-buffer cursor position as a Unicode scalar count
+  (decimal usize), matching Bash `READLINE_POINT` / `${#var}` (ADR 0015).
 - `text` is the plain command text, percent-escaped; bounded to a few KiB by
   the same limit `mbx highlight` enforces on the CLI.
 
@@ -135,9 +135,10 @@ MBX2<TAB>request-id<TAB>STYLED<TAB>generation<TAB>point<TAB>line
 MBX2<TAB>request-id<TAB>ERROR<TAB>kind
 ```
 
-- `point` is the styled-buffer cursor position; `line` is the styled (or, at
-  `color=0`, plain) text, percent-escaped. One `STYLED` frame answers one
-  `HIGHLIGHT` request.
+- `point` is the styled-buffer cursor as a Unicode scalar count; `line` is the
+  styled (or, at `color=0`, plain) text, percent-escaped. One `STYLED` frame
+  answers one `HIGHLIGHT` request. The interactive preview ignores the
+  returned point; the cursor stays on the plain `READLINE_LINE` (ADR 0015).
 - `HIGHLIGHT` has no `CANCEL`: unlike ghost's background QUERY, a highlight
   request is synchronous from Bash's perspective (the keystroke handler
   blocks on it up to `MBX_HIGHLIGHT_TIMEOUT`), so there is no in-flight

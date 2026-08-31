@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
 use mbx_pty::{
-    DEFAULT_CAPTURE_LIMIT, PtyError, PtySession, SpawnOptions, WinSize, visible_contains,
-    visible_text,
+    visible_contains, visible_text, PtyError, PtySession, SpawnOptions, WinSize,
+    DEFAULT_CAPTURE_LIMIT,
 };
 use std::env;
 use std::ffi::OsString;
