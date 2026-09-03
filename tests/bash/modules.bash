@@ -1231,6 +1231,9 @@ _mbx_comp_overlay_dismiss
 
 MBX_COMP_OVERLAY=1
 _mbx_comp_wrap_backend _mbx_comp_r3_backend
+# O-1 (docs/hlt-comp-review-close-plan.md): a ranked list longer than eight
+# rows snapshots exactly eight overlay candidates (this fixture supplies 80);
+# cycling staying inside the drawn window is OV-3 below.
 assert_eq 8 ${#_MBX_COMP_OVERLAY_CANDIDATES[@]} \
     'overlay snapshot should cap ranked rows at eight'
 assert_eq mbx_comp_reply_0 "${_MBX_COMP_OVERLAY_CANDIDATES[0]:-}" \
@@ -1357,6 +1360,18 @@ _mbx_comp_cycle_next
 (( _MBX_COMP_OVERLAY_INDEX < 8 )) || fail 'overlay cycle must stay within the eight-row window'
 _mbx_comp_sanitize_display $'aa\033flag'
 assert_eq 'aa?flag' "$REPLY" 'overlay display sanitize should replace ESC bytes'
+
+# The 64-byte cap must not split a multi-byte UTF-8 character: a tail cut
+# mid-sequence would write invalid UTF-8 to the tty.
+_mbx_comp_sanitize_display "$(printf 'a%.0s' {1..62})"$'\xe6\x97\xa5'
+assert_eq "$(printf 'a%.0s' {1..62})" "$REPLY" \
+    'sanitize should drop a UTF-8 character the byte cap split, not emit a broken tail'
+_mbx_comp_sanitize_display $'ab\xc3\xa9cd'
+assert_eq $'ab\xc3\xa9cd' "$REPLY" \
+    'sanitize must keep a complete multi-byte character within the cap'
+_mbx_comp_sanitize_display $'ab\xc3'
+assert_eq 'ab' "$REPLY" \
+    'sanitize should drop a lone lead byte left at the cap boundary'
 unset MBX_COMP_OVERLAY
 
 # History module contract: MBX2 record encoding, ACK decoding, exclusions,

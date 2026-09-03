@@ -1329,7 +1329,10 @@ to prevent recurrence, not to assign blame.
   `0x01`/`0x1b`/`0x02` confirmed present via `od -c` on `mbx highlight`'s own
   output, contrasted with the literal two-character `^A`/`^[`/`^B` sequences
   Bash's redisplay produced for the same bytes once inserted into
-  `READLINE_LINE`); ADR 0015; `crates/pty/tests/highlight.rs`.
+  `READLINE_LINE`); ADR 0015; `crates/pty/tests/highlight.rs`
+  (`typed_line_renders_without_caret_control_leftovers`, added 2026-09-03,
+  pins the ADR 0015 invariant that the typed line never shows caret-encoded
+  markers).
 
 ## M-065 — Completion overlay's DECSC/DECRC save is invalidated by its own scroll
 
@@ -1989,3 +1992,36 @@ to prevent recurrence, not to assign blame.
 - Evidence: `_mbx_tty_clamp_row` in `bash/engine.bash`; C-locale clamp
   contracts in `tests/bash/modules.bash`.
 
+
+## M-085 — Review-close evidence was recorded for an assert that had no test
+
+- Discovered: 2026-09-03
+- Status: Fixed
+- Failed assumption: the ADR 0013 review-close plan and the roadmap recorded
+  "H-1–H-6, O-1–O-5, and M-1 have module/PTY evidence" once the close slices
+  landed. H-4 — `MBX_HIGHLIGHT` unset installs no highlight widgets and typing
+  stays stock — had no test anywhere: every highlight PTY case set
+  `MBX_HIGHLIGHT=1`, and no module case covered the absent configuration.
+- Impact: the roadmap and the close plan cited evidence that did not exist,
+  and the opt-in feature's absent-configuration behavior — the exact class
+  M-024 and M-037 already turned into a prevention rule — was unprotected. A
+  regression that installed highlight widgets without `MBX_HIGHLIGHT=1` would
+  have passed the entire canonical suite. Found by a read-only review that
+  tried to resolve each cited evidence ID to a named test; O-1 survived the
+  same check only in substance (its snapshot cap is asserted against an
+  80-row fixture and its cycle bound became OV-3), never by its ID.
+- Correction: added the H-4 PTY case (`highlight_unset_installs_no_widgets`,
+  confirmed to fail when the `MBX_HIGHLIGHT` gate is neutered) and annotated
+  the existing O-1 evidence in `tests/bash/modules.bash` with its ID and the
+  pointer to OV-3, so the next ID-resolution check resolves both.
+- Prevention: an evidence ID recorded as covered must resolve to a named,
+  runnable test before the claim is written down — cite the test name in the
+  same sentence as the claim. Every opt-in feature needs the absent,
+  explicit-off, and explicit-on configurations exercised (M-024, M-037); the
+  review close only added enabled-side tests, which is why the gap was
+  invisible to the pass that should have caught it.
+- Evidence: `crates/pty/tests/highlight.rs`
+  (`highlight_unset_installs_no_widgets`); `tests/bash/modules.bash`
+  (O-1 annotation above the eight-candidate snapshot cap); the resolving
+  review grepped every H-1–H-6/O-1–O-5 ID against the test files and found H-4
+  absent.

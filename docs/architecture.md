@@ -67,7 +67,8 @@ bash/
   fallback.bash      Bash-only prompt renderer
   hooks.bash         PROMPT_COMMAND and optional DEBUG integration
   editor.bash        non-destructive bind -x insert prototype
-  completion.bash    stock completion adapter and ranked-accept chord
+  completion.bash    stock completion adapter, ranked-accept/cycle chords, and the opt-in overlay (ADR 0013)
+  highlight.bash     opt-in after-every-key styling; preview row below the prompt (ADR 0013/0014/0015)
   history.bash       opt-in admitted-entry observation and MBX2 RECORD send
   search.bash        explicit history-search bind -x, cycling, and restore (ADR 0009)
   ghost.bash         opt-in inline history ghost suffix (ADR 0010)

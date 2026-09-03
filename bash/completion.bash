@@ -29,7 +29,28 @@ _mbx_comp_sanitize_display() {
             sanitized+=$byte
         fi
     done
-    REPLY=$sanitized
+
+    # The cap above counts bytes, so it can cut a multi-byte UTF-8 character
+    # mid-sequence and write invalid UTF-8 to the tty. Back the cut off to the
+    # last character boundary inside the cap: strip any trailing continuation
+    # bytes, then drop the lead byte too when the cap left its sequence
+    # incomplete.
+    local kept=${#sanitized}
+    local trailing=0
+    while ((kept - trailing > 0)); do
+        printf -v code '%d' "'${sanitized:kept - trailing - 1:1}"
+        ((code >= 128 && code < 192)) || break
+        trailing=$((trailing + 1))
+    done
+    if ((kept - trailing > 0)); then
+        local lead needed=0
+        printf -v lead '%d' "'${sanitized:kept - trailing - 1:1}"
+        if ((lead >= 240)); then needed=3; elif ((lead >= 224)); then needed=2; elif ((lead >= 192)); then needed=1; fi
+        if ((needed > trailing)); then
+            kept=$((kept - trailing - 1))
+        fi
+    fi
+    REPLY=${sanitized:0:kept}
 }
 
 _mbx_comp_sanitize_desc() {

@@ -7,6 +7,12 @@ evidence. Later work closed the leftover gates: ADR 0015 (2026-08-31) for
 "do not mark complete" notes below stay as the close-plan's original stop
 condition, not current roadmap status.
 
+> Reconciliation note (2026-09-03, `M-085`): when this plan closed, H-4 had no
+> test — every highlight PTY case set `MBX_HIGHLIGHT=1`. The evidence landed
+> 2026-09-03 as `highlight_unset_installs_no_widgets`
+> (`crates/pty/tests/highlight.rs`), and O-1's snapshot-cap assert was
+> annotated with its ID in `tests/bash/modules.bash`.
+
 Existing files (`bash/highlight.bash`, `bash/completion.bash`, `mbx highlight`)
 are a first cut. They are not exit evidence. A PTY session with `MBX_HIGHLIGHT=1`
 sets `_MBX_HIGHLIGHT_BOUND=1` while `bind -X` contains **no** `_mbx_highlight_*`

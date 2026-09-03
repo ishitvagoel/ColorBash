@@ -1,7 +1,7 @@
 mod common;
 
 use common::{TempHome, deadline, mbx_bin, path_env, wait_all, workspace_root};
-use mbx_pty::{PtySession, Screen, SpawnOptions, WinSize};
+use mbx_pty::{PtySession, Screen, SpawnOptions, WinSize, visible_text};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -19,40 +19,40 @@ fn drain(session: &mut PtySession, seconds: u64) -> Vec<u8> {
     }
 }
 
-fn spawn_highlight_shell(home: &Path) -> PtySession {
+fn spawn_highlight_shell(home: &Path, highlight: bool) -> PtySession {
     fs::write(
         home.join("rc.bash"),
         "source \"${MBX_TEST_ROOT}/bash/init.bash\"\n",
     )
     .expect("rcfile");
-    PtySession::spawn(
-        SpawnOptions::new("/bin/bash")
-            .arg("--noprofile")
-            .arg("--rcfile")
-            .arg(home.join("rc.bash"))
-            .arg("-i")
-            .clear_env()
-            .env("PATH", path_env())
-            .env("HOME", home)
-            .env("TERM", "xterm-256color")
-            .env("USER", "mbx")
-            .env("HISTFILE", "/dev/null")
-            .env("LANG", "C.UTF-8")
-            .env("LC_ALL", "C.UTF-8")
-            .env("MBX_TEST_ROOT", workspace_root())
-            .env("MBX_BIN", mbx_bin())
-            .env("MBX_HIGHLIGHT", "1")
-            .env("MBX_DISABLE_GIT", "1")
-            .cwd(home)
-            .winsize(WinSize { rows: 24, cols: 80 }),
-    )
-    .expect("highlight shell spawn")
+    let mut options = SpawnOptions::new("/bin/bash")
+        .arg("--noprofile")
+        .arg("--rcfile")
+        .arg(home.join("rc.bash"))
+        .arg("-i")
+        .clear_env()
+        .env("PATH", path_env())
+        .env("HOME", home)
+        .env("TERM", "xterm-256color")
+        .env("USER", "mbx")
+        .env("HISTFILE", "/dev/null")
+        .env("LANG", "C.UTF-8")
+        .env("LC_ALL", "C.UTF-8")
+        .env("MBX_TEST_ROOT", workspace_root())
+        .env("MBX_BIN", mbx_bin())
+        .env("MBX_DISABLE_GIT", "1")
+        .cwd(home)
+        .winsize(WinSize { rows: 24, cols: 80 });
+    if highlight {
+        options = options.env("MBX_HIGHLIGHT", "1");
+    }
+    PtySession::spawn(options).expect("highlight shell spawn")
 }
 
 #[test]
 fn highlight_install_sets_bound_flag_and_wraps_self_insert() {
     let home = TempHome::new("hl-pty0");
-    let mut session = spawn_highlight_shell(home.path());
+    let mut session = spawn_highlight_shell(home.path(), true);
     wait_all(&mut session, &["> "]);
     session
         .write_str(
@@ -67,7 +67,7 @@ fn highlight_install_sets_bound_flag_and_wraps_self_insert() {
 #[test]
 fn highlighted_line_executes_plain_bytes() {
     let home = TempHome::new("hl-pty1");
-    let mut session = spawn_highlight_shell(home.path());
+    let mut session = spawn_highlight_shell(home.path(), true);
     wait_all(&mut session, &["> "]);
     session
         .write_str("printf 'HL:plain\\n'", deadline(2))
@@ -85,7 +85,7 @@ fn highlighted_line_executes_plain_bytes() {
 #[test]
 fn highlight_left_motion_keeps_plain_buffer_in_sync() {
     let home = TempHome::new("hl-pty2");
-    let mut session = spawn_highlight_shell(home.path());
+    let mut session = spawn_highlight_shell(home.path(), true);
     wait_all(&mut session, &["> "]);
     session.write_str("echo ab", deadline(2)).expect("type");
     wait_all(&mut session, &["echo ab"]);
@@ -99,7 +99,7 @@ fn highlight_left_motion_keeps_plain_buffer_in_sync() {
 #[test]
 fn hostile_highlighted_line_executes_plain_bytes() {
     let home = TempHome::new("hl-pty3");
-    let mut session = spawn_highlight_shell(home.path());
+    let mut session = spawn_highlight_shell(home.path(), true);
     wait_all(&mut session, &["> "]);
     session
         .write_str("printf 'HOSTILE:$`\\n'", deadline(2))
@@ -107,6 +107,66 @@ fn hostile_highlighted_line_executes_plain_bytes() {
     wait_all(&mut session, &["printf 'HOSTILE:$`\\n'"]);
     session.write_str("\n", deadline(2)).expect("enter");
     wait_all(&mut session, &["\nHOSTILE:$`", "> "]);
+    session.write_str("exit\n", deadline(2)).expect("exit");
+}
+
+// H-4 (docs/hlt-comp-review-close-plan.md): with `MBX_HIGHLIGHT` unset the
+// installer must not run at all — no highlight widgets in `bind -X`, the
+// bound flag stays 0, and typing/Enter stay stock. The needles are built with
+// printf indirection so the echoed command line cannot forge a match
+// (M-019/M-073).
+#[test]
+fn highlight_unset_installs_no_widgets() {
+    let home = TempHome::new("hl-pty6");
+    let mut session = spawn_highlight_shell(home.path(), false);
+    wait_all(&mut session, &["> "]);
+    session
+        .write_str(
+            "bind -X | grep -Fq _mbx_highlight_ && printf 'MBX_HLT:%s\\n' widgets || printf 'MBX_HLT:%s\\n' absent\n",
+            deadline(2),
+        )
+        .expect("widget check");
+    session
+        .write_str(
+            "[[ ${_MBX_HIGHLIGHT_BOUND:-0} == 1 ]] && printf 'MBX_FLG:%s\\n' set || printf 'MBX_FLG:%s\\n' unset\n",
+            deadline(2),
+        )
+        .expect("flag check");
+    wait_all(&mut session, &["MBX_HLT:absent", "MBX_FLG:unset", "> "]);
+    session.write_str("echo stock", deadline(2)).expect("type");
+    session.write_str("\n", deadline(2)).expect("enter");
+    wait_all(&mut session, &["\nstock", "> "]);
+    session.write_str("exit\n", deadline(2)).expect("exit");
+}
+
+// M-064's prevention rule (MISTAKES.md): the rendered line must contain no
+// caret-encoded control characters — not just round-trip to the plain bytes.
+// Under ADR 0015 the edit buffer stays permanently plain and styled bytes
+// paint on a reserved row below the prompt, so this pins that invariant: if
+// styling ever reaches `READLINE_LINE` again (the pre-0015 design), Readline
+// redisplay emits literal `^A`/`^[`/`^B` sequences and this test fails. The
+// typed line must contain tokens the lexer actually styles (keywords, quotes,
+// operators); plain words render identically either way and would prove
+// nothing.
+#[test]
+fn typed_line_renders_without_caret_control_leftovers() {
+    let home = TempHome::new("hl-pty7");
+    let mut session = spawn_highlight_shell(home.path(), true);
+    wait_all(&mut session, &["> "]);
+    session.write_str("echo \"hi\"", deadline(2)).expect("type");
+    // Wait on a fragment that appears in both the plain and the M-064-garbled
+    // render, so a flip of the color decision reaches the caret assertion
+    // below instead of dying as a wait timeout.
+    let captured = wait_all(&mut session, &["\"hi\""]);
+    let text = visible_text(&captured);
+    assert!(
+        !text.contains("^A") && !text.contains("^B") && !text.contains("^["),
+        "the rendered line leaked caret-encoded control characters (M-064 \
+         regression: styling reached READLINE_LINE without a technique \
+         Readline hides); visible text: {text:?}"
+    );
+    session.write_str("\n", deadline(2)).expect("enter");
+    wait_all(&mut session, &["\nhi", "> "]);
     session.write_str("exit\n", deadline(2)).expect("exit");
 }
 
@@ -259,7 +319,7 @@ fn cli_fallback_highlight_does_fork_the_helper_per_keystroke() {
 #[test]
 fn highlight_preview_row_paints_sgr_below_an_intact_prompt() {
     let home = TempHome::new("hl-pty-preview");
-    let mut session = spawn_highlight_shell(home.path());
+    let mut session = spawn_highlight_shell(home.path(), true);
     let mut transcript: Vec<u8> = Vec::new();
     macro_rules! step {
         ($needles:expr) => {{

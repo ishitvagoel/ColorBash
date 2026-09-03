@@ -1928,6 +1928,19 @@ mod tests {
         assert!(!diagnostic.contains(PERM_SENTINEL), "{diagnostic}");
     }
 
+    fn foreign_user_probe_supported() -> bool {
+        match Command::new("sudo")
+            .args(["-n", "-u", "nobody", "true"])
+            .output()
+        {
+            Ok(output) => output.status.success(),
+            Err(error) => {
+                eprintln!("the sudo probe itself failed to spawn: {error}");
+                false
+            }
+        }
+    }
+
     fn assert_foreign_probe_is_nobody() {
         let output = Command::new("sudo")
             .args(["-n", "-u", "nobody", "id", "-u"])
@@ -2006,6 +2019,19 @@ mod tests {
 
     #[test]
     fn foreign_user_cannot_open_store_paths() {
+        // M-060 class: the canonical suite must complete on hosts where
+        // passwordless `sudo -n -u nobody` does not work (e.g. a developer
+        // machine whose sudo asks for a password). The foreign-user contract
+        // needs a real uid switch and has no narrower invariant to assert
+        // without one, so such hosts skip loudly instead of failing; CI
+        // runners with passwordless sudo still run the full evidence.
+        if !foreign_user_probe_supported() {
+            eprintln!(
+                "skipping foreign_user_cannot_open_store_paths: \
+                 passwordless sudo -n -u nobody is unavailable on this host"
+            );
+            return;
+        }
         assert_foreign_probe_is_nobody();
 
         let (dir, path) = temp_store("foreign");

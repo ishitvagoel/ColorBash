@@ -243,7 +243,6 @@ fn render(input: &str, plain_point: usize) -> (String, usize) {
             output.push_str(text);
             let _ = write!(output, "{RL_START}\x1b[0m{RL_END}");
         }
-        let styled_end = output.len();
         if !mapped && plain_point >= token.start && plain_point <= token.end {
             let within = plain_point - token.start;
             if token.kind == TokenKind::Whitespace || token.kind == TokenKind::Word {
@@ -257,7 +256,6 @@ fn render(input: &str, plain_point: usize) -> (String, usize) {
             styled_point = styled_start;
             mapped = true;
         }
-        let _ = styled_end;
     }
     if !mapped {
         styled_point = output.len();

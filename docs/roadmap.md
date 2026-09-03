@@ -5,7 +5,7 @@
 > brief remains `CODEX_MODERN_BASH_ARCHITECTURE.md`; its checkboxes describe the
 > intended program and are not a status tracker.
 
-- Last reviewed: 2026-08-31 UTC
+- Last reviewed: 2026-09-03 UTC
 - Current milestone: Strategy A MVP is `complete` on Linux (`G5` 2026-08-27); Phase 6 `complete` (ADR 0015 preview-row highlighting; `HLT-003` p99 `deferred`); Phase 9 `complete`; macOS `HRD-001` `deferred` (ADR 0012); `HRD-003` `deferred`; `COMP-004` overlay `complete` (type-to-filter GUI `deferred`)
 - Active workstream: `REL-001` first `v*` tag (maintainer-gated); G5 revisit macOS PTY; dim paint; percentile benches `deferred`
 - Next decision gate: G5 revisit (macOS matrix, `HLT-003` p99, `HRD-003`, dim paint). ADR 0015 closed `M-064`; `COMP-004` width guard recorded
@@ -301,11 +301,12 @@ prototype:
 Status: `complete` (2026-08-16)
 
 The non-popup `COMP-001`/`COMP-002` adapter experiment produced this gate. It may
-run alongside `G3`, using the shared PTY harness. A GUI completion overlay is
-`deferred` (no decoration hook; `docs/comp-004-popup-plan.md`). Ranked-accept
+run alongside `G3`, using the shared PTY harness. A GUI type-to-filter overlay
+remains `deferred`; the Strategy A `MBX_COMP_OVERLAY=1` overlay slice is
+`complete` under `COMP-004` (ADR 0013/0015 superseded this gate's original
+`discovery` note when continuous decoration was accepted). Ranked-accept
 (`\C-x\C-a`) is on main; ranked-cycle `\C-xn` / `\C-xp` is recorded.
-`COMP-005` Strategy A insert/fallthrough is `complete`. Overlay leftover stays
-`COMP-004` `discovery`. Passed when
+`COMP-005` Strategy A insert/fallthrough is `complete`. Passed when
 file completion and at least one existing `-F` completion function preserve
 stock Bash behavior for:
 
@@ -511,7 +512,7 @@ live-state and `compopt` parity are demonstrated. Do not start a GUI overlay.
 | `COMP-001` | Build a non-popup stock-completion adapter harness | `complete` | `docs/comp-001-harness-plan.md`; H-1–H-4; `G4` complete; 5 ms leftover `deferred` |
 | `COMP-002` | Prove file and one `-F` function's exact insertion parity | `complete` | `docs/comp-002-parity-plan.md`; P-1–P-4, F-1–F-4, L-1–L-4, N-1–N-2, S-1–S-4; `docs/g4-gate-close-plan.md`; 5 ms leftover `deferred` |
 | `COMP-003` | Add typed candidate metadata and bounded ranking | `complete` | `docs/comp-003-metadata-plan.md` K-1–K-4; `docs/comp-003-ranking-plan.md` R-1–R-4 in `bash/completion.bash`, `tests/bash/modules.bash`, `crates/pty/tests/completion_harness.rs` |
-| `COMP-004` | Add popup navigation and terminal-safe rendering | `complete` | Popup policy P-1–P-4 (`docs/comp-004-popup-plan.md`); ranked-accept A-1–A-6; ranked-cycle C-1–C-6; overlay slice OV-1 + PTY (`docs/comp-004-overlay-plan.md`, ADR 0013). **`M-065` fixed 2026-08-30**. **Width guard 2026-08-31**: `_mbx_comp_overlay_format_row` clamps each overlay row to `COLUMNS-1` (SGR skipped; non-ASCII two columns) so a wide candidate cannot wrap onto an extra reserved row. Evidence: `crates/pty/tests/overlay_screen.rs` (`overlay_clamps_a_wide_row_so_it_does_not_wrap`, `overlay_near_the_bottom_of_a_short_terminal_leaves_the_prompt_intact`) and `tests/bash/modules.bash` OV-2/OV-3 plus the format-row clamp contract. Type-to-filter GUI menu remains `deferred` |
+| `COMP-004` | Add popup navigation and terminal-safe rendering | `complete` | Popup policy P-1–P-4 (`docs/comp-004-popup-plan.md`); ranked-accept A-1–A-6; ranked-cycle C-1–C-6; overlay slice OV-1 + PTY (`docs/comp-004-overlay-plan.md`, ADR 0013). **`M-065` fixed 2026-08-30**. **Width guard 2026-08-31**: `_mbx_comp_overlay_format_row` clamps each overlay row to `COLUMNS-1` (SGR skipped; non-ASCII two columns) so a wide candidate cannot wrap onto an extra reserved row. Evidence: `crates/pty/tests/overlay_screen.rs` (`overlay_clamps_a_wide_row_so_it_does_not_wrap`, `overlay_near_the_bottom_of_a_short_terminal_leaves_the_prompt_intact`) and `tests/bash/modules.bash` OV-2/OV-3 plus the format-row clamp contract. The display sanitizer truncates on a UTF-8 character boundary rather than mid-sequence (2026-09-03), so a capped candidate cannot emit invalid UTF-8 to the tty. Type-to-filter GUI menu remains `deferred` |
 | `COMP-005` | Insert/fall through exactly and pass the parity/PTY matrix | `complete` | `docs/comp-005-strategy-a-close-plan.md`; G4/COMP-002 P-1–P-4, L-1–L-4, N-1–N-2, S-1–S-4; ranked-accept A-1–A-6; ranked-cycle C-1–C-6 (`\C-xn` / `\C-xp`); `GIT-004` kinds; overlay lives on `COMP-004` (`complete`; type-to-filter GUI `deferred`); 5 ms leftover `deferred` |
 
 Exit condition: `G4` for the adapter slice; `COMP-005` for the Strategy A
@@ -700,7 +701,7 @@ an accepted decoration/ownership ADR.
 
 ## Change log
 
-Full history (138 entries as of 2026-08-31; the 126 present at the trim are
+Full history (141 entries as of 2026-09-03; the 126 present at the trim are
 byte-identical to what was here before it) lives in
 [`docs/archive/roadmap-history.md`](archive/roadmap-history.md). Append new
 entries to *both* this table and that file, most-recent last, exactly as the
@@ -738,3 +739,4 @@ entries for at-a-glance context.
 | 2026-08-31 | Safety/hardening batch ahead of the M-064 rendering ADR. Bash: C0/DEL gates on ghost history-motion and ranked-completion insert (M-050 recurrence); highlight disarm always clears `ENTER_ARMED` (M-044 recurrence); `${#_MBX_HIGHLIGHT_PLAIN-}` bad substitution on forward-motion (M-078); highlight/ghost CLI wait-or-kill plus exit-status check (M-067 recurrence); `_mbx_comp_identifier_ok` anchored regex (M-056 recurrence); shared `_mbx_jobs_suspend`/`_mbx_wait_or_kill_child`. Rust: create-with-mode store file/dir (M-079); non-blocking history Drop (M-080); bounded exclude glob (M-081); highlight rejects C0 and skips UTF-8 after `\` (M-082); retention `saturating_mul`; socket write timeout. Do not mark `HLT-002`, `COMP-004`, or Phase 6 complete. |
 | 2026-08-31 | Accepted ADR 0015: `READLINE_LINE` stays plain; styled bytes paint on one reserved preview row (M-065 IND/DECSC). Implemented in `bash/highlight.bash`. Color is a tty-paint decision because `bind -x` stdout is often a pipe (M-062 fixed). Point units are Unicode scalar counts. Preview-row C0 check must not use an octal glob range that includes ESC (M-083). PTY: `highlight_preview_row_paints_sgr_below_an_intact_prompt`. `HLT-002`/`HLT-003`/Phase 6 `complete`; `HLT-003` p99 stays `deferred`. Overlay COLUMNS-1 clamp: `overlay_clamps_a_wide_row_so_it_does_not_wrap`; `COMP-004` `complete` (type-to-filter GUI `deferred`). `scripts/package-release.bash` dry-run for `REL-001` (tag still maintainer-gated). Stall-until-timeout module cases converted to deadline-relative assertions (M-072 leftover). |
 | 2026-08-31 | Fixed `M-084`: `_mbx_tty_clamp_row` split UTF-8 under a C locale (`${#var}` / `${var:i:1}` are bytes in POSIX, scalars in UTF-8). Bash-matrix CI failed `non-ASCII scalars count as two columns` on every 5.x leg; the UTF-8 canonical suite stayed green. Clamp now indexes bytes and consumes a whole UTF-8 sequence per wide scalar. |
+| 2026-09-03 | Deep-review follow-ups (M-085). Closed the two missing evidence pieces for the ADR 0013 review close: H-4 (`highlight_unset_installs_no_widgets` — `MBX_HIGHLIGHT` unset installs no widgets, the bound flag stays 0, typing/Enter stay stock; confirmed to fail when the gate is neutered) and a rendered-bytes guard (`typed_line_renders_without_caret_control_leftovers`) pinning ADR 0015's invariant that the typed line never shows caret-encoded markers — it reproduces `M-064`'s exact `^A^[[32m^B` garbling if styling is ever assigned back into `READLINE_LINE`. Annotated O-1's snapshot-cap assert with its ID. `_mbx_comp_sanitize_display` now truncates on a UTF-8 character boundary instead of mid-sequence — the 64-byte cap could previously emit invalid UTF-8 to the tty — with module cases confirmed to fail against the old body. `foreign_user_cannot_open_store_paths` skips loudly on hosts without passwordless `sudo -n -u nobody` (M-060 class; CI still runs the full case). Fixed the dead `hist-008-failed-search-plan.md` reference, the G4 gate section's stale `COMP-004` `discovery` note, and the review-close plan's evidence claim (M-085 note). Removed the committed Windows `Zone.Identifier` stub and a dead `styled_end` in `highlight.rs`. No status changes. |
