@@ -7,6 +7,10 @@ you opt in, records admitted history and offers insert-only suggestions.
 Suggestions and selections insert ordinary Bash text. They **never execute**
 until you press Enter.
 
+> **New to MBX?** Start with the **[plain-language guide](docs/user-guide.md)** —
+> what it does, how to set it up, everyday use, and its limits, written
+> without the engineering vocabulary.
+
 ## Quick start
 
 One command builds the helper and turns on the **comfort** profile (history
@@ -124,6 +128,8 @@ implementations.
 Agent work starts with [`AGENTS.md`](AGENTS.md), which requires reading the
 cumulative [`MISTAKES.md`](MISTAKES.md) before planning or editing.
 
+- [`docs/user-guide.md`](docs/user-guide.md) — plain-language guide: features,
+  setup, daily use, and limits
 - [`docs/reference.md`](docs/reference.md) — per-feature walkthroughs, full
   environment variable list, and automated test commands
 - [`docs/roadmap.md`](docs/roadmap.md) — canonical delivery status, gates, and
