@@ -70,9 +70,12 @@ returns), fill:
   kind `flag`; probe candidate uses kind `word`; missing kind is empty
 - `_MBX_COMP_DESCS` — parallel optional descriptions; empty by default
 
-Sanitize each description: strip C0 and DEL; cap at 64 characters; cap the
-arrays at `COMPREPLY` length. Do not write metadata into `PS1`, the
-terminal, or history.
+Sanitize each description (the same rule the overlay display path applies to
+candidates, O-2): replace C0, DEL, `$`, backtick, and backslash with `?`; cap
+at 64 **bytes**, truncating on a UTF-8 character boundary so a capped value
+never ends mid-sequence or writes invalid UTF-8 to the tty (2026-09-03,
+`M-085`); cap the arrays at `COMPREPLY` length. Do not write metadata into
+`PS1`, the terminal, or history.
 
 Reuse `mbx_comp_probe` / `mbx_comp_flag` fixtures behind
 `MBX_COMP_FIXTURES=1`. Observe insertion through `printf 'GOT:%s|\n' …`

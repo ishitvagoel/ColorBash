@@ -495,10 +495,11 @@ percentiles are `deferred` and do not block that exit.
 ### Phase 5 — Completion
 
 Status: `complete` for Strategy A insert/fallthrough (`COMP-005`, 2026-08-25).
-Popup policy is `complete` (`docs/comp-004-popup-plan.md` P-1–P-4). Strategy A
-overlay slice is `validation` (ADR 0013; `docs/comp-004-overlay-plan.md`). Tab
-stays stock. Ranked-accept is on main. Ranked-cycle defaults to `\C-xn` / `\C-xp`
-so ghost `\C-x\C-n` / `\C-x\C-p` stay free.
+Popup policy is `complete` (`docs/comp-004-popup-plan.md` P-1–P-4). The
+`MBX_COMP_OVERLAY=1` overlay slice is `complete` (ADR 0013/0015;
+`docs/comp-004-overlay-plan.md`; the type-to-filter GUI menu stays
+`deferred`). Tab stays stock. Ranked-accept is on main. Ranked-cycle defaults
+to `\C-xn` / `\C-xp` so ghost `\C-x\C-n` / `\C-x\C-p` stay free.
 `COMP-001` / `COMP-002` / `COMP-003` / `GIT-004` / `COMP-005` are complete.
 
 First adapt stock Bash completion and prove exact insertion parity. Only then add
@@ -701,7 +702,7 @@ an accepted decoration/ownership ADR.
 
 ## Change log
 
-Full history (141 entries as of 2026-09-03; the 126 present at the trim are
+Full history (142 entries as of 2026-09-03; the 126 present at the trim are
 byte-identical to what was here before it) lives in
 [`docs/archive/roadmap-history.md`](archive/roadmap-history.md). Append new
 entries to *both* this table and that file, most-recent last, exactly as the
@@ -740,3 +741,4 @@ entries for at-a-glance context.
 | 2026-08-31 | Accepted ADR 0015: `READLINE_LINE` stays plain; styled bytes paint on one reserved preview row (M-065 IND/DECSC). Implemented in `bash/highlight.bash`. Color is a tty-paint decision because `bind -x` stdout is often a pipe (M-062 fixed). Point units are Unicode scalar counts. Preview-row C0 check must not use an octal glob range that includes ESC (M-083). PTY: `highlight_preview_row_paints_sgr_below_an_intact_prompt`. `HLT-002`/`HLT-003`/Phase 6 `complete`; `HLT-003` p99 stays `deferred`. Overlay COLUMNS-1 clamp: `overlay_clamps_a_wide_row_so_it_does_not_wrap`; `COMP-004` `complete` (type-to-filter GUI `deferred`). `scripts/package-release.bash` dry-run for `REL-001` (tag still maintainer-gated). Stall-until-timeout module cases converted to deadline-relative assertions (M-072 leftover). |
 | 2026-08-31 | Fixed `M-084`: `_mbx_tty_clamp_row` split UTF-8 under a C locale (`${#var}` / `${var:i:1}` are bytes in POSIX, scalars in UTF-8). Bash-matrix CI failed `non-ASCII scalars count as two columns` on every 5.x leg; the UTF-8 canonical suite stayed green. Clamp now indexes bytes and consumes a whole UTF-8 sequence per wide scalar. |
 | 2026-09-03 | Deep-review follow-ups (M-085). Closed the two missing evidence pieces for the ADR 0013 review close: H-4 (`highlight_unset_installs_no_widgets` — `MBX_HIGHLIGHT` unset installs no widgets, the bound flag stays 0, typing/Enter stay stock; confirmed to fail when the gate is neutered) and a rendered-bytes guard (`typed_line_renders_without_caret_control_leftovers`) pinning ADR 0015's invariant that the typed line never shows caret-encoded markers — it reproduces `M-064`'s exact `^A^[[32m^B` garbling if styling is ever assigned back into `READLINE_LINE`. Annotated O-1's snapshot-cap assert with its ID. `_mbx_comp_sanitize_display` now truncates on a UTF-8 character boundary instead of mid-sequence — the 64-byte cap could previously emit invalid UTF-8 to the tty — with module cases confirmed to fail against the old body. `foreign_user_cannot_open_store_paths` skips loudly on hosts without passwordless `sudo -n -u nobody` (M-060 class; CI still runs the full case). Fixed the dead `hist-008-failed-search-plan.md` reference, the G4 gate section's stale `COMP-004` `discovery` note, and the review-close plan's evidence claim (M-085 note). Removed the committed Windows `Zone.Identifier` stub and a dead `styled_end` in `highlight.rs`. No status changes. |
+| 2026-09-03 | Documentation sweep after the ADR 0015 reconciliation: the Phase 5 status paragraph now says the `MBX_COMP_OVERLAY=1` overlay slice is `complete` (it still read `validation` from before the close); `docs/comp-003-metadata-plan.md`'s sanitize contract now matches the implementation — replace C0/DEL/`$`/backtick/backslash with `?`, 64-byte cap truncating on a UTF-8 character boundary (the rule added with `M-085`) instead of the stale "strip C0 and DEL; cap at 64 characters"; added `docs/adr/README.md`, a one-table index of all fifteen ADRs with amendment cross-references. No status values change. |
