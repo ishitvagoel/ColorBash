@@ -75,6 +75,46 @@ mbx_status() {
     printf 'diagnose: mbx_doctor\n'
 }
 
+# ONBD-002: in-shell cheatsheet. One body, live on/off per feature, so users
+# never have to leave the terminal to learn the keys. Install/configure print
+# a pointer here instead of duplicating the text.
+mbx_help() {
+    local state
+    state=$([[ ${MBX_HISTORY:-} == 1 ]] && echo on || echo off)
+    printf 'MBX keys and commands (feature: state)\n\n'
+    printf 'always on\n'
+    printf '  two-line prompt          context line + > input line\n'
+    printf '  Ctrl-X Ctrl-Y            insert the editor token at the cursor\n'
+    printf '  Tab                      stock Bash completion (unchanged)\n\n'
+    printf 'history search: %s   (export MBX_HISTORY=1 to enable)\n' "$state"
+    printf '  Ctrl-X h                 replace the line with a history match; repeat cycles\n'
+    printf '  Ctrl-X l                 bring back the line you typed\n'
+    printf '  mbx history search ...   recent | prefix | cwd | fuzzy | failed | repo | branch\n\n'
+    state=$([[ ${MBX_GHOST:-} == 1 && ${MBX_HISTORY:-} == 1 ]] && echo on || echo off)
+    printf 'ghost suggestions: %s   (needs MBX_HISTORY=1 and MBX_GHOST=1)\n' "$state"
+    printf '  Right / Ctrl-F           accept the whole suggestion\n'
+    printf '  Alt-F / Ctrl-Right       accept one word\n'
+    printf '  Enter                    runs only what you typed\n'
+    printf '  Left / Home / Up / Down  dismiss and do the normal motion\n'
+    printf '  Ctrl-X Ctrl-N / Ctrl-P   cycle other matches\n\n'
+    state=$([[ ${MBX_HIGHLIGHT:-} == 1 ]] && echo on || echo off)
+    printf 'syntax highlighting: %s   (export MBX_HIGHLIGHT=1; not with ghost)\n' "$state"
+    printf '  (no keys)                color copy on a row below your line; Enter runs plain text\n\n'
+    state=$([[ ${MBX_COMP_OVERLAY:-} == 1 ]] && echo on || echo off)
+    printf 'completion overlay: %s   (export MBX_COMP_OVERLAY=1; shows after Tab on wrapped completers)\n' "$state"
+    printf '  Ctrl-X Ctrl-O            show / hide the candidate list\n'
+    printf '  Ctrl-X n / Ctrl-X p      move the selection\n'
+    printf '  Ctrl-X Ctrl-A            insert the selected candidate\n'
+    printf '  Ctrl-X j                 dismiss\n\n'
+    printf 'utilities\n'
+    printf '  mbx_status               one-line-per-feature summary\n'
+    printf '  mbx_doctor               diagnose problems with fixes\n'
+    printf '  mbx_configure            change settings (saved in ~/.config/mbx/config.bash)\n'
+    printf '  mbx history clear        empty the recorded history\n\n'
+    printf 'disable a feature: export MBX_<FEATURE>=0   remove from bashrc:\n'
+    printf '  bash scripts/install.bash --uninstall-bashrc\n'
+}
+
 _mbx_doctor_line() {
     local level=$1 message=$2 fix=${3-}
     case $level in

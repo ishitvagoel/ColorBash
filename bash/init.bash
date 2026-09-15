@@ -34,6 +34,19 @@ if [[ -z ${MBX_BIN:-} ]]; then
     fi
 fi
 
+# ONBD-001: the first source must not be silent. One banner, once per config
+# directory, only on a terminal; onboarding may never block or fail the shell.
+_mbx_first_run_notice() {
+    local path
+    [[ -t 1 ]] || return 0
+    _mbx_user_config_path || return 0
+    path=${REPLY%/*}/first-run-shown
+    [[ -e $path ]] && return 0
+    printf 'MBX loaded. Type mbx_help for keys, mbx_status for a summary.\n'
+    printf 'Something look off? Run mbx_doctor. Change settings: mbx_configure.\n'
+    mkdir -p -- "${path%/*}" 2>/dev/null && : > "$path" 2>/dev/null || true
+}
+
 _mbx_engine_start || true
 _mbx_install_hooks
 _mbx_editor_install || true
@@ -43,5 +56,6 @@ _mbx_search_install || true
 _mbx_history_install_hooks
 _mbx_ghost_install || true
 _MBX_INITIALIZED=1
+_mbx_first_run_notice
 
 unset _MBX_INIT_FILE _MBX_BASH_DIR

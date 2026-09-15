@@ -622,21 +622,40 @@ combinations are impractical.
 Exit condition: `G5` after every non-deferred `HRD-*` item is complete.
 macOS `HRD-001` is explicitly `deferred` (ADR 0012).
 
+### Onboarding baseline
+
+The MVP's features were discoverable only by reading the docs: a default
+session was a prompt plus silently inert chords. This slice makes what ships
+findable from inside the shell. It changes no feature behavior.
+
+| ID | Deliverable | Status | Evidence or dependency |
+| --- | --- | --- | --- |
+| `ONBD-001` | One-time first-run welcome on first source | `complete` | `_mbx_first_run_notice` in `bash/init.bash`: prints two lines only when stdout is a tty and `${config-dir}/first-run-shown` is absent, then creates the marker (failures silent). PTY: `crates/pty/tests/onboarding.rs` (`first_source_prints_banner_once_and_marks_the_config_dir` — banner on first source, marker file exists, second source shows no banner) |
+| `ONBD-002` | `mbx_help` in-shell cheatsheet; installer stops duplicating the text | `complete` | `mbx_help` in `bash/config.bash`: chord table grouped by feature with live on/off state from the `MBX_*` environment, plus utility/config/disable pointers. `print_cheatsheet` in `scripts/install.bash` now prints a pointer. Module contracts in `tests/bash/modules.bash` (every chord named; history/ghost on/off flip with the variables) |
+| `ONBD-003` | Inert `Ctrl-X h` explains itself once instead of failing silently | `complete` | `_mbx_search_insert` in `bash/search.bash`: when `MBX_HISTORY != 1`, prints `MBX: history search is off - run mbx_configure or export MBX_HISTORY=1` to stderr once per session (`_MBX_SEARCH_HINTED`), leaves `READLINE_LINE` untouched. Module contract (first stderr non-empty, second empty, line untouched) and PTY `inert_search_chord_hints_once_and_keeps_the_line` (hint visible, typed line intact, Enter runs it, second chord silent) |
+
 ## Immediate next work
 
 Strategy A MVP on Linux is `complete` (`G5` 2026-08-27). Capture stays
 disabled by default. Unmet percentile leftovers are `deferred` and must not
 block product slices (`docs/latency-budget-deferral.md`).
 
-1. **G5 revisit** when a macOS host is available: run the `HRD-001` pairwise
+1. **TUI history search (approved slice, next)**: ADR 0016, then `mbx tui
+   search` (zero-dependency alternate-screen picker over the existing history
+   queries) behind `MBX_TUI=1` on the `Ctrl-X h` chord, with PTY
+   terminal-restore evidence (`TUI-001`–`TUI-004`). Baseline discoverability
+   (`ONBD-001`–`ONBD-003`) is done.
+2. **G5 revisit** when a macOS host is available: run the `HRD-001` pairwise
    matrix per ADR 0012. Do not fake it on Linux.
-2. **`REL-001`**: maintainer `workflow_dispatch` smoke of `release.yml`, then
+3. **`REL-001`**: maintainer `workflow_dispatch` smoke of `release.yml`, then
    the first `v*` tag. Do not push a tag from an agent unless asked.
-3. `HLT-003` p99 / `HRD-003` / `PRM-004` percentiles stay `deferred` unless
+4. `HLT-003` p99 / `HRD-003` / `PRM-004` percentiles stay `deferred` unless
    an ADR ratifies new numbers or a functional prompt-path defect is proven.
-4. `GIT-005` provider SDK stays post-MVP `deferred`.
-5. Dim paint and type-to-filter overlays stay `deferred`.
-6. Do not enable capture by default. Do not combine `MBX_GHOST=1` with
+5. `GIT-005` provider SDK stays post-MVP `deferred`.
+6. Dim paint and type-to-filter completion overlays stay `deferred` (the
+   history-search TUI, once it lands, supersedes the history-search portion
+   of that line only).
+7. Do not enable capture by default. Do not combine `MBX_GHOST=1` with
    `MBX_HIGHLIGHT=1`.
 
 ## Provisional performance and safety budgets
@@ -702,7 +721,7 @@ an accepted decoration/ownership ADR.
 
 ## Change log
 
-Full history (143 entries as of 2026-09-03; the 126 present at the trim are
+Full history (144 entries as of 2026-09-03; the 126 present at the trim are
 byte-identical to what was here before it) lives in
 [`docs/archive/roadmap-history.md`](archive/roadmap-history.md). Append new
 entries to *both* this table and that file, most-recent last, exactly as the
@@ -743,3 +762,4 @@ entries for at-a-glance context.
 | 2026-09-03 | Deep-review follow-ups (M-085). Closed the two missing evidence pieces for the ADR 0013 review close: H-4 (`highlight_unset_installs_no_widgets` — `MBX_HIGHLIGHT` unset installs no widgets, the bound flag stays 0, typing/Enter stay stock; confirmed to fail when the gate is neutered) and a rendered-bytes guard (`typed_line_renders_without_caret_control_leftovers`) pinning ADR 0015's invariant that the typed line never shows caret-encoded markers — it reproduces `M-064`'s exact `^A^[[32m^B` garbling if styling is ever assigned back into `READLINE_LINE`. Annotated O-1's snapshot-cap assert with its ID. `_mbx_comp_sanitize_display` now truncates on a UTF-8 character boundary instead of mid-sequence — the 64-byte cap could previously emit invalid UTF-8 to the tty — with module cases confirmed to fail against the old body. `foreign_user_cannot_open_store_paths` skips loudly on hosts without passwordless `sudo -n -u nobody` (M-060 class; CI still runs the full case). Fixed the dead `hist-008-failed-search-plan.md` reference, the G4 gate section's stale `COMP-004` `discovery` note, and the review-close plan's evidence claim (M-085 note). Removed the committed Windows `Zone.Identifier` stub and a dead `styled_end` in `highlight.rs`. No status changes. |
 | 2026-09-03 | Documentation sweep after the ADR 0015 reconciliation: the Phase 5 status paragraph now says the `MBX_COMP_OVERLAY=1` overlay slice is `complete` (it still read `validation` from before the close); `docs/comp-003-metadata-plan.md`'s sanitize contract now matches the implementation — replace C0/DEL/`$`/backtick/backslash with `?`, 64-byte cap truncating on a UTF-8 character boundary (the rule added with `M-085`) instead of the stale "strip C0 and DEL; cap at 64 characters"; added `docs/adr/README.md`, a one-table index of all fifteen ADRs with amendment cross-references. No status values change. |
 | 2026-09-03 | Added `docs/user-guide.md`, a jargon-free guide covering what MBX offers, setup, everyday use of every feature, the privacy controls in plain terms, the safety promises, and the limits — no roadmap IDs, ADR numbers, or test names. README links it as the starting point for new users. Docs only; no status changes. |
+| 2026-09-03 | Onboarding baseline (`ONBD-001`–`ONBD-003`), closing the 'a default session is a prompt plus silently inert chords' gap: one-time first-run welcome in `bash/init.bash` (tty-only, marker `first-run-shown` beside the user config, silent on failure); `mbx_help` in `bash/config.bash` — the key cheatsheet with live on/off per feature — replacing the duplicated text in `scripts/install.bash` with a pointer; and the inert `Ctrl-X h` now explains itself once per session instead of doing nothing silently, leaving the line untouched. Evidence: module contracts and a new `crates/pty/tests/onboarding.rs`; full PTY suite green with the banner active. Docs: user guide, README, and reference point at `mbx_help`. Immediate next work now names the approved TUI history-search slice (`TUI-001`–`TUI-004`). |

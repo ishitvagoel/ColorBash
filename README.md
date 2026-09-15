@@ -20,6 +20,7 @@ search, ghost suggestions, completion overlay). It does **not** edit
 ```bash
 bash scripts/install.bash --interactive   # menu: pick every option, then w to save
 bash scripts/install.bash --bashrc        # comfort preset + persist in ~/.bashrc
+mbx_help                                  # in-shell key cheatsheet, live on/off per feature
 mbx_configure                             # later: same menu, starting from the saved file
 mbx_status                                # flags, helper path, duration, persist-bashrc
 mbx_doctor                                # diagnose: what's off and how to fix it

@@ -56,9 +56,10 @@ Expect a prominent `! PROD` marker. `MBX_DISABLE_GIT=1` omits Git discovery.
 capability, helper path/version/live handshake, IPC mode, config resolution,
 keybinding collisions for every enabled opt-in feature, and history store
 health, each with a fix line when something needs attention. `mbx_status` is
-its one-line-per-feature summary. Every per-feature "Check" recipe elsewhere
-in this document is covered by `mbx_doctor`; run it first before checking
-things by hand.
+its one-line-per-feature summary and `mbx_help` prints the key cheatsheet
+with the live on/off state of every feature. Every per-feature "Check" recipe
+elsewhere in this document is covered by `mbx_doctor`; run it first before
+checking things by hand.
 
 **Automated:** `bash tests/bash/modules.bash`, `cargo test -p mbx-pty --test foundation`.
 

@@ -212,7 +212,15 @@ _mbx_search_insert() {
     local original_point=${READLINE_POINT:-0}
     local count
 
-    [[ ${MBX_HISTORY:-} == 1 ]] || return 0
+    # ONBD-003: a chord that silently does nothing reads as a broken shell.
+    # Say why once per session, leave the line untouched, then stay quiet.
+    if [[ ${MBX_HISTORY:-} != 1 ]]; then
+        if [[ ${_MBX_SEARCH_HINTED:-0} != 1 ]]; then
+            _MBX_SEARCH_HINTED=1
+            printf 'MBX: history search is off - run mbx_configure or export MBX_HISTORY=1\n' >&2
+        fi
+        return 0
+    fi
     count=${#_MBX_SEARCH_MATCHES[@]}
     if ((count > 0)) && \
         [[ $current == "${_MBX_SEARCH_MATCHES[_MBX_SEARCH_INDEX]}" ]]; then

@@ -198,27 +198,10 @@ print_status() {
 print_cheatsheet() {
     cat <<EOF
 
-Reload a new shell, then type mbx_status.
-
-  comfort keys
-    Ctrl-X h     insert a history match (repeat to cycle)
-    Ctrl-X l     restore the typed line
-    Right        accept ghost suffix; Enter runs only what you typed
-    Tab          stock Bash completion
-    Ctrl-X Ctrl-O  completion overlay (after Tab on wrapped git)
-    Ctrl-X Ctrl-A  accept ranked candidate
-    Ctrl-X j     dismiss overlay
-
-  files
-    config: $(config_path)
-    history store: \${XDG_DATA_HOME:-\$HOME/.local/share}/mbx/
-    helper: $ROOT/target/release/mbx
-    --bashrc appends after your existing rc, so bash-completion stays first
-
-  disable
-    edit the config file, or: export MBX_HISTORY=0
-    remove bashrc block: bash $ROOT/scripts/install.bash --uninstall-bashrc
-    reconfigure: bash $ROOT/scripts/configure.bash
+Reload a new shell, then run mbx_help for the full key list.
+  quick summary: mbx_status      diagnose: mbx_doctor
+  reconfigure: bash $ROOT/scripts/configure.bash
+  remove from bashrc: bash $ROOT/scripts/install.bash --uninstall-bashrc
 EOF
 }
 

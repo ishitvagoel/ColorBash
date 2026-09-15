@@ -95,9 +95,14 @@ source /path/to/ColorBash/bash/init.bash
 Inside a shell where MBX is loaded:
 
 ```bash
+mbx_help      # every key and command, showing what's on and what's off
 mbx_doctor    # walks through every feature: what's on, what's off, and how to fix it
 mbx_status    # one-line summary
 ```
+
+The very first time MBX loads it prints a short welcome pointing at these
+commands; it shows once and never again (unless you delete the
+`first-run-shown` file in the MBX config folder).
 
 If `mbx_doctor` says something is off, it also prints the exact setting that
 fixes it. That's usually all the troubleshooting you need.
@@ -346,11 +351,16 @@ commands, use the exclusion list for those patterns — same advice as for
 2. A feature not appearing? Check it's both enabled (`MBX_*`=1) **and**
    that you're in a real terminal window — these features switch off in
    scripts and pipes by design.
-3. A key does the old thing instead of the new thing? Something else owned
+3. Pressed a key and it seemed to do nothing? If history recording is off,
+   the search key tells you so once (`MBX: history search is off …`) and
+   then stays quiet — that's the feature working correctly, just disabled.
+   Run `mbx_configure` or `export MBX_HISTORY=1` to turn it on.
+4. A key does the old thing instead of the new thing? Something else owned
    that key. `mbx_doctor` will say so, and the matching `MBX_*_OVERRIDE=1`
    is your call to make.
-4. Want to see what a feature is doing? `mbx_status` is the quick summary;
-   the [reference](reference.md) documents every switch in detail.
+5. Want to see what a feature is doing? `mbx_status` is the quick summary;
+   `mbx_help` lists the keys; the [reference](reference.md) documents every
+   switch in detail.
 
 ---
 

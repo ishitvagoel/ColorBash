@@ -2237,4 +2237,39 @@ assert_eq 'keephello-me' "$READLINE_LINE" \
 assert_eq 9 "$READLINE_POINT" 'editor should advance the cursor by the token length'
 unset MBX_EDITOR_INSERT_TOKEN READLINE_LINE READLINE_POINT
 
+# ONBD-002: mbx_help lists every chord and reports the live on/off state.
+mbx_help_out=$(mbx_help)
+for onbd_chord in 'Ctrl-X h' 'Ctrl-X l' 'Right' 'Ctrl-X Ctrl-O' \
+    'Ctrl-X Ctrl-A' 'Ctrl-X j' 'Ctrl-X Ctrl-Y' 'mbx_doctor'; do
+    grep -Fq "$onbd_chord" <<<"$mbx_help_out" || \
+        fail "mbx_help should mention $onbd_chord"
+done
+grep -Fq 'history search: off' <<<"$mbx_help_out" || \
+    fail 'mbx_help should report history off when MBX_HISTORY is unset'
+MBX_HISTORY=1
+mbx_help_out=$(mbx_help)
+grep -Fq 'history search: on' <<<"$mbx_help_out" || \
+    fail 'mbx_help should report history on when MBX_HISTORY=1'
+grep -Fq 'ghost suggestions: off' <<<"$mbx_help_out" || \
+    fail 'mbx_help should report ghost off without MBX_GHOST=1'
+MBX_GHOST=1
+mbx_help_out=$(mbx_help)
+grep -Fq 'ghost suggestions: on' <<<"$mbx_help_out" || \
+    fail 'mbx_help should report ghost on with MBX_GHOST=1 and MBX_HISTORY=1'
+unset MBX_GHOST MBX_HISTORY mbx_help_out
+
+# ONBD-003: the inert Ctrl-X h chord explains itself once, then stays quiet.
+_mbx_search_hinted_dir=$(mktemp -d)
+unset MBX_HISTORY _MBX_SEARCH_HINTED READLINE_LINE READLINE_POINT
+_mbx_search_insert 2>"$_mbx_search_hinted_dir/first"
+_mbx_search_insert 2>"$_mbx_search_hinted_dir/second"
+[[ -s $_mbx_search_hinted_dir/first ]] || \
+    fail 'the inert search chord should print a hint when history is off'
+[[ -s $_mbx_search_hinted_dir/second ]] && \
+    fail 'the inert search chord hint must print only once per session'
+[[ -n ${READLINE_LINE:-} ]] && \
+    fail 'the inert search chord must leave the line buffer untouched'
+rm -rf "$_mbx_search_hinted_dir"
+unset _mbx_search_hinted_dir _MBX_SEARCH_HINTED
+
 printf 'PASS: focused Bash module contracts\n'
