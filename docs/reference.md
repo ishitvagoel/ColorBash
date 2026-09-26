@@ -143,7 +143,21 @@ outside a worktree or when the repo has no rows.
 If the chord is already bound, MBX leaves it alone unless
 `MBX_SEARCH_OVERRIDE=1` (insert) or `MBX_SEARCH_RESTORE_OVERRIDE=1` (restore).
 
-**Automated:** `cargo test -p mbx-pty --test history_search`.
+**TUI mode (ADR 0016, opt-in):** with `MBX_TUI=1` (and `MBX_HISTORY=1`) the
+same chord launches `mbx tui search --seed "$READLINE_LINE"` — a modal
+full-screen picker on the alternate screen. Type to filter (cwd-scoped
+prefix, then global prefix, then cwd fuzzy, then global fuzzy — the widget's
+tiers); `Up`/`Down`/`Ctrl-P`/`Ctrl-N` move; `Enter`/`Tab` accept; `Esc`/
+`Ctrl-C` cancel (exit status 2, line untouched); resize redraws via
+SIGWINCH. The helper drives `/dev/tty` itself; stdout carries only the
+selected command, which replaces the line buffer after the C0/DEL gate and
+is snapshot-restorable with `Ctrl-X l`. Helper failure or `MBX_TUI=0` falls
+back to the inline widget. `MBX_TUI_TIMEOUT` (seconds, default 600) bounds
+the wait. Zero new dependencies: hand-rolled termios/escape handling
+(`crates/cli/src/term.rs`), Linux-only for now.
+
+**Automated:** `cargo test -p mbx-pty --test history_search`;
+`cargo test -p mbx-pty --test tui_search`; `cargo test -p mbx --lib tui`.
 
 ### 5. History ghost suffix (opt-in)
 

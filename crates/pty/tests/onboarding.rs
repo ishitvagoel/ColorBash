@@ -81,7 +81,9 @@ fn inert_search_chord_hints_once_and_keeps_the_line() {
     // must appear, the typed line must survive, and Enter must run it.
     session.write_str("echo kept", deadline(2)).expect("type");
     wait_all(&mut session, &["echo kept"]);
-    session.write_all(&[0x18, 0x68], deadline(2)).expect("Ctrl-X h");
+    session
+        .write_all(&[0x18, 0x68], deadline(2))
+        .expect("Ctrl-X h");
     // Wait for the hint *and* the post-widget redraw together: the hint
     // reaches the terminal during the widget, and Readline only repaints the
     // prompt line after it returns.
@@ -95,7 +97,9 @@ fn inert_search_chord_hints_once_and_keeps_the_line() {
     wait_all(&mut session, &["\nkept", "> "]);
 
     // The hint is once per session: the second chord stays silent.
-    session.write_all(&[0x18, 0x68], deadline(2)).expect("Ctrl-X h");
+    session
+        .write_all(&[0x18, 0x68], deadline(2))
+        .expect("Ctrl-X h");
     session
         .write_str("printf 'MBX_ONBD:%s\\n' second\n", deadline(2))
         .expect("second marker");

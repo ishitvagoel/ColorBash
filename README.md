@@ -80,7 +80,8 @@ These rules hold whether a feature is on or off:
 | Adaptive prompt | `source bash/init.bash` | — | No (display only) |
 | Command duration | `MBX_ENABLE_DURATION_TIMING=1` | — | No |
 | History sidecar | `MBX_HISTORY=1` | — | No (records after admission) |
-| History-search insert | `MBX_HISTORY=1` | `Ctrl-X` `h` insert, `Ctrl-X` `l` restore | No until Enter |
+| History-search TUI | `MBX_HISTORY=1` and `MBX_TUI=1` | `Ctrl-X` `h` opens the full-screen picker; `Ctrl-X` `l` restore | No until Enter |
+| History-search insert | `MBX_HISTORY=1` (without `MBX_TUI=1`) | `Ctrl-X` `h` insert, `Ctrl-X` `l` restore | No until Enter |
 | Ghost suffix | `MBX_HISTORY=1` and `MBX_GHOST=1` | Right accept; Left dismiss; `Ctrl-X Ctrl-N`/`P` cycle | Enter runs **typed prefix only** |
 | Insert token | default on | `Ctrl-X Ctrl-Y` | No until Enter |
 | Stock Tab | always | Tab | No (stock Bash insert) |

@@ -60,6 +60,7 @@ write_profile() {
 
 [[ ${MBX_HISTORY+x} ]] || export MBX_HISTORY=1
 [[ ${MBX_GHOST+x} ]] || export MBX_GHOST=1
+[[ ${MBX_TUI+x} ]] || export MBX_TUI=1
 [[ ${MBX_COMP_OVERLAY+x} ]] || export MBX_COMP_OVERLAY=1
 [[ ${MBX_COMP_WRAP+x} ]] || export MBX_COMP_WRAP=git
 # Highlight stays off: MBX_HIGHLIGHT=1 cannot combine with ghost.

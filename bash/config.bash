@@ -63,6 +63,7 @@ mbx_status() {
     printf 'helper: %s\n' "$helper"
     printf 'persist-bashrc: %s\n' "$persist"
     printf 'history: %s\n' "${MBX_HISTORY:-off}"
+    printf 'tui: %s\n' "${MBX_TUI:-off}"
     printf 'ghost: %s (bound=%s)\n' "${MBX_GHOST:-off}" "${_MBX_GHOST_BOUND:-0}"
     printf 'highlight: %s (bound=%s)\n' "${MBX_HIGHLIGHT:-off}" "${_MBX_HIGHLIGHT_BOUND:-0}"
     printf 'overlay: %s (bound=%s)\n' "${MBX_COMP_OVERLAY:-off}" "${_MBX_COMP_OVERLAY_BOUND:-0}"
@@ -90,6 +91,9 @@ mbx_help() {
     printf '  Ctrl-X h                 replace the line with a history match; repeat cycles\n'
     printf '  Ctrl-X l                 bring back the line you typed\n'
     printf '  mbx history search ...   recent | prefix | cwd | fuzzy | failed | repo | branch\n\n'
+    state=$([[ ${MBX_TUI:-} == 1 && ${MBX_HISTORY:-} == 1 ]] && echo on || echo off)
+    printf 'history search TUI: %s   (export MBX_TUI=1 for the full-screen picker)\n' "$state"
+    printf '  Ctrl-X h                 opens the full-screen search when enabled\n\n'
     state=$([[ ${MBX_GHOST:-} == 1 && ${MBX_HISTORY:-} == 1 ]] && echo on || echo off)
     printf 'ghost suggestions: %s   (needs MBX_HISTORY=1 and MBX_GHOST=1)\n' "$state"
     printf '  Right / Ctrl-F           accept the whole suggestion\n'

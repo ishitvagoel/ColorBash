@@ -1,5 +1,7 @@
 use crate::VERSION;
-use crate::cli::{self, CliCommand, HighlightCommand, HistoryCommand, RepoCommand, ServeTarget};
+use crate::cli::{
+    self, CliCommand, HighlightCommand, HistoryCommand, RepoCommand, ServeTarget, TuiCommand,
+};
 use crate::environment;
 use crate::history::{HistoryControl, HistoryError, HistoryPolicy, HistorySearch};
 use crate::prompt::PromptRendering;
@@ -11,7 +13,7 @@ use crate::storage::{QueuedHistoryStore, default_store_path};
 use crate::telemetry::trace_duration;
 use crate::transport::{self, SocketClient};
 use mbx_protocol::{Request, RequestKind, ResponseKind};
-use std::io::{self, Write};
+use std::io::{self, IsTerminal, Write};
 use std::num::NonZeroU64;
 use std::time::Instant;
 
@@ -63,6 +65,7 @@ pub fn execute(command: CliCommand, renderer: &dyn PromptRendering) -> Result<()
         CliCommand::History(history) => execute_history(history),
         CliCommand::Highlight(highlight) => execute_highlight(highlight),
         CliCommand::Repo(repo) => execute_repo(repo),
+        CliCommand::Tui(command) => execute_tui(command),
         CliCommand::Version => {
             println!("mbx {VERSION}");
             Ok(())
@@ -207,6 +210,28 @@ fn execute_repo(command: RepoCommand) -> Result<(), String> {
                 None => Err("not inside a Git repository".to_owned()),
             }
         }
+    }
+}
+
+/// `mbx tui search` (ADR 0016): the modal history picker. A selection is
+/// written to stdout as one line for the `bind -x` widget to insert; a cancel
+/// exits through an empty error so `main` can fail quietly with status 2.
+fn execute_tui(command: TuiCommand) -> Result<(), String> {
+    let TuiCommand::Search { seed } = command;
+    if !std::io::stdin().is_terminal() {
+        return Err("mbx tui needs a terminal on stdin".to_owned());
+    }
+    let store = QueuedHistoryStore::open_default(crate::history::DEFAULT_QUEUE_CAPACITY)
+        .map_err(|error| error.to_string())?;
+    let cwd = std::env::current_dir()
+        .map(|path| path.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    match crate::tui::run(seed.as_deref(), &store, &cwd)? {
+        Some(command_text) => {
+            println!("{command_text}");
+            Ok(())
+        }
+        None => Err(String::new()),
     }
 }
 

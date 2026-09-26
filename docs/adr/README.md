@@ -22,6 +22,7 @@ it with a new one) and update the row here in the same change.
 | [0013](0013-opt-in-continuous-decoration.md) | Opt-in continuous decoration via self-insert wrapping | Accepted (2026-08-27); install rules stand, decisions 2–3 superseded by [ADR 0015](0015-highlight-preview-row.md) |
 | [0014](0014-highlight-over-coprocess.md) | Route opt-in highlighting through the coprocess | Accepted (2026-08-29); its `M-064` `color=0` deferral resolved by [ADR 0015](0015-highlight-preview-row.md) |
 | [0015](0015-highlight-preview-row.md) | Preview-row syntax highlighting (supersedes in-buffer markers) | Accepted (2026-08-31) |
+| [0016](0016-tui-history-search.md) | Modal TUI history search on an explicit chord | Accepted (2026-09-03) |
 
 Consequential changes to protocol, privacy, persistence, editor ownership, or
 provider execution still require a new ADR here or an explicit amendment of an

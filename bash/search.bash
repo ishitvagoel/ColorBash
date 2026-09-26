@@ -26,6 +26,55 @@ _mbx_search_clear() {
     _MBX_SEARCH_HAS_ORIGINAL=0
 }
 
+# TUI-003 (ADR 0016): when `MBX_TUI=1`, the Ctrl-X h chord launches the
+# full-screen picker (`mbx tui search`) instead of the insert-cycle widget.
+# The helper drives /dev/tty itself; stdout carries exactly one line — the
+# selected command — which replaces the line buffer after the C0/DEL gate.
+# Nothing is ever executed. Exit status contract: 0 selects (REPLY carries
+# the command), 2 cancels (line left untouched), anything else is a helper
+# failure and falls back to the chord widget. A user-invoked picker is the
+# user-command case, not the hot path, so its budget is generous and
+# configurable (`MBX_TUI_TIMEOUT` seconds) rather than `MBX_SEARCH_TIMEOUT`.
+_mbx_search_tui() {
+    local query=$1 original=$2 original_point=$3
+    local deadline output_fd child_pid match child_status
+
+    [[ -n ${MBX_BIN:-} && -x ${MBX_BIN:-} && -t 0 && -w /dev/tty ]] || return 1
+    _mbx_deadline_after "${MBX_TUI_TIMEOUT:-600}" || return 1
+    deadline=$REPLY
+    # bind -x under `set -m`/`set -b` can print job noise into the line
+    # buffer; the shared suspend/restore covers ghost, highlight, and search
+    # (M-049, M-063).
+    _mbx_jobs_suspend
+    exec {output_fd}< <(exec "$MBX_BIN" tui search --seed "$query" 2>/dev/null)
+    child_pid=$!
+    match=
+    if _mbx_search_read_line "$output_fd" "$deadline" && [[ -n $REPLY ]]; then
+        match=$REPLY
+    fi
+    exec {output_fd}<&-
+    if ! _mbx_wait_or_kill_child "$child_pid" "$deadline"; then
+        child_status=1
+    else
+        child_status=$REPLY
+    fi
+    _mbx_search_restore_jobs
+    if ((child_status == 2)); then
+        # Deliberate cancel: keep the typed line exactly as it was.
+        return 0
+    fi
+    ((child_status == 0)) || return 1
+    [[ -n $match ]] || return 1
+    _mbx_text_has_c0_or_del "$match" && return 1
+    _mbx_search_clear
+    _MBX_SEARCH_ORIGINAL=$original
+    _MBX_SEARCH_ORIGINAL_POINT=$original_point
+    _MBX_SEARCH_HAS_ORIGINAL=1
+    READLINE_LINE=$match
+    READLINE_POINT=${#match}
+    return 0
+}
+
 _mbx_search_limit() {
     local limit=${MBX_SEARCH_LIMIT:-$_MBX_SEARCH_DEFAULT_LIMIT}
     if [[ ! $limit =~ ^[1-9][0-9]*$ ]]; then
@@ -219,6 +268,11 @@ _mbx_search_insert() {
             _MBX_SEARCH_HINTED=1
             printf 'MBX: history search is off - run mbx_configure or export MBX_HISTORY=1\n' >&2
         fi
+        return 0
+    fi
+    # TUI-003: full-screen picker when opted in; a helper failure falls back
+    # to the insert-cycle widget below.
+    if [[ ${MBX_TUI:-} == 1 ]] && _mbx_search_tui "$query" "$original" "$original_point"; then
         return 0
     fi
     count=${#_MBX_SEARCH_MATCHES[@]}

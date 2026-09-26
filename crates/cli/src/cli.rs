@@ -88,8 +88,14 @@ pub enum CliCommand {
     History(HistoryCommand),
     Highlight(HighlightCommand),
     Repo(RepoCommand),
+    Tui(TuiCommand),
     Version,
     Help,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum TuiCommand {
+    Search { seed: Option<String> },
 }
 
 /// Parses process arguments and resolves prompt-only defaults through an
@@ -107,6 +113,7 @@ pub fn parse(
         Some("history") => parse_history(&args[1..]).map(CliCommand::History),
         Some("highlight") => parse_highlight(&args[1..]).map(CliCommand::Highlight),
         Some("repo") => parse_repo(&args[1..]).map(CliCommand::Repo),
+        Some("tui") => parse_tui(&args[1..]).map(CliCommand::Tui),
         Some("--version" | "-V") => Ok(CliCommand::Version),
         Some("--help" | "-h") | None => Ok(CliCommand::Help),
         Some(command) => Err(format!("unknown command: {command}")),
@@ -239,6 +246,33 @@ fn parse_highlight(args: &[String]) -> Result<HighlightCommand, String> {
         no_color,
         color,
     })
+}
+
+fn parse_tui(args: &[String]) -> Result<TuiCommand, String> {
+    match args.first().map(String::as_str) {
+        Some("search") => {}
+        other => {
+            return Err(format!(
+                "tui requires 'search'{}",
+                other
+                    .map(|command| format!(", got: {command}"))
+                    .unwrap_or_default()
+            ));
+        }
+    }
+    let mut seed = None;
+    let mut index = 1;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--seed" => {
+                index += 1;
+                seed = Some(args.get(index).ok_or("--seed requires TEXT")?.clone());
+            }
+            unknown => return Err(format!("unknown tui option: {unknown}")),
+        }
+        index += 1;
+    }
+    Ok(TuiCommand::Search { seed })
 }
 
 fn parse_repo(args: &[String]) -> Result<RepoCommand, String> {

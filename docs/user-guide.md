@@ -163,7 +163,33 @@ What the keys do while a hint is showing:
 Typing anything else clears the hint. Hints come only from **your own**
 recorded history, and only when history recording is on.
 
-### 3. Search your past commands — an easier Ctrl-R (needs history on)
+### 3. Search your past commands — full-screen picker (needs history on)
+
+This is the flagship way to dig up a command. Turn it on:
+
+```bash
+export MBX_HISTORY=1
+export MBX_TUI=1
+```
+
+Press `Ctrl-X` then `h` and the screen briefly becomes a search window: the
+top line shows how many commands match, below it you type and the list
+narrows instantly, and the highlighted row is what Enter will choose.
+
+| Key | What happens |
+| --- | --- |
+| (just type) | Filter the list live |
+| ↑ / ↓ (or Ctrl-P / Ctrl-N) | Move the highlight |
+| Enter | Put the highlighted command into your input line — **it does not run yet** |
+| Esc or Ctrl-C | Close the picker and keep exactly what you had typed |
+
+The picker starts with what you had already typed as the filter. When it
+closes, your terminal is restored to exactly how it was, and the chosen
+command sits on your input line for you to edit and run. If the picker
+can't start, MBX falls back to the older inline search (next section) —
+nothing breaks.
+
+### 4. Search your past commands — inline, without the full screen (needs history on)
 
 Press `Ctrl-X` then `h` and MBX replaces what you typed with the closest
 match from your history (what you typed counts as the start of the command;
@@ -191,7 +217,7 @@ mbx history search repo "$PWD"           # ones run anywhere in this repository
 mbx history search branch main           # ones run on this branch
 ```
 
-### 4. A pick-list for Tab completions (off by default)
+### 5. A pick-list for Tab completions (off by default)
 
 Normal Tab completion is untouched. If you also turn on the overlay, MBX can
 show a small menu of the matching choices below your prompt, with the best
@@ -217,7 +243,7 @@ The menu shows at most 8 choices, tidied so odd characters can't scramble
 your terminal. If a completer isn't wrapped, the menu simply has nothing to
 show and stays out of the way.
 
-### 5. Color while you type (off by default)
+### 6. Color while you type (off by default)
 
 ```bash
 export MBX_HIGHLIGHT=1
@@ -235,13 +261,13 @@ doesn't). Very long lines (over about 4,000 characters) and lines containing
 raw control characters are left uncolored. While the completion menu is
 open, coloring steps aside so the two don't fight over the screen.
 
-### 6. Paste a snippet at a keypress (mostly for testing)
+### 7. Paste a snippet at a keypress (mostly for testing)
 
 `Ctrl-X` then `Ctrl-Y` inserts a short piece of text (`MBX_EDITOR_INSERT_TOKEN`
 sets what). It's aimed at developers exercising the shell, but it's there if
 you want a text shortcut.
 
-### 7. How long did that take? (off by default)
+### 8. How long did that take? (off by default)
 
 ```bash
 export MBX_ENABLE_DURATION_TIMING=1
@@ -315,8 +341,9 @@ commands, use the exclusion list for those patterns — same advice as for
 - **No prebuilt downloads yet.** You build it from source once with Rust.
 - **Suggestions only know what your history knows.** No cloud, no
   autocomplete of programs' internals, nothing network-based.
-- **No type-to-filter Ctrl-R screen.** Today's search inserts a match into
-  your line (feature 3); a live-filtering menu like fzf is not implemented.
+- **No type-to-filter Ctrl-R takeover of the standard key.** The picker
+  lives on `Ctrl-X h`; stock `Ctrl-R` is left alone (an override setting
+  could change that later if wanted).
 - **The completion menu only covers completers that were wrapped** (Git by
   default in the comfort profile). Everything else keeps normal Tab.
 - **The color copy is a display**, so copy-pasting from the preview row
@@ -351,7 +378,13 @@ commands, use the exclusion list for those patterns — same advice as for
 2. A feature not appearing? Check it's both enabled (`MBX_*`=1) **and**
    that you're in a real terminal window — these features switch off in
    scripts and pipes by design.
-3. Pressed a key and it seemed to do nothing? If history recording is off,
+3. Pressed `Ctrl-X h` and got the old inline cycling instead of the
+   full-screen picker? `MBX_TUI=1` isn't set (or history is off). Both
+   features coexist; the picker needs `MBX_HISTORY=1` **and** `MBX_TUI=1`.
+4. Pressed a key and it seemed to do nothing at all? If history recording is
+   off, the search key tells you so once (`MBX: history search is off …`)
+   and then stays quiet — that's the feature working correctly, just
+   disabled. Run `mbx_configure` or `export MBX_HISTORY=1` to turn it on.
    the search key tells you so once (`MBX: history search is off …`) and
    then stays quiet — that's the feature working correctly, just disabled.
    Run `mbx_configure` or `export MBX_HISTORY=1` to turn it on.

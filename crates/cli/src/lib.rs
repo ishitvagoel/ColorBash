@@ -17,7 +17,9 @@ mod provider;
 mod service;
 mod storage;
 mod telemetry;
+mod term;
 mod transport;
+mod tui;
 
 #[cfg(test)]
 mod corpus;

@@ -634,17 +634,32 @@ findable from inside the shell. It changes no feature behavior.
 | `ONBD-002` | `mbx_help` in-shell cheatsheet; installer stops duplicating the text | `complete` | `mbx_help` in `bash/config.bash`: chord table grouped by feature with live on/off state from the `MBX_*` environment, plus utility/config/disable pointers. `print_cheatsheet` in `scripts/install.bash` now prints a pointer. Module contracts in `tests/bash/modules.bash` (every chord named; history/ghost on/off flip with the variables) |
 | `ONBD-003` | Inert `Ctrl-X h` explains itself once instead of failing silently | `complete` | `_mbx_search_insert` in `bash/search.bash`: when `MBX_HISTORY != 1`, prints `MBX: history search is off - run mbx_configure or export MBX_HISTORY=1` to stderr once per session (`_MBX_SEARCH_HINTED`), leaves `READLINE_LINE` untouched. Module contract (first stderr non-empty, second empty, line untouched) and PTY `inert_search_chord_hints_once_and_keeps_the_line` (hint visible, typed line intact, Enter runs it, second chord silent) |
 
+### TUI history search (ADR 0016)
+
+The approved post-MVP slice: a chord-launched, modal, full-screen history
+picker over the existing sidecar queries, opt-in via `MBX_TUI=1`. Readline
+keeps editing ownership between invocations (ADR 0003); no printable key is
+rebound (ADR 0009 decision 6); zero new dependencies.
+
+| ID | Deliverable | Status | Evidence or dependency |
+| --- | --- | --- | --- |
+| `TUI-001` | ADR 0016 decision (modal takeover, in-process queries, hand-rolled terminal handling, restore-on-every-path) | `complete` | `docs/adr/0016-tui-history-search.md`; supersedes the deferred type-to-filter overlay **for history search only** |
+| `TUI-002` | `mbx tui search [--seed TEXT]` Rust core | `complete` | `crates/cli/src/term.rs` (raw mode via `tcgetattr`/`tcsetattr`, `TIOCGWINSZ`, poll, signal waker; Linux-gated) and `crates/cli/src/tui.rs` (key decoder, alternate-screen renderer, width-safe truncation, chord-parity query tiers over `HistorySearch`); CLI `tui` arm; 8 unit tests (`cargo test -p mbx --lib tui`) |
+| `TUI-003` | Bash chord integration, opt-in | `complete` | `_mbx_search_tui` in `bash/search.bash`: `MBX_TUI=1` launches the picker on `Ctrl-X h` via the canonical helper recipe (jobs suspend/restore M-049/M-063, exit-status gate M-067, C0/DEL gate before `READLINE_LINE`); status 2 = cancel leaves the line untouched; helper failure falls back to the insert-cycle widget. Comfort profile sets `MBX_TUI=1`; `configure.bash` `tui` key (normalize forces history on); `mbx_help`/`mbx_status` rows |
+| `TUI-004` | PTY evidence: restore-on-every-path, exact insertion, hostile refusal, fallback, opt-out | `complete` | `crates/pty/tests/tui_search.rs`: selection replaces the line and nothing executes until Enter; cancel keeps the typed line; hostile ESC row refused; helper failure falls back to the widget; `MBX_TUI` unset keeps the widget path; standalone real-binary drive (open/filter/resize/select, restore escapes asserted when captured, exit status gates selection vs cancel); `stty -g` oracle around open/cancel/select |
+
 ## Immediate next work
 
 Strategy A MVP on Linux is `complete` (`G5` 2026-08-27). Capture stays
 disabled by default. Unmet percentile leftovers are `deferred` and must not
 block product slices (`docs/latency-budget-deferral.md`).
 
-1. **TUI history search (approved slice, next)**: ADR 0016, then `mbx tui
-   search` (zero-dependency alternate-screen picker over the existing history
-   queries) behind `MBX_TUI=1` on the `Ctrl-X h` chord, with PTY
-   terminal-restore evidence (`TUI-001`–`TUI-004`). Baseline discoverability
-   (`ONBD-001`–`ONBD-003`) is done.
+1. **TUI completion picker** (post-ADR-0016 follow-up candidate): the same
+   modal machinery over Tab's ranked candidates; needs its own decision on
+   the trigger chord and whether the overlay is replaced or complemented.
+   Nothing is scheduled — the baseline discoverability
+   (`ONBD-001`–`ONBD-003`) and history-search TUI (`TUI-001`–`TUI-004`) are
+   done.
 2. **G5 revisit** when a macOS host is available: run the `HRD-001` pairwise
    matrix per ADR 0012. Do not fake it on Linux.
 3. **`REL-001`**: maintainer `workflow_dispatch` smoke of `release.yml`, then
@@ -721,7 +736,7 @@ an accepted decoration/ownership ADR.
 
 ## Change log
 
-Full history (144 entries as of 2026-09-03; the 126 present at the trim are
+Full history (145 entries as of 2026-09-03; the 126 present at the trim are
 byte-identical to what was here before it) lives in
 [`docs/archive/roadmap-history.md`](archive/roadmap-history.md). Append new
 entries to *both* this table and that file, most-recent last, exactly as the
@@ -763,3 +778,4 @@ entries for at-a-glance context.
 | 2026-09-03 | Documentation sweep after the ADR 0015 reconciliation: the Phase 5 status paragraph now says the `MBX_COMP_OVERLAY=1` overlay slice is `complete` (it still read `validation` from before the close); `docs/comp-003-metadata-plan.md`'s sanitize contract now matches the implementation — replace C0/DEL/`$`/backtick/backslash with `?`, 64-byte cap truncating on a UTF-8 character boundary (the rule added with `M-085`) instead of the stale "strip C0 and DEL; cap at 64 characters"; added `docs/adr/README.md`, a one-table index of all fifteen ADRs with amendment cross-references. No status values change. |
 | 2026-09-03 | Added `docs/user-guide.md`, a jargon-free guide covering what MBX offers, setup, everyday use of every feature, the privacy controls in plain terms, the safety promises, and the limits — no roadmap IDs, ADR numbers, or test names. README links it as the starting point for new users. Docs only; no status changes. |
 | 2026-09-03 | Onboarding baseline (`ONBD-001`–`ONBD-003`), closing the 'a default session is a prompt plus silently inert chords' gap: one-time first-run welcome in `bash/init.bash` (tty-only, marker `first-run-shown` beside the user config, silent on failure); `mbx_help` in `bash/config.bash` — the key cheatsheet with live on/off per feature — replacing the duplicated text in `scripts/install.bash` with a pointer; and the inert `Ctrl-X h` now explains itself once per session instead of doing nothing silently, leaving the line untouched. Evidence: module contracts and a new `crates/pty/tests/onboarding.rs`; full PTY suite green with the banner active. Docs: user guide, README, and reference point at `mbx_help`. Immediate next work now names the approved TUI history-search slice (`TUI-001`–`TUI-004`). |
+| 2026-09-03 | `TUI-001`–`TUI-004` (ADR 0016): the first TUI. `mbx tui search [--seed TEXT]` — a modal, zero-dependency, full-screen history picker (alternate screen, raw mode via hand-rolled termios FFI, key decoding, SIGWINCH redraw, restore-on-every-path guard) reading the sidecar in-process with the chord widget's query tiers. Opt-in via `MBX_TUI=1`: the `Ctrl-X h` chord launches the picker instead of the insert-cycle widget; cancel (Esc/Ctrl-C, exit 2) leaves the typed line untouched; helper failure falls back to the widget; `Ctrl-X l` restore unchanged. Comfort profile and `configure.bash` gain the `tui` option; `mbx_help`/`mbx_status` report it. Evidence: 8 unit tests (decoder, window math, width truncation, tier order) plus `crates/pty/tests/tui_search.rs` — selection/cancel/hostile/fallback/opt-out with the `stty -g` oracle, and a standalone real-binary drive (open, filter, resize mid-session, select). Readline ownership (ADR 0003) and no-printable-rebind (ADR 0009) unchanged. |
