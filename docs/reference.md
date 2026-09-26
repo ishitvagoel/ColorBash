@@ -220,6 +220,19 @@ completer.
 **Automated:** `bash tests/bash/smoke.bash`, completion cases in
 `crates/pty/tests/completion_harness.rs`.
 
+**TUI mode (ADR 0016 follow-up, opt-in):** with `MBX_COMP_TUI=1`, `Ctrl-X t`
+after a wrapped Tab opens `mbx tui complete` — the modal full-screen picker
+over `_MBX_COMP_RANKED_LIST`. Type to filter (case-insensitive substring);
+`Up`/`Down`/`Ctrl-P`/`Ctrl-N` move; `Enter`/`Tab` accept; `Esc`/`Ctrl-C`
+cancels (exit status 2, line untouched). The pick replaces the word at the
+cursor (snapshot refreshed at accept time, so a stale snapshot can never
+splice into an unrelated word) and nothing runs until the user's own Enter.
+Candidates arrive on the helper's stdin bounded at 512 rows / 4096 bytes
+per row; interaction happens on `/dev/tty`; `MBX_TUI_TIMEOUT` bounds the
+wait; `MBX_COMP_TUI_KEYSEQ`/`MBX_COMP_TUI_OVERRIDE` follow the standard
+chord rules. The overlay and the picker share one snapshot and are
+independent opt-ins.
+
 ### 8. Wrapped `-F` completion, ranked accept, and cycle
 
 This is an adapter around an existing Bash `-F` completer, not a replacement

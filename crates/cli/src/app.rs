@@ -217,21 +217,36 @@ fn execute_repo(command: RepoCommand) -> Result<(), String> {
 /// written to stdout as one line for the `bind -x` widget to insert; a cancel
 /// exits through an empty error so `main` can fail quietly with status 2.
 fn execute_tui(command: TuiCommand) -> Result<(), String> {
-    let TuiCommand::Search { seed } = command;
-    if !std::io::stdin().is_terminal() {
-        return Err("mbx tui needs a terminal on stdin".to_owned());
-    }
-    let store = QueuedHistoryStore::open_default(crate::history::DEFAULT_QUEUE_CAPACITY)
-        .map_err(|error| error.to_string())?;
-    let cwd = std::env::current_dir()
-        .map(|path| path.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    match crate::tui::run(seed.as_deref(), &store, &cwd)? {
-        Some(command_text) => {
-            println!("{command_text}");
-            Ok(())
+    match command {
+        TuiCommand::Search { seed } => {
+            if !std::io::stdin().is_terminal() {
+                return Err("mbx tui search needs a terminal on stdin".to_owned());
+            }
+            let store = QueuedHistoryStore::open_default(crate::history::DEFAULT_QUEUE_CAPACITY)
+                .map_err(|error| error.to_string())?;
+            let cwd = std::env::current_dir()
+                .map(|path| path.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            match crate::tui::run_history(seed.as_deref(), &store, &cwd)? {
+                Some(command_text) => {
+                    println!("{command_text}");
+                    Ok(())
+                }
+                None => Err(String::new()),
+            }
         }
-        None => Err(String::new()),
+        // Candidates arrive on stdin; interaction happens on /dev/tty, so a
+        // piped stdin is expected here (that is the bind -x contract).
+        TuiCommand::Complete => {
+            let candidates = crate::tui::read_candidates(std::io::stdin().lock())?;
+            match crate::tui::run_over_lines(None, &candidates)? {
+                Some(token) => {
+                    println!("{token}");
+                    Ok(())
+                }
+                None => Err(String::new()),
+            }
+        }
     }
 }
 

@@ -104,6 +104,9 @@ mbx_help() {
     state=$([[ ${MBX_HIGHLIGHT:-} == 1 ]] && echo on || echo off)
     printf 'syntax highlighting: %s   (export MBX_HIGHLIGHT=1; not with ghost)\n' "$state"
     printf '  (no keys)                color copy on a row below your line; Enter runs plain text\n\n'
+    state=$([[ ${MBX_COMP_TUI:-} == 1 ]] && echo on || echo off)
+    printf 'completion TUI: %s   (export MBX_COMP_TUI=1; Ctrl-X t opens the full-screen pick-list after Tab)\n' "$state"
+    printf '  Ctrl-X t                 opens the full-screen pick-list when enabled\n\n'
     state=$([[ ${MBX_COMP_OVERLAY:-} == 1 ]] && echo on || echo off)
     printf 'completion overlay: %s   (export MBX_COMP_OVERLAY=1; shows after Tab on wrapped completers)\n' "$state"
     printf '  Ctrl-X Ctrl-O            show / hide the candidate list\n'

@@ -95,7 +95,11 @@ pub enum CliCommand {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TuiCommand {
-    Search { seed: Option<String> },
+    Search {
+        seed: Option<String>,
+    },
+    /// Candidates arrive on stdin, one per line (ADR 0016 follow-up).
+    Complete,
 }
 
 /// Parses process arguments and resolves prompt-only defaults through an
@@ -137,7 +141,8 @@ pub fn help_text(version: &str) -> String {
          mbx history search failed [--limit N]\n  \
          mbx highlight TEXT [--point N] [--no-color] [--color 0|1]\n  \
          mbx repo root [--cwd PATH]\n  \
-         mbx tui search [--seed TEXT]\n\n\
+         mbx tui search [--seed TEXT]\n  \
+         mbx tui complete (candidates on stdin)\n\n\
          PROMPT OPTIONS:\n  --cwd PATH  --status N  --duration-ms N  --flags BITS\n  \
          --no-color  --ascii  --nerd-font  --ssh  --production  --disable-git"
     )
@@ -252,9 +257,10 @@ fn parse_highlight(args: &[String]) -> Result<HighlightCommand, String> {
 fn parse_tui(args: &[String]) -> Result<TuiCommand, String> {
     match args.first().map(String::as_str) {
         Some("search") => {}
+        Some("complete") => return Ok(TuiCommand::Complete),
         other => {
             return Err(format!(
-                "tui requires 'search'{}",
+                "tui requires 'search' or 'complete'{}",
                 other
                     .map(|command| format!(", got: {command}"))
                     .unwrap_or_default()

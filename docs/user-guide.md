@@ -243,7 +243,22 @@ The menu shows at most 8 choices, tidied so odd characters can't scramble
 your terminal. If a completer isn't wrapped, the menu simply has nothing to
 show and stays out of the way.
 
-### 6. Color while you type (off by default)
+### 6. A full-screen completion browser (off by default)
+
+For long candidate lists, the pick-list also has a full-screen mode:
+
+```bash
+export MBX_COMP_TUI=1
+```
+
+After Tab on a wrapped completer (see the pick-list, feature 5), press
+`Ctrl-X` then `t`: the screen becomes a searchable list of the candidates.
+Type to narrow, ↑/↓ to move, Enter to choose — the chosen word replaces the
+word you were typing, and nothing runs until your own Enter. Esc or Ctrl-C
+puts everything back exactly as it was. Needs `MBX_COMP_TUI=1` and a
+wrapped completer; the screen is always restored afterwards.
+
+### 7. Color while you type (off by default)
 
 ```bash
 export MBX_HIGHLIGHT=1
@@ -261,13 +276,13 @@ doesn't). Very long lines (over about 4,000 characters) and lines containing
 raw control characters are left uncolored. While the completion menu is
 open, coloring steps aside so the two don't fight over the screen.
 
-### 7. Paste a snippet at a keypress (mostly for testing)
+### 8. Paste a snippet at a keypress (mostly for testing)
 
 `Ctrl-X` then `Ctrl-Y` inserts a short piece of text (`MBX_EDITOR_INSERT_TOKEN`
 sets what). It's aimed at developers exercising the shell, but it's there if
 you want a text shortcut.
 
-### 8. How long did that take? (off by default)
+### 9. How long did that take? (off by default)
 
 ```bash
 export MBX_ENABLE_DURATION_TIMING=1

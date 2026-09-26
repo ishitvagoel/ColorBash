@@ -51,7 +51,7 @@ declare -A V=()
 
 reset_defaults() {
     V=(
-        [history]=0 [ghost]=0 [highlight]=0 [overlay]=0 [tui]=0 [wrap]=
+        [history]=0 [ghost]=0 [highlight]=0 [overlay]=0 [tui]=0 [comp_tui]=0 [wrap]=
         [color]=auto [icons]=auto [disable_git]=0 [production]=0 [duration]=0
         [search_cwd]=1 [search_failed]=0 [exclude]= [ipc]=auto [renderer]=0
         [render_timeout]= [search_timeout]= [highlight_timeout]=
@@ -197,7 +197,7 @@ set_bool() {
     esac
 }
 
-KNOWN='preset history ghost highlight overlay tui wrap color icons disable_git production duration search_cwd search_failed exclude ipc renderer render_timeout search_timeout highlight_timeout ghost_limit search_limit log editor_token bashrc ghost_override search_override search_restore_override editor_override comp_accept_override comp_cycle_override overlay_override highlight_override ghost_delete_keyseq ghost_accept_keyseq ghost_next_keyseq ghost_prev_keyseq search_keyseq search_restore_keyseq editor_keyseq comp_accept_keyseq comp_cycle_next_keyseq comp_cycle_prev_keyseq overlay_keyseq overlay_dismiss_keyseq highlight_accept_keyseq'
+KNOWN='preset history ghost highlight overlay tui comp_tui wrap color icons disable_git production duration search_cwd search_failed exclude ipc renderer render_timeout search_timeout highlight_timeout ghost_limit search_limit log editor_token bashrc ghost_override search_override search_restore_override editor_override comp_accept_override comp_cycle_override overlay_override highlight_override ghost_delete_keyseq ghost_accept_keyseq ghost_next_keyseq ghost_prev_keyseq search_keyseq search_restore_keyseq editor_keyseq comp_accept_keyseq comp_cycle_next_keyseq comp_cycle_prev_keyseq overlay_keyseq overlay_dismiss_keyseq highlight_accept_keyseq'
 
 is_known() {
     [[ " $KNOWN " == *" $1 "* ]]
@@ -208,6 +208,7 @@ canonicalize_key() {
         MBX_HISTORY) REPLY=history ;;
         MBX_GHOST) REPLY=ghost ;;
         MBX_TUI) REPLY=tui ;;
+        MBX_COMP_TUI) REPLY=comp_tui ;;
         MBX_HIGHLIGHT) REPLY=highlight ;;
         MBX_COMP_OVERLAY) REPLY=overlay ;;
         MBX_COMP_WRAP) REPLY=wrap ;;
@@ -460,6 +461,9 @@ write_config() {
         if [[ ${V[tui]} == 1 ]]; then
             emit_assign MBX_TUI 1
         fi
+        if [[ ${V[comp_tui]} == 1 ]]; then
+            emit_assign MBX_COMP_TUI 1
+        fi
         if [[ ${V[overlay]} == 1 ]]; then
             emit_assign MBX_COMP_OVERLAY 1
         fi
@@ -526,6 +530,7 @@ MBX options    config: $(config_path)
     4) Completion overlay        $(on_off "${V[overlay]}")
     5) Wrap -F completers        $(show "${V[wrap]}")
    16) History search TUI       $(on_off "${V[tui]}")   (needs history; Ctrl-X h opens the picker)
+   17) Completion TUI           $(on_off "${V[comp_tui]}")   (needs a wrapped completer; Ctrl-X t)
 
   Prompt
     6) Color                     ${V[color]}
@@ -643,6 +648,7 @@ handle_choice() {
             ;;
         4) toggle overlay ;;
         5) ask_set wrap 'Wrap which -F commands (colon or comma separated)' ;;
+        17) toggle comp_tui ;;
         16)
             toggle tui
             if [[ ${V[tui]} == 1 ]]; then

@@ -87,6 +87,7 @@ These rules hold whether a feature is on or off:
 | Stock Tab | always | Tab | No (stock Bash insert) |
 | Ranked accept / cycle | wrap a `-F` completer, then Tab | `Ctrl-X Ctrl-A`; `Ctrl-X` `n`/`p` | No until Enter |
 | Completion overlay | `MBX_COMP_OVERLAY=1` after wrapped Tab | `Ctrl-X Ctrl-O` toggle; `Ctrl-X` `j` dismiss | No until Enter |
+| Completion TUI | `MBX_COMP_TUI=1` after wrapped Tab | `Ctrl-X` `t` full-screen pick-list | No until Enter |
 | Syntax highlighting | `MBX_HIGHLIGHT=1` | self-insert wrap | Enter runs **plain** bytes; color paints a preview row below the prompt (ADR 0015) |
 
 Incompatible: **`MBX_GHOST=1` and `MBX_HIGHLIGHT=1` together.** Highlight

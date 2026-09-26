@@ -378,6 +378,7 @@ _mbx_comp_flag_nospace_adapter() {
 _MBX_COMP_ACCEPT_DEFAULT_KEYSEQ='\C-x\C-a'
 _MBX_COMP_CYCLE_NEXT_DEFAULT_KEYSEQ='\C-xn'
 _MBX_COMP_CYCLE_PREV_DEFAULT_KEYSEQ='\C-xp'
+_MBX_COMP_TUI_DEFAULT_KEYSEQ='\C-xt'
 _MBX_COMP_OVERLAY_DEFAULT_KEYSEQ='\C-x\C-o'
 _MBX_COMP_OVERLAY_DISMISS_DEFAULT_KEYSEQ='\C-xj'
 _MBX_COMP_OVERLAY_VISIBLE=0
@@ -630,6 +631,78 @@ _mbx_comp_overlay_dismiss() {
     _mbx_comp_overlay_clear
 }
 
+# TUI-006 (ADR 0016 follow-up, C1): a modal picker over the ranked snapshot.
+# Opt-in via MBX_COMP_TUI=1; the overlay stays as the lightweight path and
+# both share the same snapshot. The helper drives /dev/tty itself; candidates
+# arrive on its stdin, one per line, and stdout carries exactly the chosen
+# candidate. Exit contract mirrors _mbx_search_tui: 2 = cancel, 0 = choose.
+_mbx_comp_tui() {
+    [[ ${MBX_COMP_TUI:-} == 1 ]] || return 0
+    [[ ${_MBX_COMP_SNAPPED:-0} == 1 ]] || return 0
+    ((${#_MBX_COMP_RANKED_LIST[@]} > 0)) || return 0
+    [[ -n ${MBX_BIN:-} && -x ${MBX_BIN:-} && -t 0 && -w /dev/tty ]] || return 0
+    local deadline output_fd child_pid selection child_status
+    _mbx_comp_readline_word
+    local word=$REPLY
+    _mbx_deadline_after "${MBX_COMP_TUI_TIMEOUT:-600}" || return 0
+    deadline=$REPLY
+    # bind -x under `set -m`/`set -b` can print job noise into the line
+    # buffer; the shared suspend/restore covers all chord features (M-049,
+    # M-063).
+    _mbx_jobs_suspend
+    exec {output_fd}< <(printf '%s\n' "${_MBX_COMP_RANKED_LIST[@]}" | \
+        exec "$MBX_BIN" tui complete --seed "$word" 2>/dev/null)
+    child_pid=$!
+    selection=
+    if _mbx_search_read_line "$output_fd" "$deadline" && [[ -n $REPLY ]]; then
+        selection=$REPLY
+    fi
+    exec {output_fd}<&-
+    if ! _mbx_wait_or_kill_child "$child_pid" "$deadline"; then
+        child_status=1
+    else
+        child_status=$REPLY
+    fi
+    _mbx_search_restore_jobs
+    ((child_status == 2 || child_status != 0)) && return 0
+    [[ -n $selection ]] || return 0
+    _mbx_text_has_c0_or_del "$selection" && return 0
+    # The user picked this row explicitly, so the pick replaces the word at
+    # the cursor whatever it is (fzf semantics) — unlike ranked-accept, whose
+    # M-039 prefix guard protects an insert the user never aimed for.
+    # Refreshing the word snapshot here also makes a stale-snapshot splice
+    # impossible by construction: only the current word is ever replaced.
+    _mbx_comp_snapshot_word
+    _mbx_comp_readline_word
+    [[ -n $REPLY ]] || return 0
+    _mbx_comp_apply_word_token "$selection"
+    return 0
+}
+
+_mbx_comp_install_tui() {
+    [[ ${_MBX_COMP_TUI_INSTALLED:-0} != 1 ]] || return 0
+    if [[ $- != *i* ]]; then
+        _MBX_COMP_TUI_INSTALLED=1
+        return 0
+    fi
+    [[ ${MBX_COMP_TUI:-} == 1 ]] || {
+        _MBX_COMP_TUI_INSTALLED=1
+        return 0
+    }
+    local keyseq=${MBX_COMP_TUI_KEYSEQ:-$_MBX_COMP_TUI_DEFAULT_KEYSEQ}
+    local override=${MBX_COMP_TUI_OVERRIDE:-0}
+    _MBX_COMP_TUI_BOUND=0
+    _MBX_COMP_TUI_VI_INSERT_BOUND=0
+    _MBX_COMP_TUI_KEYSEQ_ACTIVE=$keyseq
+    if _mbx_comp_install_bind_keymap emacs "$keyseq" _mbx_comp_tui "$override"; then
+        _MBX_COMP_TUI_BOUND=1
+    fi
+    if _mbx_comp_install_bind_keymap vi-insert "$keyseq" _mbx_comp_tui "$override"; then
+        _MBX_COMP_TUI_VI_INSERT_BOUND=1
+    fi
+    _MBX_COMP_TUI_INSTALLED=1
+}
+
 _mbx_comp_install_overlay() {
     [[ ${_MBX_COMP_OVERLAY_INSTALLED:-0} != 1 ]] || return 0
     if [[ $- != *i* ]]; then
@@ -847,6 +920,7 @@ _mbx_completion_install() {
     _mbx_comp_install_accept
     _mbx_comp_install_cycle
     _mbx_comp_install_overlay
+    _mbx_comp_install_tui
     if [[ ${MBX_COMP_FIXTURES:-0} == 1 ]]; then
         _mbx_comp_install_probe
         _mbx_comp_install_flag

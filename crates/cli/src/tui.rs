@@ -196,20 +196,20 @@ pub fn query_rows(search: &dyn HistorySearch, cwd: &str, query: &str) -> Vec<Str
     Vec::new()
 }
 
-fn draw(term: &Terminal, picker: &Picker) -> Result<(), String> {
+fn draw(term: &Terminal, picker: &Picker, title: &str) -> Result<(), String> {
     let (rows_total, columns) = term.size().unwrap_or((24, 80));
     let columns = usize::from(columns).max(8);
     let view = usize::from(rows_total).saturating_sub(3).max(1);
     let (start, end) = window(picker.rows.len(), picker.selected, view);
 
     let mut frame = String::from("\x1b[H");
-    let title = format!(
-        " MBX history - {} match{} - query: {}",
+    let heading = format!(
+        " {title} - {} match{} - query: {}",
         picker.rows.len(),
         if picker.rows.len() == 1 { "" } else { "es" },
         picker.query
     );
-    frame.push_str(truncate_width(&title, columns - 1));
+    frame.push_str(truncate_width(&heading, columns - 1));
     frame.push_str("\x1b[K\r\n");
     let query_line = format!("> {}_", picker.query);
     frame.push_str(truncate_width(&query_line, columns - 1));
@@ -233,10 +233,75 @@ fn draw(term: &Terminal, picker: &Picker) -> Result<(), String> {
 /// Runs the picker to completion. `Ok(Some(command))` is the user's
 /// selection; `Ok(None)` is a cancel. The terminal is restored on every path
 /// (including panics, via the guard's `Drop`) before the result is returned.
-pub fn run(
+pub fn run_history(
     seed: Option<&str>,
     search: &dyn HistorySearch,
     cwd: &str,
+) -> Result<Option<String>, String> {
+    run(seed, &|query| query_rows(search, cwd, query), "MBX history")
+}
+
+/// Filters a fixed candidate list (the completion picker's source): an empty
+/// query keeps everything, otherwise a case-insensitive substring match.
+pub fn filter_lines(lines: &[String], query: &str) -> Vec<String> {
+    if query.is_empty() {
+        return lines.to_vec();
+    }
+    let needle = query.to_lowercase();
+    lines
+        .iter()
+        .filter(|line| line.to_lowercase().contains(&needle))
+        .cloned()
+        .collect()
+}
+
+/// Acceptance bounds for `tui complete` candidate intake: completion
+/// snapshots are small, so a bounded reader is both a resource bound and a
+/// protocol bound (BST-006 discipline).
+pub const MAX_COMPLETE_CANDIDATES: usize = 512;
+pub const MAX_COMPLETE_LINE_BYTES: usize = 4096;
+
+/// Reads newline-separated candidates from `reader`, bounded. Over-long
+/// lines and rows past the cap are dropped, not truncated (no silent
+/// mutation of candidate bytes).
+pub fn read_candidates(mut reader: impl std::io::BufRead) -> Result<Vec<String>, String> {
+    let mut lines = Vec::new();
+    let mut buf = String::new();
+    while lines.len() < MAX_COMPLETE_CANDIDATES {
+        buf.clear();
+        let read = reader
+            .read_line(&mut buf)
+            .map_err(|error| error.to_string())?;
+        if read == 0 {
+            break;
+        }
+        let line = buf.trim_end_matches(['\n', '\r']);
+        if line.is_empty() || line.len() > MAX_COMPLETE_LINE_BYTES || line.contains('\0') {
+            continue;
+        }
+        lines.push(line.to_owned());
+    }
+    Ok(lines)
+}
+
+/// The completion picker: same loop over a fixed candidate list read from
+/// stdin by the caller (ADR 0016 follow-up; C1 in `docs/next-steps-todo.md`).
+pub fn run_over_lines(seed: Option<&str>, lines: &[String]) -> Result<Option<String>, String> {
+    let owned = lines.to_vec();
+    run(
+        seed,
+        &|query| filter_lines(&owned, query),
+        "MBX completions",
+    )
+}
+
+/// Runs the picker to completion against `refill`, which produces the row
+/// list for the current query. The terminal is restored on every path
+/// (including panics, via the guard's `Drop`) before the result is returned.
+pub fn run(
+    seed: Option<&str>,
+    refill: &dyn Fn(&str) -> Vec<String>,
+    title: &str,
 ) -> Result<Option<String>, String> {
     let term = Terminal::open()?;
     let mut saved: SavedMode = term.enable_raw()?;
@@ -245,7 +310,7 @@ pub fn run(
 
     let mut picker = Picker::new();
     picker.query = seed.unwrap_or_default().to_string();
-    picker.set_rows(query_rows(search, cwd, &picker.query));
+    picker.set_rows(refill(&picker.query));
 
     let mut pending: Vec<u8> = Vec::new();
     let mut chunk = [0_u8; 1024];
@@ -253,7 +318,7 @@ pub fn run(
     let mut dirty = true;
     'picker: loop {
         if dirty {
-            draw(&term, &picker)?;
+            draw(&term, &picker, title)?;
             dirty = false;
         }
         match term.wait_event(200)? {
@@ -289,12 +354,12 @@ pub fn run(
                 None => {}
                 Some(Key::Char(ch)) => {
                     picker.query.push(ch);
-                    picker.set_rows(query_rows(search, cwd, &picker.query));
+                    picker.set_rows(refill(&picker.query));
                     dirty = true;
                 }
                 Some(Key::Backspace) => {
                     picker.query.pop();
-                    picker.set_rows(query_rows(search, cwd, &picker.query));
+                    picker.set_rows(refill(&picker.query));
                     dirty = true;
                 }
                 Some(Key::Up) => {
@@ -555,6 +620,34 @@ mod tests {
                 "fuzzy:zz"
             ]
         );
+    }
+
+    #[test]
+    fn filter_lines_matches_case_insensitively_and_empty_keeps_all() {
+        let lines = vec!["echo alpha-one".to_owned(), "Git status".to_owned()];
+        assert_eq!(filter_lines(&lines, ""), lines);
+        assert_eq!(filter_lines(&lines, "alpha"), ["echo alpha-one"]);
+        assert_eq!(filter_lines(&lines, "GIT"), ["Git status"]);
+        assert!(filter_lines(&lines, "zzz").is_empty());
+    }
+
+    #[test]
+    fn read_candidates_is_bounded_and_drops_hostile_rows() {
+        let input = b"a\nb\n\n".as_slice();
+        assert_eq!(read_candidates(input).unwrap(), ["a", "b"]);
+        // Over the candidate cap: extras are dropped, not truncated.
+        let many: Vec<u8> = (0..600)
+            .map(|i| format!("row{i}\n"))
+            .collect::<Vec<_>>()
+            .concat()
+            .into_bytes();
+        let read = read_candidates(&many[..]).unwrap();
+        assert_eq!(read.len(), MAX_COMPLETE_CANDIDATES);
+        assert_eq!(read[511], "row511");
+        // An over-long line is dropped whole, not split mid-sequence.
+        let long_line = "x".repeat(MAX_COMPLETE_LINE_BYTES + 1);
+        let mixed = format!("{long_line}\nok\n");
+        assert_eq!(read_candidates(mixed.as_bytes()).unwrap(), ["ok"]);
     }
 
     #[test]

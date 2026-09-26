@@ -940,6 +940,25 @@ _mbx_completion_install
 _mbx_completion_install
 assert_eq 1 "${_MBX_COMPLETION_INSTALLED:-missing}" \
     'completion install should be idempotent and leave the installed flag set'
+
+# TUI-007: the completion picker chord is opt-in (MBX_COMP_TUI=1); unset
+# must install nothing, and the handler must be a no-op without a snapshot.
+_mbx_comp_install_tui
+assert_eq 1 "${_MBX_COMP_TUI_INSTALLED:-missing}" \
+    'tui install should run and leave the installed flag set'
+[[ ${_MBX_COMP_TUI_BOUND:-0} == 0 ]] || \
+    fail 'tui chord must not bind in a non-interactive shell'
+READLINE_LINE='echo aa'
+READLINE_POINT=7
+_mbx_comp_tui
+assert_eq 'echo aa' "$READLINE_LINE" \
+    'the picker handler must be a no-op when MBX_COMP_TUI is unset'
+MBX_COMP_TUI=1
+unset _MBX_COMP_SNAPPED
+_mbx_comp_tui
+assert_eq 'echo aa' "$READLINE_LINE" \
+    'the picker handler must be a no-op without a completion snapshot'
+unset MBX_COMP_TUI READLINE_LINE READLINE_POINT
 declare -F mbx_comp_flag >/dev/null 2>&1 && \
     fail 'default completion install must not define mbx_comp_flag'
 complete -p mbx_comp_flag >/dev/null 2>&1 && \

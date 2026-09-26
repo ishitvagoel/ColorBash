@@ -55,10 +55,9 @@ owner's decision — everything up to it can be prepared and verified.
   cases assert the full comfort variable set (add `MBX_TUI` if the test
   enumerates variables). Evidence: updated smoke assert.
 
-## C. TUI completion picker — decision proposal (do not implement yet)
+## C. TUI completion picker — COMPLETE (2026-09-26, per C1)
 
-The roadmap names this as the natural `ADR 0016` follow-up but explicitly
-unscheduled, pending a decision. Proposal to put in front of the owner:
+The owner directed completion of all todos, adopting the C1 recommendation.
 
 - **C1 (recommended): complement, don't replace.** New opt-in
   `MBX_COMP_TUI=1`; after Tab on a wrapped completer, a new chord
@@ -73,8 +72,28 @@ unscheduled, pending a decision. Proposal to put in front of the owner:
   and the overlay's at-a-glance listing is cheaper than a modal for 2-3
   candidates.
 
-Decision needed from the owner; then `TUI-005..007` (Rust `mbx tui
-complete`, Bash seam, PTY evidence) as one slice.
+- [x] **`TUI-005` — `mbx tui complete` Rust core.** Candidates on stdin
+  (bounded 512 rows / 4096 bytes per row, empties and over-long rows dropped
+  whole), same modal loop, case-insensitive substring filter, title
+  `MBX completions`. Evidence: 10 unit tests in `crates/cli/src/tui.rs`.
+- [x] **`TUI-006` — Bash chord wiring.** `_mbx_comp_tui` +
+  `_mbx_comp_install_tui` in `bash/completion.bash`: opt-in `MBX_COMP_TUI=1`,
+  default `\C-xt` with occupied-skip and `MBX_COMP_TUI_OVERRIDE`; candidates
+  piped from `_MBX_COMP_RANKED_LIST`; exit 2 = cancel leaves the line; C0/DEL
+  gate; the pick replaces the word at the cursor with the snapshot refreshed
+  at accept time. `configure.bash` menu option 17; `mbx_help`/`mbx_status`
+  rows.
+- [x] **`TUI-007` — evidence.** Module contracts (unset installs nothing,
+  bound flag, handler no-op without a snapshot) and PTY
+  `tui_chord_opens_picker_and_accept_replaces_the_word` in
+  `crates/pty/tests/completion_harness.rs`: `Ctrl-X t` after wrapped Tab
+  opens the picker on the alternate screen, type-to-filter to `1 match`,
+  Enter replaces the word (`mbx_comp_rank zzflag`), execution only on the
+  user's own Enter (`GOT:zzflag|`). One real defect found and fixed during
+  this slice: the `set -u`-unsafe `_MBX_COMP_SNAPPED` reference, and a
+  product decision recorded here — picker accept replaces the current word
+  regardless of prefix (explicit user choice), unlike ranked-accept whose
+  M-039 guard stays.
 
 ## D. Blocked / decision / hardware-gated (tracked, not actionable now)
 
@@ -91,8 +110,8 @@ complete`, Bash seam, PTY evidence) as one slice.
 - [>] **D5 — `GIT-005` provider SDK.** Post-MVP policy.
 - [>] **D6 — M-075 PTY flake.** Mitigated, root cause unreproduced;
   monitor. If it recurs, the rebuilt failure report names the cause.
-- [ ] **D7 — Housekeeping: delete the merged `fix/chord-history-leak`
-  remote branch.** Trivial; ask the owner (it is harmless to keep).
+- [x] **D7 — Housekeeping: delete the merged `fix/chord-history-leak`
+  remote branch.** Deleted 2026-09-26 (`git push origin --delete`).
 
 ## Execution order
 

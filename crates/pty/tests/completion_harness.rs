@@ -915,3 +915,44 @@ fn overlay_dismiss_chord_hides_list() {
         .expect("overlay dismiss");
     wait_all(&mut session, &["> "]);
 }
+
+// TUI-007 (ADR 0016 follow-up, C1): with MBX_COMP_TUI=1, `Ctrl-X t` after a
+// wrapped Tab opens the modal picker over the ranked snapshot; Enter
+// replaces the current word with the highlighted candidate and nothing runs
+// until the user's own Enter.
+#[test]
+fn tui_chord_opens_picker_and_accept_replaces_the_word() {
+    let home = TempHome::new("comp-tui0");
+    let mut session = spawn_mbx_shell(
+        home.path(),
+        &[("MBX_COMP_FIXTURES", "1"), ("MBX_COMP_TUI", "1")],
+        "",
+    );
+    wait_prompt(&mut session);
+    session
+        .write_str(
+            "[[ ${_MBX_COMP_TUI_BOUND:-missing} == 1 ]] && bind -X | grep -Fq '_mbx_comp_tui' && printf 'MBX_COMP:tui-bound\\n'\n",
+            deadline(2),
+        )
+        .expect("status");
+    wait_all(&mut session, &["MBX_COMP:tui-bound\n", "> "]);
+
+    session
+        .write_str("mbx_comp_rank aa", deadline(2))
+        .expect("type rank prefix");
+    send_tab(&mut session);
+    // The picker opens over the ranked snapshot on the alternate screen.
+    session
+        .write_all(&[CTRL_X, b't'], deadline(2))
+        .expect("chord");
+    wait_all(&mut session, &["MBX completions", "aaflag"]);
+    // Type-to-filter: "zz" narrows to the zzflag candidate alone.
+    session.write_str("zz", deadline(2)).expect("filter");
+    wait_all(&mut session, &["1 match", "zzflag"]);
+    // Enter accepts: the terminal is restored and the word is replaced.
+    session.write_str("\r", deadline(2)).expect("accept");
+    wait_all(&mut session, &["> mbx_comp_rank zzflag"]);
+    session.write_str("\n", deadline(2)).expect("submit");
+    wait_all(&mut session, &["\nGOT:zzflag|", "> "]);
+    session.write_str("exit\n", deadline(2)).expect("exit");
+}
