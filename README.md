@@ -40,11 +40,17 @@ Comfort is the highest-QoL preset. History is local SQLite and does not rewrite
 `--profile prompt` for the prompt only. Non-interactive: `bash
 scripts/configure.bash --answers FILE`.
 
-Requirements: Bash 5.x, Rust **1.85** or newer, a real terminal (not a pipe).
-Git is optional (prompt segment and `MBX_COMP_WRAP=git`). If several
-toolchains are installed: `export RUSTUP_TOOLCHAIN=1.85.0`. There is no
-prebuilt binary yet — building from source is currently the only install
-path (see [What remains](#what-remains)).
+Requirements: Bash 5.x, a real terminal (not a pipe), and **either** the
+Rust toolchain (**1.85** or newer, to build) **or** Linux x86_64/aarch64
+(to download the prebuilt release binary). Git is optional (prompt segment
+and `MBX_COMP_WRAP=git`). If several toolchains are installed:
+`export RUSTUP_TOOLCHAIN=1.85.0`.
+
+Prebuilt binary: `bash scripts/install.bash --download` fetches the release
+tarball matching this checkout's version, verifies its checksum, and
+installs it where cargo would put it — falling back to `cargo build` on any
+failure (Linux x86_64/aarch64; releases live at
+https://github.com/ishitvagoel/ColorBash/releases).
 
 Disable without uninstalling by editing `~/.config/mbx/config.bash`, running
 `mbx_configure`, or `export MBX_HISTORY=0`. Remove the bashrc block with
@@ -109,7 +115,7 @@ These MVP leftovers are **not** available for interactive use:
 | --- | --- |
 | Ghost dim / live paint | Opt-in suffix ghost exists (ADR 0010); dim after-every-key styling does not |
 | Type-to-filter Ctrl+R overlay | Explicit `\C-xh` insert exists (ADR 0009); redraw-on-key overlay does not |
-| Prebuilt binaries | No tag has been cut yet; `.github/workflows/release.yml` exists but is untested end-to-end (`REL-001`, in progress) |
+| ~~Prebuilt binaries~~ **Available**: `install.bash --download` (v0.1.0+); `REL-001` complete |
 | macOS PTY matrix | `deferred` (ADR 0012); needs a macOS host. Linux nested/SSH/login/vim/tmux PTY is recorded |
 
 Strategy A MVP on Linux is `complete` (`G5` 2026-08-27). Opt-in highlighting

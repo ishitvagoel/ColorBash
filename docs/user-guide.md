@@ -37,8 +37,9 @@ Two things never change, no matter what you turn on:
 - Linux, with **Bash version 5.0 or newer** (check with `bash --version`).
 - A **real terminal window** (the features that watch your typing switch
   themselves off inside scripts or pipes — that's on purpose).
-- The Rust toolchain, **version 1.85 or newer**, but only to build it once.
-  There is no ready-made download yet.
+- The Rust toolchain, **version 1.85 or newer** — unless your machine is
+  Linux x86_64 or aarch64, in which case `install.bash --download` fetches
+  a ready-made binary instead.
 - Git is optional. It only matters if you want the Git parts of the prompt
   and completions.
 
@@ -353,7 +354,9 @@ commands, use the exclusion list for those patterns — same advice as for
   not supported. Bash 5.x only — not zsh, not fish.
 - **Ghost hints and coloring can't be on together.** Pick one (the comfort
   profile picks hints; the `highlight` profile picks coloring).
-- **No prebuilt downloads yet.** You build it from source once with Rust.
+- **Prebuilt downloads are new**: `install.bash --download` fetches a
+  verified release binary on Linux x86_64/aarch64; other machines build from
+  source once with Rust.
 - **Suggestions only know what your history knows.** No cloud, no
   autocomplete of programs' internals, nothing network-based.
 - **No type-to-filter Ctrl-R takeover of the standard key.** The picker

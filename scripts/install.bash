@@ -9,6 +9,7 @@ PROFILE=comfort
 PROFILE_SET=0
 WRITE_BASHRC=0
 NO_BUILD=0
+DOWNLOAD=0
 ACTION=install
 
 usage() {
@@ -17,6 +18,7 @@ Install MBX and enable a feature profile.
 
 Usage:
   bash scripts/install.bash [--profile comfort|highlight|prompt] [--bashrc] [--no-build]
+  bash scripts/install.bash --download [...]   # fetch the prebuilt v0.1.0 release binary instead of building
   bash scripts/install.bash --interactive [--profile NAME] [--bashrc] [--no-build]
   bash scripts/install.bash --status
   bash scripts/install.bash --uninstall-bashrc
@@ -32,6 +34,8 @@ Profiles:
 --bashrc     Append a managed block to ~/.bashrc (idempotent)
 --interactive  Open the option menu (scripts/configure.bash)
 --no-build   Skip cargo build (tests / already built)
+--download   Fetch the matching prebuilt release binary instead of building
+             (Linux x86_64/aarch64 only; falls back to cargo build on failure)
 
 Environment variables already set in your shell always win over the config file.
 History stays off until a profile that opts in, or you export MBX_HISTORY=1.
@@ -206,6 +210,63 @@ Reload a new shell, then run mbx_help for the full key list.
 EOF
 }
 
+
+# REL-001: with --download, fetch the prebuilt release binary matching this
+# checkout's version and machine instead of compiling. The tarball is
+# checksum-verified and only the `mbx` binary is extracted to the same path
+# cargo would produce, so everything downstream is unchanged. Any failure
+# falls back to the cargo build path.
+download_release_binary() {
+    local version target url tmp
+    version=$(sed -n 's/^version = "\(.*\)"/\1/p' "$ROOT/crates/cli/Cargo.toml" | head -1)
+    [[ -n $version ]] || return 1
+    case $(uname -s)-$(uname -m) in
+        Linux-x86_64) target=x86_64-unknown-linux-gnu ;;
+        Linux-aarch64) target=aarch64-unknown-linux-gnu ;;
+        *) return 1 ;;
+    esac
+    url="https://github.com/ishitvagoel/ColorBash/releases/download/v${version}/mbx-${version}-${target}.tar.gz"
+    tmp=$(mktemp -d)
+    printf 'Downloading %s\n' "$url"
+    curl -fsSL -o "$tmp/mbx-${version}-${target}.tar.gz" "$url" || {
+        printf 'Download failed; falling back to cargo build.\n' >&2
+        return 1
+    }
+    (cd "$tmp" && curl -fsSLO "$url.sha256" && sha256sum -c "mbx-${version}-${target}.tar.gz.sha256" >/dev/null) || {
+        printf 'Checksum mismatch; falling back to cargo build.\n' >&2
+        return 1
+    }
+    tar xzf "$tmp/mbx-${version}-${target}.tar.gz" -C "$tmp"
+    mkdir -p "$ROOT/target/release"
+    cp "$tmp/mbx-${version}-${target}/mbx" "$ROOT/target/release/mbx" || {
+        printf 'Extraction failed; falling back to cargo build.\n' >&2
+        return 1
+    }
+    rm -rf "$tmp"
+    printf 'Installed prebuilt helper: %s\n' "$ROOT/target/release/mbx"
+}
+
+install_build_or_download() {
+    if ((DOWNLOAD == 1)); then
+        if command -v curl >/dev/null 2>&1 && download_release_binary; then
+            return 0
+        fi
+        if ((NO_BUILD == 1)); then
+            printf 'mbx install: --download failed and --no-build forbids building.\n' >&2
+            exit 2
+        fi
+        printf 'Falling back to cargo build.\n' >&2
+    fi
+    command -v cargo >/dev/null 2>&1 || {
+        printf 'mbx install: Rust/Cargo is required (https://rustup.rs).\n' >&2
+        exit 2
+    }
+    (
+        cd "$ROOT"
+        cargo build --release --workspace
+    )
+}
+
 while (($#)); do
     case $1 in
         -h | --help)
@@ -219,6 +280,11 @@ while (($#)); do
             ;;
         --bashrc)
             WRITE_BASHRC=1
+            shift
+            ;;
+        --download)
+            DOWNLOAD=1
+            NO_BUILD=1
             shift
             ;;
         --no-build)
@@ -274,14 +340,7 @@ case $ACTION in
         ;;
     configure)
         if ((NO_BUILD == 0)); then
-            command -v cargo >/dev/null 2>&1 || {
-                printf 'mbx install: Rust/Cargo is required (https://rustup.rs).\n' >&2
-                exit 2
-            }
-            (
-                cd "$ROOT"
-                cargo build --release --workspace
-            )
+            install_build_or_download
         fi
         extra=(--no-build)
         ((WRITE_BASHRC == 1)) && extra+=(--bashrc)
@@ -290,15 +349,11 @@ case $ACTION in
         ;;
 esac
 
-if ((NO_BUILD == 0)); then
-    command -v cargo >/dev/null 2>&1 || {
-        printf 'mbx install: Rust/Cargo is required (https://rustup.rs).\n' >&2
-        exit 2
-    }
-    (
-        cd "$ROOT"
-        cargo build --release --workspace
-    )
+# `--download` sets NO_BUILD to suppress the default cargo build, but the
+# download itself must still run; a failed download falls back to cargo
+# unless --no-build was also given, in which case install fails loudly.
+if ((NO_BUILD == 0 || DOWNLOAD == 1)); then
+    install_build_or_download
 fi
 
 write_profile "$(config_path)"

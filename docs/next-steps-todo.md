@@ -97,11 +97,21 @@ The owner directed completion of all todos, adopting the C1 recommendation.
 
 ## D. Blocked / decision / hardware-gated (tracked, not actionable now)
 
-- [>] **D1 — First `v*` tag.** Owner decision after A1–A3. Everything else
-  in REL-001 is then mechanical.
+- [x] **D1 — First `v*` tag.** Owner decision given 2026-09-26; executed per
+  the A3 runbook. Tag `v0.1.0` at `a24b38a`; tag-triggered run 36261206838
+  `success`; release published with 4 assets; downloaded tarball
+  checksum-verified and `mbx --version` = 0.1.0. `REL-001` moved to
+  `complete` and `scripts/install.bash --download` shipped (verified
+  end-to-end: download → checksum → install → `mbx --version`; `--no-build`
+  still skips everything; failed download + `--no-build` fails loudly). One
+  regression introduced and caught by the canonical suite during this work:
+  the first refactor dropped the `NO_BUILD` guard around the non-interactive
+  build call, breaking `install --no-build`; fixed and smoke re-run green.
 - [>] **D2 — Deferred percentiles** (`HRD-003`/`PRM-004`/write-ack):
-  measurement work for the Contabo box; owner said to stay on the PC for
-  now.
+  measurement work for the Contabo box; owner has not yet scheduled it
+  (earlier instruction: stay on the PC). The commands are documented in the
+  2026-09-03 session and `scripts/benchmark-*.bash` is ready — say the word
+  and it runs.
 - [>] **D3 — macOS `HRD-001` matrix and Darwin TUI port.** Needs a Mac
   (ADR 0012); the TUI terminal layer is Linux-gated with a clean non-Linux
   error by design.
