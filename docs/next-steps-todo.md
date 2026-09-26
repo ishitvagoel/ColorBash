@@ -2,8 +2,18 @@
 
 Working TODO built from everything that remains after `TUI-001..004`,
 `ONBD-001..003`, and the chord-surface regression tests (`415c31a`).
-Canonical status stays in `docs/roadmap.md`; this document drives execution
-and records evidence as items complete. Status legend: `[ ]` open,
+Canonical status stays in `docs/roadmap.md`; this document drove execution
+and records evidence as items complete.
+
+**Final status (2026-09-26):** every session-actionable item is complete
+(A1–A4, B1–B3, C via `TUI-005..007`, D1, D7) with evidence below and the
+canonical suite green. On the owner's confirmation, D2–D6 remain out of
+scope for this effort: D2 waits for the Contabo box to be scheduled (the
+commands are documented here and in the 2026-09-03 session), D3 needs a
+macOS host, D4 needs a Readline redisplay technique the prior evidence says
+does not exist, D5 stays post-MVP policy, and D6 is monitoring-only. They
+stay tracked in `docs/roadmap.md` (deferred/G5-revisit) and reopen the
+moment their gate clears. Status legend: `[ ]` open,
 `[x]` done (with evidence), `[~]` in progress, `[>]` blocked/decision-gated.
 
 ---
@@ -95,7 +105,10 @@ The owner directed completion of all todos, adopting the C1 recommendation.
   regardless of prefix (explicit user choice), unlike ranked-accept whose
   M-039 guard stays.
 
-## D. Blocked / decision / hardware-gated (tracked, not actionable now)
+## D. Blocked / decision / hardware-gated — confirmed out of scope (owner, 2026-09-26)
+
+The items below are tracked in `docs/roadmap.md` and reopen when their gate
+clears; they are intentionally not part of this effort's completable scope.
 
 - [x] **D1 — First `v*` tag.** Owner decision given 2026-09-26; executed per
   the A3 runbook. Tag `v0.1.0` at `a24b38a`; tag-triggered run 36261206838
