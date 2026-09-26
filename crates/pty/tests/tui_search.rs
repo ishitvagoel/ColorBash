@@ -5,7 +5,7 @@
 
 mod common;
 
-use common::{TempHome, deadline, mbx_bin, path_env, wait_all, workspace_root};
+use common::{TempHome, deadline, mbx_bin, path_env, sidecar_commands, wait_all, workspace_root};
 use mbx_pty::{PtySession, SpawnOptions, WinSize};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -344,5 +344,62 @@ fn real_tui_filters_selects_and_restores_the_terminal() {
         selected,
         "exit status 0 means Enter accepted the highlighted row; a \
          nonzero status is the cancel path"
+    );
+}
+
+// Regression (2026-09-03, same property as the ghost test): chord presses
+// through the picker seam — open, cancel, and accept — never record widget
+// names into the sidecar, and only genuinely executed commands land there.
+#[test]
+fn tui_chord_presses_leave_no_widget_names_in_the_sidecar() {
+    let home = TempHome::new("tui-leak");
+    let mode = home.path().join("mode");
+    fs::write(&mode, "cancel").expect("mode file");
+    let shim = write_tui_shim(home.path(), &mbx_bin(), &mode);
+    let mut session = spawn_tui_shell(&home, &shim);
+    wait_all(&mut session, &["> "]);
+
+    session
+        .write_str("echo kept\n", deadline(2))
+        .expect("record row");
+    wait_all(&mut session, &["\nkept", "> "]);
+
+    // Cancel path: the chord opens the picker, the helper cancels, and the
+    // typed line survives; Enter then executes it and it alone is recorded.
+    session
+        .write_str("echo draft-x", deadline(2))
+        .expect("type");
+    session.write_all(CTRL_X_H, deadline(2)).expect("chord");
+    wait_all(&mut session, &["echo draft-x", "> "]);
+    session.write_str("\n", deadline(2)).expect("enter");
+    wait_all(&mut session, &["\ndraft-x", "> "]);
+
+    // Select path: the helper returns a selection; Enter executes it.
+    fs::write(&mode, "select").expect("mode file");
+    session.write_all(CTRL_X_H, deadline(2)).expect("chord");
+    wait_all(&mut session, &["echo SELECTED"]);
+    session.write_str("\n", deadline(2)).expect("enter");
+    wait_all(&mut session, &["\nSELECTED", "> "]);
+    // The sidecar records asynchronously; wait for the true total before
+    // asserting on its contents (M-034: exact-count waits only).
+    common::wait_for_count(&mbx_bin(), &home.data_home(), 3);
+
+    let recent = sidecar_commands(&mbx_bin(), &home.data_home());
+    assert_eq!(
+        recent.len(),
+        3,
+        "chord presses must not add rows beyond executed commands: {recent:?}"
+    );
+    assert!(
+        recent.iter().all(|command| !command.starts_with("_mbx_")),
+        "widget names must never appear as recorded commands: {recent:?}"
+    );
+    assert_eq!(
+        recent[0], "echo SELECTED",
+        "the newest row must be the executed selection, not a widget name"
+    );
+    assert!(
+        recent.contains(&"echo draft-x".to_owned()),
+        "the executed cancel-path line must be recorded: {recent:?}"
     );
 }

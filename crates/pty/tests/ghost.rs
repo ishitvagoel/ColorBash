@@ -750,3 +750,45 @@ fn cancel_after_query_leaves_usable_prompt() {
     wait_all(&mut session, &["MBX_GHST:after-cancel\n", "> "]);
     exit_and_wait(&mut session);
 }
+
+// Regression (2026-09-03, ADR 0016 follow-up): a review suspected that
+// `bind -x` chord presses recorded the widget's function name into the
+// sidecar. A clean reproduction across the widget, TUI, and ghost surfaces
+// found no pollution — this locks the property in: wrapped self-inserts and
+// ghost chords never become history rows of their own.
+#[test]
+fn ghost_chord_presses_leave_no_widget_names_in_the_sidecar() {
+    let home = TempHome::new("ghst-leak");
+    let data_home = home.data_home();
+    let histfile = home.histfile();
+    let data_home_s = data_home.to_str().unwrap();
+    let histfile_s = histfile.to_str().unwrap();
+    let mut session = spawn_history_shell(home.path(), &ghost_env(data_home_s, histfile_s, &[]));
+    wait_for(&mut session, "> ");
+    record_echo(&mut session, "alpha");
+    wait_for_count(&mbx_bin(), &data_home, 1);
+
+    // One line's lifetime exercises several widget invocations: typing goes
+    // through wrapped self-inserts, the cycle chord runs, Right accepts the
+    // suffix, and Enter runs the accepted bytes.
+    session
+        .write_str("echo MBX_GHST:a", deadline(2))
+        .expect("type prefix");
+    wait_all(&mut session, &["echo MBX_GHST:alpha"]);
+    send_keys(&mut session, CTRL_X_CTRL_N);
+    send_keys(&mut session, RIGHT);
+    session.write_str("\n", deadline(2)).expect("enter");
+    wait_all(&mut session, &["\nMBX_GHST:alpha", "> "]);
+    wait_for_count(&mbx_bin(), &data_home, 2);
+
+    let recent = sidecar_commands(&mbx_bin(), &data_home);
+    assert_eq!(
+        recent.len(),
+        2,
+        "chord presses must not add rows: {recent:?}"
+    );
+    assert!(
+        recent.iter().all(|command| !command.starts_with("_mbx_")),
+        "widget names must never appear as recorded commands: {recent:?}"
+    );
+}
