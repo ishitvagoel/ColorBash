@@ -525,6 +525,7 @@ MBX options    config: $(config_path)
     3) Syntax highlighting       $(on_off "${V[highlight]}")   (not with ghost)
     4) Completion overlay        $(on_off "${V[overlay]}")
     5) Wrap -F completers        $(show "${V[wrap]}")
+   16) History search TUI       $(on_off "${V[tui]}")   (needs history; Ctrl-X h opens the picker)
 
   Prompt
     6) Color                     ${V[color]}
@@ -642,6 +643,13 @@ handle_choice() {
             ;;
         4) toggle overlay ;;
         5) ask_set wrap 'Wrap which -F commands (colon or comma separated)' ;;
+        16)
+            toggle tui
+            if [[ ${V[tui]} == 1 ]]; then
+                printf 'The full-screen picker opens on Ctrl-X h; Esc cancels it.
+'
+            fi
+            ;;
         6) ask_set color 'Color (auto|never)' ;;
         7) ask_set icons 'Icons (auto|never|ascii|nerd)' ;;
         8)

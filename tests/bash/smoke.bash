@@ -165,6 +165,8 @@ install_out=$(iso "$install_home" bash "$ROOT/scripts/install.bash" \
     fail 'install --no-build must write ~/.config/mbx/config.bash'
 [[ $(<"$install_home/.config/mbx/config.bash") == *MBX_HISTORY=1* ]] || \
     fail 'comfort profile must opt in to history'
+[[ $(<"$install_home/.config/mbx/config.bash") == *MBX_TUI=1* ]] || \
+    fail 'comfort profile must enable the history search TUI (ADR 0016)'
 [[ $(<"$install_home/.config/mbx/config.bash") != *'export MBX_HIGHLIGHT=1'* ]] || \
     fail 'comfort profile must not enable highlight'
 [[ ! -e $install_home/.bashrc ]] || \

@@ -136,7 +136,8 @@ pub fn help_text(version: &str) -> String {
          mbx history search fuzzy TEXT [--cwd PATH] [--limit N]\n  \
          mbx history search failed [--limit N]\n  \
          mbx highlight TEXT [--point N] [--no-color] [--color 0|1]\n  \
-         mbx repo root [--cwd PATH]\n\n\
+         mbx repo root [--cwd PATH]\n  \
+         mbx tui search [--seed TEXT]\n\n\
          PROMPT OPTIONS:\n  --cwd PATH  --status N  --duration-ms N  --flags BITS\n  \
          --no-color  --ascii  --nerd-font  --ssh  --production  --disable-git"
     )

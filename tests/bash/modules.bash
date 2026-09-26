@@ -892,6 +892,43 @@ doctor_out=$(mbx_doctor) || doctor_status=$?
 unset MBX_HISTORY
 rm -rf "$doctor_stub_dir"
 
+# D-6: the TUI diagnostics name both failure modes a user can hit — the
+# picker enabled without history, and a helper binary predating the tui
+# subcommand — and stay quiet when everything is in place.
+doctor_stub_dir=$(mktemp -d)
+cat >"$doctor_stub_dir/old-mbx" <<'EOF'
+#!/bin/sh
+case "$1" in
+    tui) printf 'mbx: unknown command: tui\n' >&2; exit 2 ;;
+    *) exit 0 ;;
+esac
+EOF
+cat >"$doctor_stub_dir/new-mbx" <<'EOF'
+#!/bin/sh
+case "$1" in
+    tui) printf 'mbx: mbx tui needs a terminal on stdin\n' >&2; exit 2 ;;
+    *) exit 0 ;;
+esac
+EOF
+chmod +x "$doctor_stub_dir/old-mbx" "$doctor_stub_dir/new-mbx"
+MBX_TUI=1 MBX_HISTORY=0
+doctor_out=$(mbx_doctor) || true
+[[ $doctor_out == *'[WARN]'*'MBX_TUI=1 but MBX_HISTORY is not 1'* ]] || \
+    fail "doctor should warn when the TUI is on without history: $doctor_out"
+MBX_HISTORY=1 MBX_BIN=$doctor_stub_dir/old-mbx
+doctor_out=$(mbx_doctor) || true
+[[ $doctor_out == *'[WARN]'*'no tui support'* ]] || \
+    fail "doctor should warn when the helper predates the tui subcommand: $doctor_out"
+MBX_BIN=$doctor_stub_dir/new-mbx
+doctor_out=$(mbx_doctor) || true
+[[ $doctor_out == *'[OK]'*'full-screen picker'* ]] || \
+    fail "doctor should report the picker as ready when configured: $doctor_out"
+unset MBX_TUI MBX_HISTORY MBX_BIN
+doctor_out=$(mbx_doctor) || true
+[[ $doctor_out != *full-screen* ]] || \
+    fail "doctor must not report TUI rows when MBX_TUI is unset: $doctor_out"
+rm -rf "$doctor_stub_dir"
+
 unset _MBX_ROOT MBX_CONFIG MBX_HISTORY MBX_GHOST
 _MBX_USER_CONFIG_LOADED=1
 rm -f "$mbx_cfg_dir/config.bash"

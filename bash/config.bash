@@ -140,7 +140,7 @@ _mbx_doctor_line() {
 # ~/.bashrc, or the history store. Exit status is nonzero only on [FAIL].
 mbx_doctor() {
     local _MBX_DOCTOR_WARN=0 _MBX_DOCTOR_FAIL=0
-    local config_path=- version handshake
+    local config_path=- version handshake tui_probe
 
     printf 'mbx doctor\n\nShell\n'
     if ((${BASH_VERSINFO[0]:-0} >= 5)); then
@@ -280,6 +280,23 @@ mbx_doctor() {
     if [[ ${MBX_GHOST:-0} == 1 && ${MBX_HIGHLIGHT:-0} == 1 ]]; then
         _mbx_doctor_line fail 'MBX_GHOST=1 and MBX_HIGHLIGHT=1 are both set; they are mutually exclusive' \
             'disable one of them (highlight install skips while ghost is enabled)'
+    fi
+    if [[ ${MBX_TUI:-0} == 1 ]]; then
+        if [[ ${MBX_HISTORY:-0} != 1 ]]; then
+            _mbx_doctor_line warn 'MBX_TUI=1 but MBX_HISTORY is not 1; the picker can never launch' \
+                'export MBX_HISTORY=1 (the picker searches recorded history)'
+        elif [[ -n ${MBX_BIN:-} && -x $MBX_BIN ]]; then
+            tui_probe=$("$MBX_BIN" tui search </dev/null 2>&1 || true)
+            if [[ $tui_probe != *'needs a terminal'* ]]; then
+                _mbx_doctor_line warn 'MBX_TUI=1 but the helper binary has no tui support (it was built before ADR 0016)' \
+                    'rebuild the helper: cargo build --release --workspace'
+            else
+                _mbx_doctor_line ok 'history search TUI: Ctrl-X h opens the full-screen picker'
+            fi
+        else
+            # A missing helper is already a FAIL in the handshake section.
+            _mbx_doctor_line ok 'history search TUI: Ctrl-X h opens the full-screen picker'
+        fi
     fi
 
     printf '\nHistory store\n'
